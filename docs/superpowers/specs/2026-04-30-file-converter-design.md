@@ -275,6 +275,20 @@ Direction: **industrial / terminal**. Pinned specifics:
 
 **Bundle policy:** dynamic import per conversion engine; CI verifies via `next bundle-analyzer` that opening one tool doesn't pull another tool's bytes onto the homepage.
 
+### 9.1 Browser support matrix
+
+Floor versions, set by required APIs (WASM, Web Workers + Comlink, dynamic `import()`, `OffscreenCanvas`, `File.stream()`, `structuredClone`):
+
+| Browser | Minimum |
+|---|---|
+| Chrome / Edge | **110+** (Feb 2023) |
+| Firefox | **110+** (Feb 2023) |
+| Safari | **16.4+** (Mar 2023) |
+
+Below the floor, the page renders an inline notice naming the missing capability ("Your browser doesn't support `OffscreenCanvas`, please update or use Chrome/Firefox/Safari ≥ recent version"). Detection is feature-based, not user-agent-based.
+
+Playwright tests cover Chromium, Firefox, and WebKit at their current stable versions in CI.
+
 ## 10. Security model
 
 ### 10.1 Threat model (scoped to context)
@@ -294,7 +308,7 @@ Direction: **industrial / terminal**. Pinned specifics:
 Content-Security-Policy:
   default-src 'self';
   script-src 'self' 'wasm-unsafe-eval';
-  style-src 'self' 'unsafe-inline';
+  style-src 'self';
   img-src 'self' data: blob:;
   font-src 'self';
   connect-src 'self';
@@ -309,7 +323,7 @@ Referrer-Policy: no-referrer
 Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
 ```
 
-`'wasm-unsafe-eval'` required for libheif (and future ffmpeg). `'unsafe-inline'` for styles required by Tailwind v4 runtime. No `'unsafe-eval'` for JS.
+`'wasm-unsafe-eval'` required for libheif (and future ffmpeg). No `'unsafe-eval'` for JS. **No `'unsafe-inline'` for styles** — Tailwind v4 in build-time PostCSS mode (which static export uses) emits a static stylesheet, not runtime `<style>` injections, so the strict policy holds. If a build artifact is ever caught requiring inline styles, fix the build, do not relax the header. (Verify this assumption during initial deploy — see Section 18.)
 
 ### 10.3 Privacy verification
 
@@ -343,8 +357,12 @@ Soft warn = "this may take a while or hit memory limits, continue?" modal. Hard 
 ### 11.3 Memory strategy
 
 - Streaming/chunked APIs where the underlying library supports them (pdf-lib supports incremental, mammoth does not).
-- Batch operations process files **sequentially by default**; a power-user concurrency setting can enable parallelism with explicit acknowledgment of memory cost.
+- Batch operations process files **sequentially by default**; the `batchConcurrency` preference (1–4, default 1) can enable parallelism with explicit acknowledgment of memory cost.
 - Web Worker per active conversion; workers are torn down after their result is delivered.
+
+### 11.4 Tab-close protection
+
+While any conversion is in flight, the app installs a `beforeunload` listener that prompts the standard browser "leave site? changes will be lost" dialog. The listener is removed the moment the active-conversion count drops to zero, so users never see the prompt during normal navigation. Closing or refreshing during a conversion aborts the in-flight work cleanly via the `AbortSignal` passed to engines (Section 6.3).
 
 ## 12. Error handling
 
@@ -369,10 +387,11 @@ Three error classes, three UI treatments:
 type Prefs = {
   schemaVersion: 1;
   defaultImageFormat: 'png' | 'jpeg' | 'webp';
-  defaultImageQuality: number; // 0-100
+  defaultImageQuality: number;            // 0-100
   defaultPdfMergeOrder: 'as-dropped' | 'alphabetical';
   sidebarCollapsed: boolean;
-  zipBatchThreshold: number; // default 5
+  zipBatchThreshold: number;              // default 5; trigger when count > threshold
+  batchConcurrency: number;               // default 1 (sequential); 1-4
   warnedAboutLargeFiles: boolean;
 };
 ```
@@ -456,4 +475,4 @@ This is a personal project; success is measured against the stated problem, not 
 - **Vercel static export + WASM caching headers.** WASM modules need long cache lives but careful cache-busting on releases. Will validate during initial deploy.
 - **PDF → DOCX experimental quality.** The "best-effort" label sets expectations, but if results are unusable in practice, this feature may be cut from v1 rather than ship broken.
 - **shadcn/ui restyling effort.** shadcn defaults are rounded/soft — restyling them to brutalist sharp-corner monospace is real work, not a token swap. Budget time for this in implementation planning.
-- **Tailwind v4 + CSP `style-src`.** Tailwind v4's runtime requires `'unsafe-inline'` for styles; if that becomes a hardening concern, fallback is precompiling to a static stylesheet.
+- **Tailwind v4 + CSP `style-src`.** Default plan: build-time PostCSS emits a static stylesheet; CSP holds at `style-src 'self'` (no `'unsafe-inline'`). Resolution path: verify on the first deploy that no inline styles slip in via shadcn primitives, design-token runtime, or third-party widgets. If any do, fix the build (precompile, restyle, or drop the offender) — do **not** relax the header.
