@@ -28,6 +28,7 @@
 **Files:**
 - Modify: `src/engines/_shared/types.ts`
 - Modify: `src/engines/_shared/types.test-d.ts`
+- Modify: `src/engines/_shared/registry.ts` — the new `isReadyToConvert?: (opts: TOptions) => boolean` field puts a function in input-contravariant position. With `exactOptionalPropertyTypes`, the existing `Loader` type's `ConversionEngine<unknown, ...>` default no longer accepts concrete engine types (e.g., `(opts: HeicToPngOptions) => boolean` is not assignable to `(opts: unknown) => boolean`). Widen `Loader` to use `ConversionEngine<any, OutputItem | OutputItem[]>` (factored as `type AnyEngine = ...` for a labeled `any` boundary), with a `biome-ignore lint/suspicious/noExplicitAny` annotation. The registry is the canonical type-erasure boundary; `loadEngine`'s public return type stays `ConversionEngine` (unparameterized) so callers are unaffected.
 
 - [ ] **Step 1: Add the new optional fields to both engine types**
 
@@ -443,23 +444,9 @@ pnpm typecheck
 
 Expected: exit 0.
 
-- [ ] **Step 3: Verify worker compiles for the browser target**
+- [ ] **Step 3: Worker build coverage deferred to Task 6**
 
-Add a temporary import to `src/app/page.tsx` (line 1, BEFORE any other imports):
-
-```ts
-import "@/engines/image-convert/worker";
-```
-
-Run `pnpm build`. Expected: exit 0; build emits the worker chunk. If the build fails on `Module not found: Can't resolve 'fs'` or similar, the worker is pulling in a Node-only path — investigate.
-
-After the build succeeds:
-
-```bash
-git checkout -- src/app/page.tsx
-```
-
-Confirm `git status` is clean.
+Do **NOT** add `import "@/engines/image-convert/worker"` to `page.tsx` to probe the worker. Importing the worker file directly into the page module graph forces `Comlink.expose(api)` to run during Next.js SSR prerender, where `self.addEventListener` is unavailable, and the build fails spuriously with `TypeError: b.addEventListener is not a function`. Task 6 lands the engine descriptor (`src/engines/image-convert/index.ts`) which spawns the worker lazily via `new Worker(new URL("./worker.ts", import.meta.url))`. Task 6's verify step probes the engine module — same pattern as Plan 1 Task 9 Step 8b — which is the correct integration test under static export.
 
 - [ ] **Step 4: Commit**
 
@@ -828,7 +815,29 @@ expect(listEngineIds()).toEqual(["heic-to-png", "image-convert"]);
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-Expected: all exit 0; total 61 unit tests (55 + 6 from index.test.ts). Build emits a new `image-convert` worker chunk in addition to the existing HEIC chunk.
+Expected: all exit 0; total 61 unit tests (55 + 6 from index.test.ts).
+
+- [ ] **Step 5b: Engine-module build probe (was deferred from Task 4 Step 3)**
+
+Until Task 7 wires the engine into ToolFrame and Task 8 adds the route, nothing imports `@/engines/image-convert` into a page bundle, so the worker chunk isn't emitted by the regular build. Force a build that pulls the engine module into the page graph to verify Webpack resolves the worker via `new Worker(new URL("./worker.ts", import.meta.url))` correctly.
+
+Add a temporary import to `src/app/page.tsx` (line 1, BEFORE any other imports):
+
+```ts
+import "@/engines/image-convert";
+```
+
+Run `pnpm build`. Expected: exit 0; build emits a new `image-convert` worker chunk alongside the existing HEIC chunk. (Importing the engine module — not the worker file — is the correct probe pattern; it mirrors Plan 1 Task 9 Step 8b. Importing `worker.ts` directly triggers SSR-time Comlink.expose failure.)
+
+If the build fails on `Module not found: Can't resolve 'fs'` or similar, the worker has pulled in a Node-only path — investigate.
+
+After the build succeeds:
+
+```bash
+git checkout -- src/app/page.tsx
+```
+
+Confirm `git status` is clean.
 
 - [ ] **Step 6: Commit**
 
@@ -979,7 +988,7 @@ Notes:
 
 ```tsx
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversionEngine, OutputItem, ValidationResult } from "@/engines/_shared/types";
 import { ToolFrame } from "./tool-frame";
 import { stageFile, takeStagedFile } from "@/lib/handoff";
@@ -1090,8 +1099,7 @@ describe("ToolFrame", () => {
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
-    const [calledFile] = convert.mock.calls[0] as [File, StubOpts, AbortSignal];
-    expect(calledFile).toBe(staged);
+    expect(convert).toHaveBeenCalledWith(staged, expect.anything(), expect.anything());
   });
 });
 ```
@@ -1099,8 +1107,10 @@ describe("ToolFrame", () => {
 - [ ] **Step 3: Verify the existing HEIC E2E still passes (regression check)**
 
 ```bash
-pnpm test:e2e --project=chromium tests/e2e/heic-to-png.spec.ts tests/e2e/homepage-handoff.spec.ts
+pnpm test:e2e --project=chromium --workers=1 tests/e2e/heic-to-png.spec.ts tests/e2e/homepage-handoff.spec.ts
 ```
+
+`--workers=1` is required: with the default parallel workers, libheif-js's WASM-bundle compile in the dev server can race two simultaneous Playwright workers and produce a `Cannot read properties of undefined (reading 'split')` error in libheif's environment-detection on cold start. The race is unrelated to ToolFrame's logic — confirmed by stash-revert showing the error pre-dates this task. Sequential workers eliminate the race.
 
 Expected: both pass. ToolFrame's signature change (`run` now takes options) is a generic type — HEIC's options are `{}`, no behavior change.
 

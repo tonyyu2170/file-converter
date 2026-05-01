@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import type {
   ConversionEngine,
   MultiInputEngine,
+  OptionsPanelProps,
   OutputItem,
   SingleInputEngine,
   ValidationResult,
@@ -36,5 +37,21 @@ describe("types", () => {
     if (e.cardinality === "single") {
       expectTypeOf(e.convert).parameter(0).toMatchTypeOf<File>();
     }
+  });
+
+  it("isReadyToConvert is optional on SingleInputEngine", () => {
+    type OptsType = { foo: string };
+    type SE = SingleInputEngine<OptsType, OutputItem>;
+    expectTypeOf<SE["isReadyToConvert"]>().toEqualTypeOf<
+      ((opts: OptsType) => boolean) | undefined
+    >();
+  });
+
+  it("OptionsPanelProps shape is value + onChange", () => {
+    type OptsType = { foo: string };
+    expectTypeOf<OptionsPanelProps<OptsType>>().toEqualTypeOf<{
+      value: OptsType;
+      onChange: (next: OptsType) => void;
+    }>();
   });
 });
