@@ -19,6 +19,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "comlink": "^4.4.2",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
