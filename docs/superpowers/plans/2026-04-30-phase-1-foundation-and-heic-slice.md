@@ -268,13 +268,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   trailingSlash: false,
   // Note: `headers()` does NOT run with `output: 'export'`.
-  // Security headers are configured in vercel.json (Task 11).
+  // Security headers are configured in vercel.json (Task 14).
   images: {
     unoptimized: true, // required for static export
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
 };
 
 export default nextConfig;
