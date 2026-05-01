@@ -23,8 +23,9 @@ test("conversion produces zero outbound network requests beyond initial load", a
   });
   const conversionWebSockets: string[] = [];
   page.on("websocket", (ws) => {
-    const origin = new URL(ws.url()).origin;
-    if (origin !== new URL(page.url()).origin) {
+    // Compare host (hostname:port), not origin: ws:// vs http:// would
+    // otherwise flag the dev server's same-host HMR socket as off-origin.
+    if (new URL(ws.url()).host !== new URL(page.url()).host) {
       conversionWebSockets.push(ws.url());
     }
   });
