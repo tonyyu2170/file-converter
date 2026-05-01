@@ -1,7 +1,8 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
-import { useState } from "react";
+import { takeStagedFile } from "@/lib/handoff";
+import { useCallback, useEffect, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { type Status, StatusIndicator } from "./status-indicator";
@@ -15,13 +16,34 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function run(files: File[]) {
-    setErrorMessage(null);
-    setItems([]);
-    if (engine.cardinality === "single") {
-      const f = files[0];
-      if (!f) return;
-      const v = engine.validate(f, engine.defaultOptions);
+  const run = useCallback(
+    async (files: File[]) => {
+      setErrorMessage(null);
+      setItems([]);
+      if (engine.cardinality === "single") {
+        const f = files[0];
+        if (!f) return;
+        const v = engine.validate(f, engine.defaultOptions);
+        if (!v.ok) {
+          setErrorMessage(v.reason);
+          setStatus("error");
+          return;
+        }
+        setStatus("converting");
+        try {
+          const ctrl = new AbortController();
+          const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
+          const out = Array.isArray(result) ? result : [result];
+          setItems(out);
+          setStatus("done");
+        } catch (err) {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+          setStatus("error");
+        }
+        return;
+      }
+
+      const v = engine.validate(files, engine.defaultOptions);
       if (!v.ok) {
         setErrorMessage(v.reason);
         setStatus("error");
@@ -30,34 +52,21 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       setStatus("converting");
       try {
         const ctrl = new AbortController();
-        const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
-        const out = Array.isArray(result) ? result : [result];
-        setItems(out);
+        const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
+        setItems(Array.isArray(result) ? result : [result]);
         setStatus("done");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setStatus("error");
       }
-      return;
-    }
+    },
+    [engine],
+  );
 
-    const v = engine.validate(files, engine.defaultOptions);
-    if (!v.ok) {
-      setErrorMessage(v.reason);
-      setStatus("error");
-      return;
-    }
-    setStatus("converting");
-    try {
-      const ctrl = new AbortController();
-      const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
-      setItems(Array.isArray(result) ? result : [result]);
-      setStatus("done");
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-      setStatus("error");
-    }
-  }
+  useEffect(() => {
+    const staged = takeStagedFile();
+    if (staged) run([staged]);
+  }, [run]);
 
   return (
     <main className="p-6">

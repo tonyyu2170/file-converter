@@ -2,6 +2,7 @@
 
 import { DropZone } from "@/components/drop-zone";
 import { detectMime } from "@/engines/_shared/file-detection";
+import { stageFile } from "@/lib/handoff";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -15,6 +16,7 @@ export default function Home() {
     if (!f) return;
     const mime = await detectMime(f);
     if (mime === "image/heic" || mime === "image/heif") {
+      stageFile(f);
       router.push("/tools/heic-to-png");
       return;
     }

@@ -2256,10 +2256,11 @@ gets its own per-row download button."
 ```tsx
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { StatusIndicator, type Status } from "./status-indicator";
+import { takeStagedFile } from "@/lib/handoff";
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 
 type Props<TOptions> = {
@@ -2271,13 +2272,34 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function run(files: File[]) {
-    setErrorMessage(null);
-    setItems([]);
-    if (engine.cardinality === "single") {
-      const f = files[0];
-      if (!f) return;
-      const v = engine.validate(f, engine.defaultOptions);
+  const run = useCallback(
+    async (files: File[]) => {
+      setErrorMessage(null);
+      setItems([]);
+      if (engine.cardinality === "single") {
+        const f = files[0];
+        if (!f) return;
+        const v = engine.validate(f, engine.defaultOptions);
+        if (!v.ok) {
+          setErrorMessage(v.reason);
+          setStatus("error");
+          return;
+        }
+        setStatus("converting");
+        try {
+          const ctrl = new AbortController();
+          const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
+          const out = Array.isArray(result) ? result : [result];
+          setItems(out);
+          setStatus("done");
+        } catch (err) {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+          setStatus("error");
+        }
+        return;
+      }
+
+      const v = engine.validate(files, engine.defaultOptions);
       if (!v.ok) {
         setErrorMessage(v.reason);
         setStatus("error");
@@ -2286,35 +2308,21 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       setStatus("converting");
       try {
         const ctrl = new AbortController();
-        const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
-        const out = Array.isArray(result) ? result : [result];
-        setItems(out);
+        const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
+        setItems(Array.isArray(result) ? result : [result]);
         setStatus("done");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setStatus("error");
       }
-      return;
-    }
+    },
+    [engine],
+  );
 
-    // multi-input branch (PDF merge etc.) — implemented in later plans.
-    const v = engine.validate(files, engine.defaultOptions);
-    if (!v.ok) {
-      setErrorMessage(v.reason);
-      setStatus("error");
-      return;
-    }
-    setStatus("converting");
-    try {
-      const ctrl = new AbortController();
-      const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
-      setItems(Array.isArray(result) ? result : [result]);
-      setStatus("done");
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-      setStatus("error");
-    }
-  }
+  useEffect(() => {
+    const staged = takeStagedFile();
+    if (staged) run([staged]);
+  }, [run]);
 
   return (
     <main className="p-6">
@@ -2360,6 +2368,7 @@ export default function HeicToPngPage() {
 import { useRouter } from "next/navigation";
 import { DropZone } from "@/components/drop-zone";
 import { detectMime } from "@/engines/_shared/file-detection";
+import { stageFile } from "@/lib/handoff";
 
 export default function Home() {
   const router = useRouter();
@@ -2369,9 +2378,8 @@ export default function Home() {
     if (!f) return;
     const mime = await detectMime(f);
     if (mime === "image/heic" || mime === "image/heif") {
+      stageFile(f);
       router.push("/tools/heic-to-png");
-      // The user will need to drop the file again on the tool page.
-      // Cross-route file handoff is a Plan 5 enhancement.
       return;
     }
     // No matching engine yet. Future plans will surface a disambiguation modal.
@@ -2428,9 +2436,11 @@ and applies the smart-default download rule. Single-output engines
 auto-download; multi-output stay staged in the result list (ZIP
 packaging arrives in Plan 5).
 
-Homepage detects MIME on drop and routes to the matching tool
-route. Cross-route file handoff (drop file on home → land in tool
-with file pre-staged) is deferred to Plan 5."
+Homepage detects MIME on drop, stages the file in a module-level
+slot via stageFile(), and routes to the matching tool. ToolFrame
+consumes the staged file on mount via takeStagedFile() in a
+useEffect, so the user drops once and the conversion runs without
+a second drop on the tool page."
 ```
 
 ---
@@ -2711,7 +2721,7 @@ If all four hold, Phase 1 is shipped.
 
 - **Lint rule blocking `fetch` in `src/engines/`:** spec §10.1 calls for this. Deferred to Plan 6 (production hardening). Phase 1 does not have this guardrail; the privacy regression test catches the same class of bug from the runtime side.
 
-- **Cross-route file handoff:** dropping a HEIC on the homepage routes to `/tools/heic-to-png` but does not pre-stage the file there. This is called out in Task 12 and deferred to Plan 5.
+- ~~**Cross-route file handoff:**~~ landed in Plan 1 via `src/lib/handoff.ts`'s `stageFile`/`takeStagedFile` single-consumer slot. Homepage stages on drop; ToolFrame's mount effect consumes and runs. E2E coverage: `tests/e2e/homepage-handoff.spec.ts`.
 
 ---
 
