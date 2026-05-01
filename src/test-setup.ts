@@ -1,5 +1,17 @@
 import "@testing-library/jest-dom/vitest";
 
+// jsdom 25 does not implement Blob.prototype.arrayBuffer; polyfill via FileReader.
+if (typeof Blob !== "undefined" && Blob.prototype.arrayBuffer === undefined) {
+  Blob.prototype.arrayBuffer = function arrayBuffer(): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
