@@ -6,14 +6,16 @@
 
 **Architecture:** Next.js 15 App Router with `output: 'export'` static build. Conversion logic isolated in Web Workers behind a typed Comlink RPC. A modular engine system (`src/engines/<id>/`) — Phase 1 implements one engine (`heic-to-png`) end-to-end against a generic harness so subsequent phases plug in additional engines without modifying shared code. Security headers applied via `vercel.json` (not `next.config`, since static export bypasses the Next.js server). Privacy guarantee enforced by a Playwright test that asserts zero outbound network traffic during conversion.
 
-**Tech Stack:** Next.js 15, React 19, TypeScript (strict), Tailwind CSS v4, shadcn/ui (current `shadcn` package, restyled), Comlink, libheif-js, Vitest, Playwright (Chromium / Firefox / WebKit), Biome, pnpm.
+**Tech Stack:** Next.js 15, React 19, TypeScript (strict), Tailwind CSS v4, Comlink, libheif-js, Vitest, Playwright (Chromium / Firefox / WebKit), Biome, pnpm.
+
+> **shadcn/ui is deferred to Plan 2.** Phase 1 components are raw `<button>` / `<div>` elements with Tailwind utility classes — sufficient for the drop zone, result list, and status indicator. shadcn primitives (Dialog, Slider) first appear in Plan 2 when the disambiguation modal and image-quality slider need them. Do NOT run `shadcn init` during Phase 1.
 
 **Phasing context:** This is **Plan 1 of 6**. Subsequent plans listed at the end of this document. After Plan 1 is merged, the user will have a working deployed site. Phase 2 onward adds conversions, polish, and full hardening incrementally.
 
 **Pre-flight verifications (do once before Task 1, ~5 min):**
-- `pnpm dlx shadcn@latest --help` — confirm the package name `shadcn` (not `shadcn-ui`) and the CLI is reachable. If the binary cannot be found, recheck npm; do not substitute the old package name.
 - `npm view libheif-js version` — note the current version. The plan's HEIC code targets the `HeifDecoder()` API; sanity-check that the current README still uses this surface.
 - `node --version` — must be ≥ 20. Next.js 15 requires Node 18.18+; we lock to ≥ 20 to match Vercel's default runtime.
+- `pnpm --version` — must be ≥ 9.
 
 ---
 
@@ -76,8 +78,6 @@ src/components/result-list.test.tsx
 src/components/status-indicator.tsx
 src/components/status-indicator.test.tsx
 src/components/tool-frame.tsx
-
-src/components/ui/button.tsx          (shadcn add + restyle)
 
 src/engines/_shared/types.ts
 src/engines/_shared/types.test-d.ts
@@ -142,7 +142,26 @@ pnpm create next-app@latest . \
 
 > **Why no `--turbopack`:** Turbopack's Web Worker support in Next.js 15 is incomplete as of this writing. Workers using `new URL("./worker.ts", import.meta.url)` may fail to resolve in `next dev --turbopack` while working perfectly with the default Webpack dev server. We stay on Webpack until Turbopack workers stabilize. `next build` is unaffected (always Webpack).
 
-Expected: scaffolding files written to current directory. Next.js will warn about non-empty dir; accept (the only existing file is `.gitignore`, which the scaffolder will merge with).
+Expected: scaffolding files written to current directory. Next.js will warn about non-empty dir; accept (the existing files are `.git/`, `.gitignore`, `docs/`, `.superpowers/`, `.claude/`).
+
+> **⚠️ Verify `.gitignore` survived the scaffold.** Modern `create-next-app` may overwrite `.gitignore` with its own version, dropping our project-specific entries (`.superpowers/`, `.claude/settings.local.json`). After Step 1 finishes:
+>
+> ```bash
+> grep -E '^\.superpowers/$|^\.claude/settings\.local\.json$' .gitignore
+> ```
+>
+> If either line is missing, restore the entries by appending:
+>
+> ```bash
+> echo "" >> .gitignore
+> echo "# Superpowers brainstorming artifacts (mockups, session state)" >> .gitignore
+> echo ".superpowers/" >> .gitignore
+> echo "" >> .gitignore
+> echo "# Claude Code local settings" >> .gitignore
+> echo ".claude/settings.local.json" >> .gitignore
+> ```
+>
+> (Alternatively: `git checkout HEAD -- .gitignore` to restore the committed version, then re-apply any new Next.js-specific lines from the scaffold by hand.)
 
 - [ ] **Step 2: Replace generated `package.json` scripts and dependencies**
 
@@ -582,7 +601,15 @@ CI will not actually run until the repo is pushed in Task 14; that task confirms
 - Create: `postcss.config.mjs`, `src/app/globals.css`, `public/fonts/JetBrainsMono-Regular.woff2`, `public/fonts/JetBrainsMono-Medium.woff2`
 - Modify: `src/app/layout.tsx`, `src/app/page.tsx`
 
-- [ ] **Step 1: Confirm `postcss.config.mjs` uses the v4 plugin**
+- [ ] **Step 1: Remove any v3-style Tailwind config the scaffold may have left, then confirm `postcss.config.mjs` uses the v4 plugin**
+
+```bash
+rm -f tailwind.config.ts tailwind.config.js tailwind.config.mjs
+```
+
+(Tailwind v4 in `@theme`-via-CSS mode does not use a JS config file. A stray config file is harmless at runtime but causes ten minutes of confusion when `@theme` tokens appear not to apply.)
+
+Then write or overwrite `postcss.config.mjs`:
 
 ```js
 const config = {
@@ -593,8 +620,6 @@ const config = {
 
 export default config;
 ```
-
-(The Next.js scaffold may have generated a v3-style config — overwrite if so.)
 
 - [ ] **Step 2: Download JetBrains Mono Regular + Medium WOFF2 into `public/fonts/`**
 
@@ -1487,18 +1512,22 @@ If installation prints a warning about WASM provisioning, it is fine — we will
 
 - [ ] **Step 2: Add a small real HEIC fixture to `tests/fixtures/sample.heic`**
 
-The fixture must be a real HEIC file, ideally < 200 KB. Acquire one of the following ways and place at `tests/fixtures/sample.heic`:
+> **⚠️ MANUAL STEP — pause for user.** An autonomous agent cannot acquire a HEIC file on its own. Surface this to the user with the following request and stop:
+>
+> > "I need a small real HEIC file (ideally < 200 KB) committed at `tests/fixtures/sample.heic` so the engine tests can run against real bytes. Two ways to get one:
+> > 1. Take a photo on your iPhone of any flat color (like a wall), AirDrop it to your Mac as HEIC, then crop / resize until it's under 200 KB.
+> > 2. Download a public-domain test HEIC, e.g. from `https://github.com/strukturag/libheif/raw/master/examples/example.heic`.
+> >
+> > Once placed at `tests/fixtures/sample.heic`, run `file tests/fixtures/sample.heic` and confirm the output mentions ISO Media or HEIF. Tell me when ready and I'll resume from Step 3."
 
-- An iPhone photo of a flat color, exported as HEIC and downsized.
-- The smallest sample HEIC from `https://github.com/strukturag/libheif/tree/master/examples` (verify license — these are CC0 / permissive).
+After the user confirms the fixture is in place:
 
 ```bash
 mkdir -p tests/fixtures
-# (place sample.heic here by whichever means)
 file tests/fixtures/sample.heic
 ```
 
-Expected: `file` reports an ISO Media or HEIF file. If `file` reports something else, the fixture is wrong — replace it.
+Expected: `file` reports an ISO Media or HEIF file. If `file` reports something else, the fixture is wrong — ask the user to replace it.
 
 - [ ] **Step 3: Write `options.ts`**
 
@@ -2387,12 +2416,14 @@ test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
 
   // Set up the download promise BEFORE triggering the conversion.
-  const downloadPromise = page.waitForEvent("download", { timeout: 15_000 });
+  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
 
   await input.setInputFiles(fixture);
 
-  // Status should transition through converting → done.
-  await expect(page.getByTestId("status-indicator")).toHaveText("[ CONVERTING ]", { timeout: 5000 });
+  // Wait for terminal state. We do NOT assert the intermediate `[ CONVERTING ]`
+  // text — for a small fixture HEIC, the conversion finishes in 100–500ms,
+  // which is faster than Playwright can poll. Asserting that intermediate
+  // would flake on a perfectly-working app.
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", { timeout: 30_000 });
 
   const download = await downloadPromise;
