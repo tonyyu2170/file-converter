@@ -18,7 +18,12 @@ const engine: SingleInputEngine<Record<string, never>, OutputItem> = {
       () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
     );
     const result = await harness.runSingle(file, opts, signal);
-    return Array.isArray(result) ? (result[0] as OutputItem) : result;
+    if (Array.isArray(result)) {
+      const first = result[0];
+      if (!first) throw new Error("engine returned empty array");
+      return first;
+    }
+    return result;
   },
 };
 

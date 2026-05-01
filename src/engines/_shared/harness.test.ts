@@ -53,4 +53,24 @@ describe("WorkerHarness.runSingle", () => {
       name: "AbortError",
     });
   });
+
+  it("terminates worker and rejects when aborted mid-conversion", async () => {
+    vi.mocked(Comlink.wrap).mockReturnValue({
+      convertSingle: () =>
+        new Promise<OutputItem>((_resolve) => {
+          // Promise intentionally never resolves — keeps the worker busy.
+        }),
+    } as never);
+    const fw = fakeWorker();
+    const h = new WorkerHarness<{ q: number }>(() => fw);
+    const ctrl = new AbortController();
+    const f = new File([new Uint8Array([1])], "x.heic", { type: "image/heic" });
+    const p = h.runSingle(f, { q: 90 }, ctrl.signal);
+    // Yield the microtask queue so file.arrayBuffer() resolves and the race begins.
+    await Promise.resolve();
+    await Promise.resolve();
+    ctrl.abort();
+    await expect(p).rejects.toMatchObject({ name: "AbortError" });
+    expect(fw.terminate).toHaveBeenCalled();
+  });
 });

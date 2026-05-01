@@ -16,9 +16,10 @@ export type WorkerEntry<TOptions> = {
 
 export type WorkerFactory = () => Worker;
 
-// Comlink wraps optional methods as Promise<fn | undefined> rather than
-// Remote<fn> | undefined, so we need a concrete callable alias to avoid
-// TS2349 at the call sites in runSingle / runMulti.
+// Comlink's Remote<T> rewrites function-argument types via the internal
+// UnproxyOrClone<T> mapper, which a generic TOptions cannot satisfy
+// without a cast. SingleFn / MultiFn are concrete callable shapes used
+// at the call sites after a runtime truthiness guard.
 type SingleFn<TOptions> = (
   fileBytes: ArrayBuffer,
   fileName: string,
@@ -47,9 +48,10 @@ export class WorkerHarness<TOptions> {
       this.terminate();
       throw new Error("worker does not implement convertSingle");
     }
-    // Cast to the concrete callable type — the guard above already confirms
-    // convertSingle is truthy; Comlink's Remote wraps optional fns as
-    // Promise<fn | undefined> which TS treats as non-callable without this.
+    // Cast to the concrete callable type — the guard above proves
+    // convertSingle is set; Comlink's Remote<T> rewrites function-argument
+    // types via UnproxyOrClone<T>, which a generic TOptions cannot satisfy
+    // without an explicit cast.
     const convertSingle = this.remote.convertSingle as unknown as SingleFn<TOptions>;
     const buf = await file.arrayBuffer();
     // Early exit if signal was already aborted before reaching this point.

@@ -1508,7 +1508,7 @@ check rather than a 'did it work once' snapshot."
 
 **Files:**
 - Create: `src/engines/heic-to-png/options.ts`, `src/engines/heic-to-png/worker.ts`, `src/engines/heic-to-png/index.ts`, `src/engines/heic-to-png/index.test.ts`, `tests/fixtures/sample.heic`
-- Modify: `src/engines/_shared/registry.test.ts` (add positive-path test)
+- Modify: `src/engines/_shared/registry.ts`, `src/engines/_shared/registry.test.ts` (swap throwing stub loader → real dynamic import; add positive-path test)
 
 - [ ] **Step 1: Install libheif-js**
 
@@ -1635,12 +1635,29 @@ const engine: SingleInputEngine<HeicToPngOptions, OutputItem> = {
       () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
     );
     const result = await harness.runSingle(file, opts, signal);
-    return Array.isArray(result) ? (result[0] as OutputItem) : result;
+    if (Array.isArray(result)) {
+      const first = result[0];
+      if (!first) throw new Error("engine returned empty array");
+      return first;
+    }
+    return result;
   },
 };
 
 export default engine;
 ```
+
+- [ ] **Step 5b: Swap the registry loader from throwing stub to real dynamic import**
+
+In `src/engines/_shared/registry.ts`, replace the throwing stub with the real dynamic import. Open the file and change the registry block so it reads:
+
+```ts
+const REGISTRY: Record<EngineId, Loader> = {
+  "heic-to-png": () => import("@/engines/heic-to-png"),
+};
+```
+
+Delete the now-unused `heicToPngLoader` helper and its preceding comment (lines 8–14 of the original Task 7 file). The dynamic import resolves now that `src/engines/heic-to-png/index.ts` exists.
 
 - [ ] **Step 6: Write `index.test.ts`**
 
@@ -1695,7 +1712,7 @@ Expected: all pass, including the new metadata test and registry positive-path.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/engines/heic-to-png src/engines/_shared/registry.test.ts tests/fixtures/sample.heic
+git add src/engines/heic-to-png src/engines/_shared/registry.ts src/engines/_shared/registry.test.ts tests/fixtures/sample.heic
 git commit -m "feat(engines): heic-to-png via libheif-js + OffscreenCanvas
 
 Worker decodes HEIC with libheif-js, encodes the bitmap to PNG via
