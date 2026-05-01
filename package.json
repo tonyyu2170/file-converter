@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "comlink": "^4.4.2",
+    "libheif-js": "^1.19.8",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

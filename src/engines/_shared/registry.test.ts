@@ -9,4 +9,10 @@ describe("registry", () => {
   it("loadEngine throws for unknown id", async () => {
     await expect(loadEngine("does-not-exist" as never)).rejects.toThrow("Unknown engine id");
   });
+
+  it("loadEngine returns the heic-to-png engine module", async () => {
+    const e = await loadEngine("heic-to-png");
+    expect(e.id).toBe("heic-to-png");
+    expect(e.cardinality).toBe("single");
+  });
 });
