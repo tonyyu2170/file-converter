@@ -20,7 +20,12 @@ export default function Home() {
       router.push("/tools/heic-to-png");
       return;
     }
-    setError("No tool for this file type yet. Phase 1 ships HEIC only.");
+    if (mime === "image/png" || mime === "image/jpeg" || mime === "image/webp") {
+      stageFile(f);
+      router.push("/tools/image-convert");
+      return;
+    }
+    setError("No tool for this file type yet. Phase 2 supports HEIC, PNG, JPEG, WebP.");
   }
 
   return (
