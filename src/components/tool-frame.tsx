@@ -2,7 +2,7 @@
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 import { takeStagedFile } from "@/lib/handoff";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { type Status, StatusIndicator } from "./status-indicator";
@@ -15,15 +15,20 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [status, setStatus] = useState<Status>("ready");
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const ready = engine.isReadyToConvert?.(options) ?? true;
+  const Panel = engine.OptionsPanel;
 
   const run = useCallback(
-    async (files: File[]) => {
+    async (files: File[], opts: TOptions) => {
       setErrorMessage(null);
       setItems([]);
       if (engine.cardinality === "single") {
         const f = files[0];
         if (!f) return;
-        const v = engine.validate(f, engine.defaultOptions);
+        const v = engine.validate(f, opts);
         if (!v.ok) {
           setErrorMessage(v.reason);
           setStatus("error");
@@ -32,7 +37,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         setStatus("converting");
         try {
           const ctrl = new AbortController();
-          const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
+          const result = await engine.convert(f, opts, ctrl.signal);
           const out = Array.isArray(result) ? result : [result];
           setItems(out);
           setStatus("done");
@@ -43,7 +48,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         return;
       }
 
-      const v = engine.validate(files, engine.defaultOptions);
+      const v = engine.validate(files, opts);
       if (!v.ok) {
         setErrorMessage(v.reason);
         setStatus("error");
@@ -52,7 +57,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       setStatus("converting");
       try {
         const ctrl = new AbortController();
-        const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
+        const result = await engine.convert(files, opts, ctrl.signal);
         setItems(Array.isArray(result) ? result : [result]);
         setStatus("done");
       } catch (err) {
@@ -63,10 +68,25 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     [engine],
   );
 
+  // Mount-time staged-file consumption. Single-shot: takeStagedFile clears
+  // the slot, so React Strict Mode's double-mount fires this once net.
+  const consumedRef = useRef(false);
   useEffect(() => {
+    if (consumedRef.current) return;
+    consumedRef.current = true;
     const staged = takeStagedFile();
-    if (staged) run([staged]);
-  }, [run]);
+    if (staged) setPendingFile(staged);
+  }, []);
+
+  // Fires conversion when both file and ready state materialize. If options
+  // start out ready (HEIC), this runs as soon as pendingFile is set. If not
+  // (image-convert with output unselected), waits until user picks a format.
+  useEffect(() => {
+    if (pendingFile && ready) {
+      run([pendingFile], options);
+      setPendingFile(null);
+    }
+  }, [pendingFile, ready, run, options]);
 
   return (
     <main className="p-6">
@@ -75,10 +95,12 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <span>·</span>
         <StatusIndicator status={status} />
       </div>
+      {Panel && <Panel value={options} onChange={setOptions} />}
       <DropZone
         accept={engine.inputAccept}
         multiple={engine.cardinality === "multi"}
-        onFiles={run}
+        onFiles={(files) => run(files, options)}
+        disabled={!ready}
       />
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">
