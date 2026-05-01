@@ -108,7 +108,6 @@ describe("ToolFrame", () => {
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
-    const [calledFile] = convert.mock.calls[0] as unknown as [File, StubOpts, AbortSignal];
-    expect(calledFile).toBe(staged);
+    expect(convert).toHaveBeenCalledWith(staged, expect.anything(), expect.anything());
   });
 });

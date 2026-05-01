@@ -988,7 +988,7 @@ Notes:
 
 ```tsx
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversionEngine, OutputItem, ValidationResult } from "@/engines/_shared/types";
 import { ToolFrame } from "./tool-frame";
 import { stageFile, takeStagedFile } from "@/lib/handoff";
@@ -1099,8 +1099,7 @@ describe("ToolFrame", () => {
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
-    const [calledFile] = convert.mock.calls[0] as [File, StubOpts, AbortSignal];
-    expect(calledFile).toBe(staged);
+    expect(convert).toHaveBeenCalledWith(staged, expect.anything(), expect.anything());
   });
 });
 ```
@@ -1108,8 +1107,10 @@ describe("ToolFrame", () => {
 - [ ] **Step 3: Verify the existing HEIC E2E still passes (regression check)**
 
 ```bash
-pnpm test:e2e --project=chromium tests/e2e/heic-to-png.spec.ts tests/e2e/homepage-handoff.spec.ts
+pnpm test:e2e --project=chromium --workers=1 tests/e2e/heic-to-png.spec.ts tests/e2e/homepage-handoff.spec.ts
 ```
+
+`--workers=1` is required: with the default parallel workers, libheif-js's WASM-bundle compile in the dev server can race two simultaneous Playwright workers and produce a `Cannot read properties of undefined (reading 'split')` error in libheif's environment-detection on cold start. The race is unrelated to ToolFrame's logic — confirmed by stash-revert showing the error pre-dates this task. Sequential workers eliminate the race.
 
 Expected: both pass. ToolFrame's signature change (`run` now takes options) is a generic type — HEIC's options are `{}`, no behavior change.
 
