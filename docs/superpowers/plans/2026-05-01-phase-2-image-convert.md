@@ -444,23 +444,9 @@ pnpm typecheck
 
 Expected: exit 0.
 
-- [ ] **Step 3: Verify worker compiles for the browser target**
+- [ ] **Step 3: Worker build coverage deferred to Task 6**
 
-Add a temporary import to `src/app/page.tsx` (line 1, BEFORE any other imports):
-
-```ts
-import "@/engines/image-convert/worker";
-```
-
-Run `pnpm build`. Expected: exit 0; build emits the worker chunk. If the build fails on `Module not found: Can't resolve 'fs'` or similar, the worker is pulling in a Node-only path — investigate.
-
-After the build succeeds:
-
-```bash
-git checkout -- src/app/page.tsx
-```
-
-Confirm `git status` is clean.
+Do **NOT** add `import "@/engines/image-convert/worker"` to `page.tsx` to probe the worker. Importing the worker file directly into the page module graph forces `Comlink.expose(api)` to run during Next.js SSR prerender, where `self.addEventListener` is unavailable, and the build fails spuriously with `TypeError: b.addEventListener is not a function`. Task 6 lands the engine descriptor (`src/engines/image-convert/index.ts`) which spawns the worker lazily via `new Worker(new URL("./worker.ts", import.meta.url))`. Task 6's verify step probes the engine module — same pattern as Plan 1 Task 9 Step 8b — which is the correct integration test under static export.
 
 - [ ] **Step 4: Commit**
 
@@ -829,7 +815,29 @@ expect(listEngineIds()).toEqual(["heic-to-png", "image-convert"]);
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-Expected: all exit 0; total 61 unit tests (55 + 6 from index.test.ts). Build emits a new `image-convert` worker chunk in addition to the existing HEIC chunk.
+Expected: all exit 0; total 61 unit tests (55 + 6 from index.test.ts).
+
+- [ ] **Step 5b: Engine-module build probe (was deferred from Task 4 Step 3)**
+
+Until Task 7 wires the engine into ToolFrame and Task 8 adds the route, nothing imports `@/engines/image-convert` into a page bundle, so the worker chunk isn't emitted by the regular build. Force a build that pulls the engine module into the page graph to verify Webpack resolves the worker via `new Worker(new URL("./worker.ts", import.meta.url))` correctly.
+
+Add a temporary import to `src/app/page.tsx` (line 1, BEFORE any other imports):
+
+```ts
+import "@/engines/image-convert";
+```
+
+Run `pnpm build`. Expected: exit 0; build emits a new `image-convert` worker chunk alongside the existing HEIC chunk. (Importing the engine module — not the worker file — is the correct probe pattern; it mirrors Plan 1 Task 9 Step 8b. Importing `worker.ts` directly triggers SSR-time Comlink.expose failure.)
+
+If the build fails on `Module not found: Can't resolve 'fs'` or similar, the worker has pulled in a Node-only path — investigate.
+
+After the build succeeds:
+
+```bash
+git checkout -- src/app/page.tsx
+```
+
+Confirm `git status` is clean.
 
 - [ ] **Step 6: Commit**
 
