@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 
 export type OutputItem = {
@@ -14,6 +16,11 @@ export type EngineMeta<TOptions> = {
   defaultOptions: TOptions;
 };
 
+export type OptionsPanelProps<TOptions> = {
+  value: TOptions;
+  onChange: (next: TOptions) => void;
+};
+
 export type SingleInputEngine<
   TOptions,
   TOutput extends OutputItem | OutputItem[],
@@ -21,6 +28,8 @@ export type SingleInputEngine<
   cardinality: "single";
   validate(file: File, opts: TOptions): ValidationResult;
   convert(file: File, opts: TOptions, signal: AbortSignal): Promise<TOutput>;
+  isReadyToConvert?: (opts: TOptions) => boolean;
+  OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
 };
 
 export type MultiInputEngine<
@@ -30,6 +39,8 @@ export type MultiInputEngine<
   cardinality: "multi";
   validate(files: File[], opts: TOptions): ValidationResult;
   convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
+  isReadyToConvert?: (opts: TOptions) => boolean;
+  OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
 };
 
 export type ConversionEngine<
