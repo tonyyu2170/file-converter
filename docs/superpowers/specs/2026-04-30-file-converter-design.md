@@ -2,7 +2,7 @@
 
 **Status:** Draft, pending user review
 **Date:** 2026-04-30
-**Owner:** asm.hwang@gmail.com (single user)
+**Owner:** Tony Yu — tonyyu2170@gmail.com (personal) / tonyyu2029@u.northwestern.edu (school)
 **Repo:** `/Users/turdy/coding_fun/projects/file_converter`
 
 ---
@@ -147,6 +147,139 @@ type ConversionEngine<TOptions, TOutput> =
 ```
 
 Each engine lives under `src/engines/<id>/`, exporting only this interface plus its options type. Batch operations on single-input engines (e.g., converting 10 HEICs) are handled by a shared queue harness, not by the engine itself.
+
+### 6.4 Project directory structure
+
+```
+file-converter/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                       # type-check, lint, vitest, playwright,
+│                                        # bundle budget, axe, lighthouse, privacy regression
+├── docs/
+│   └── superpowers/
+│       ├── specs/
+│       │   └── 2026-04-30-file-converter-design.md   # this document
+│       └── plans/
+│           └── (implementation plans live here)
+├── public/
+│   ├── favicon.ico
+│   └── fonts/                           # self-hosted JetBrains Mono (CSP font-src 'self')
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                   # root layout: header + sidebar + footer + status bar
+│   │   ├── page.tsx                     # universal drop zone homepage
+│   │   ├── globals.css                  # Tailwind v4 entry + @theme tokens
+│   │   ├── tools/
+│   │   │   └── [tool]/
+│   │   │       ├── page.tsx             # focused tool surface, deep-linkable
+│   │   │       └── not-found.tsx
+│   │   ├── about/
+│   │   │   └── page.tsx                 # privacy claim + verification instructions
+│   │   └── error.tsx                    # top-level [ FATAL ] boundary
+│   │
+│   ├── components/
+│   │   ├── ui/                          # shadcn primitives, restyled to brutalist
+│   │   │   ├── button.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── slider.tsx
+│   │   │   └── …
+│   │   ├── layout/
+│   │   │   ├── header.tsx
+│   │   │   ├── sidebar.tsx              # tool list, filter input
+│   │   │   └── footer.tsx               # status bar (READY / CONVERTING / DONE)
+│   │   ├── drop-zone.tsx                # universal + tool-specific variants
+│   │   ├── disambiguation-modal.tsx     # "you dropped 3 PDFs — Merge / Split / Image?"
+│   │   ├── tool-frame.tsx               # common shell for /tools/[tool]
+│   │   ├── result-list.tsx              # output thumbnails + per-row download / ZIP
+│   │   ├── progress-bar.tsx             # ASCII [████░░░░] 42%
+│   │   ├── status-indicator.tsx         # [ READY ] [ CONVERTING ] [ DONE ] [ ERROR ]
+│   │   ├── shortcut-overlay.tsx         # `?` keyboard help
+│   │   └── error-details-panel.tsx      # expandable tech detail + Report link
+│   │
+│   ├── engines/                         # one folder per conversion (Section 6.3)
+│   │   ├── _shared/
+│   │   │   ├── types.ts                 # ConversionEngine, ValidationResult, EngineMeta
+│   │   │   ├── harness.ts               # batch queue, worker spawn/teardown, AbortSignal
+│   │   │   ├── filename.ts              # basename + extension rewrite, page-N suffix
+│   │   │   └── registry.ts              # id → dynamic-import map for routes & sidebar
+│   │   ├── heic-to-png/
+│   │   │   ├── index.ts                 # SingleInputEngine export
+│   │   │   ├── worker.ts                # Comlink-exposed worker doing libheif decode
+│   │   │   └── options.ts
+│   │   ├── jpeg-png-webp/               # round-trip image format swaps
+│   │   ├── image-resize/
+│   │   ├── image-compress/
+│   │   ├── pdf-merge/                   # MultiInputEngine
+│   │   ├── pdf-split/
+│   │   ├── pdf-reorder/
+│   │   ├── pdf-rotate/
+│   │   ├── image-to-pdf/                # MultiInputEngine
+│   │   ├── pdf-to-image/                # single in, multi out (per-page)
+│   │   ├── docx-to-pdf/
+│   │   ├── docx-to-txt/
+│   │   ├── md-to-pdf/
+│   │   ├── txt-to-pdf/
+│   │   ├── pdf-to-docx/                 # experimental, best-effort
+│   │   └── pdf-to-md/                   # experimental, best-effort
+│   │
+│   ├── hooks/
+│   │   ├── use-prefs.ts                 # localStorage preferences with schema migration
+│   │   ├── use-conversion.ts            # engine harness React adapter
+│   │   ├── use-keyboard-shortcuts.ts
+│   │   ├── use-active-conversions.ts    # source of truth for tab-close protection
+│   │   └── use-paste-to-convert.ts      # Cmd+V clipboard image handler
+│   │
+│   ├── lib/
+│   │   ├── prefs.ts                     # Prefs type, schema migrations, defaults
+│   │   ├── file-detection.ts            # MIME + magic-byte sniffing
+│   │   ├── disambiguation.ts            # multi-operation routing logic
+│   │   ├── zip.ts                       # client-zip wrapper, output naming
+│   │   ├── error-reporting.ts           # GitHub issue prefill template
+│   │   ├── browser-support.ts           # feature detection + below-floor screen
+│   │   └── beforeunload.ts              # tab-close guard install/teardown
+│   │
+│   └── styles/
+│       └── tokens.css                   # CSS custom properties (brutalist palette + scale)
+│
+├── tests/
+│   ├── fixtures/                        # canonical inputs for correctness tests
+│   │   ├── sample.heic
+│   │   ├── sample-5pages.pdf
+│   │   ├── sample.docx
+│   │   ├── sample.md
+│   │   └── sample.png
+│   ├── e2e/                             # Playwright specs
+│   │   ├── homepage.spec.ts
+│   │   ├── heic-to-png.spec.ts
+│   │   ├── pdf-merge.spec.ts
+│   │   ├── docx-to-pdf.spec.ts
+│   │   ├── privacy-regression.spec.ts   # asserts zero outbound network
+│   │   ├── tab-close-protection.spec.ts
+│   │   └── a11y.spec.ts                 # axe sweep across all routes
+│   └── (unit tests are co-located as `<file>.test.ts` next to source)
+│
+├── .gitignore
+├── .lighthouserc.json                   # Lighthouse CI thresholds (≥95 each)
+├── biome.json                           # lint + format config
+├── next.config.ts                       # static export, security headers, bundle analyzer
+├── package.json
+├── playwright.config.ts                 # Chromium + Firefox + WebKit projects
+├── pnpm-lock.yaml
+├── postcss.config.mjs                   # Tailwind v4 PostCSS plugin
+├── README.md
+├── tsconfig.json                        # strict, noUncheckedIndexedAccess, etc.
+└── vitest.config.ts                     # jsdom env + co-located test pattern
+```
+
+**Conventions:**
+
+- **Engines are self-contained.** A new conversion is a single folder under `src/engines/` plus one entry in `_shared/registry.ts`. No edits to UI components, hooks, or routes — the harness handles them generically based on engine metadata.
+- **Workers co-located with their engine.** Each engine's `worker.ts` is the Comlink-exposed module. The harness spawns it via `new Worker(new URL('./worker.ts', import.meta.url))`.
+- **Unit tests co-located** (`foo.ts` + `foo.test.ts`) — easier discovery, easier deletion alongside the code.
+- **E2E tests centralized** under `tests/e2e/` with one spec per tool plus cross-cutting specs (privacy regression, tab-close, accessibility).
+- **Fixtures committed.** All test fixtures live in `tests/fixtures/` and are committed to the repo. They're small (< 1 MB each); deterministic tests > deterministic-CI > "fetch from somewhere."
+- **No `src/types/` god-folder.** Types live next to the code that owns them; only truly cross-cutting types (e.g., `ConversionEngine`) live in `_shared/types.ts`.
 
 ## 7. UX / interaction model
 
