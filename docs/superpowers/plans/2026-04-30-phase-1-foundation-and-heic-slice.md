@@ -2540,7 +2540,7 @@ regression to keep both load-bearing."
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -2557,6 +2557,8 @@ regression to keep both load-bearing."
 ```
 
 > **NOTE:** `style-src 'self'` is intentionally strict — Tailwind v4 in PostCSS mode emits a static stylesheet. If a deployed page console shows a CSP violation for `style-src`, do NOT relax the header; fix the offending inline style at its source. Common offenders: shadcn primitives that inject runtime CSS variables (replace with stable utility classes); third-party widgets (replace or drop).
+>
+> **NOTE on `'unsafe-inline'` in `script-src`:** Next.js 15 App Router emits inline `<script>` tags that push the React Server Components Flight payload onto `self.__next_f`. Strict `script-src 'self'` blocks these, which causes React's hydration to fail (the Flight stream throws `Connection closed`), and the App Router framework unmounts the body — yielding a blank/black page on the deployed site. Static export has no server runtime to inject per-request nonces. Build-time hash injection works but adds tooling and the hashes change each build. For a static-export app where there is no user-content-to-script-tag pathway, `'unsafe-inline'` in `script-src` is the pragmatic policy. The privacy guarantee lives in `connect-src 'self'`; XSS surface here is essentially zero. Flag hash-based hardening for a future plan.
 >
 > **NOTE on `outputDirectory`:** Do NOT add `"outputDirectory": "out"` to vercel.json. With `framework: "nextjs"`, Vercel's adapter expects `routes-manifest.json` (which lives in `.next/`) inside whatever `outputDirectory` points at. Setting it to `out` (the static-export target) makes the adapter look for `routes-manifest.json` in `out/`, where it doesn't exist, and the deploy fails with `couldn't be found ... routes-manifest.json`. The Next.js adapter detects `output: 'export'` from `next.config.ts` and serves from `out/` automatically — no `outputDirectory` setting is needed or correct.
 
