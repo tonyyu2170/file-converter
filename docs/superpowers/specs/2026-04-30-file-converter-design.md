@@ -118,23 +118,41 @@ Vercel (static host)
 
 ### 6.3 Engine interface (sketch)
 
+Two engine shapes — single-input (HEIC→PNG, DOCX→PDF, etc.) and multi-input (PDF merge, image-to-PDF). The shape is encoded so the harness can adapt the UI and avoid leaking branching logic into engine code.
+
 ```typescript
-type ConversionEngine<TOptions, TOutput> = {
+type EngineMeta<TOptions> = {
   id: string;                              // "heic-to-png"
-  inputAccept: string[];                   // [".heic", ".heif"]
-  inputMime: string[];                     // ["image/heic", "image/heif"]
+  inputAccept: string[];                   // [".heic", ".heif"]   — for <input accept>
+  inputMime: string[];                     // ["image/heic", ...]  — for runtime detection
   outputMime: string;                      // "image/png"
   defaultOptions: TOptions;
+};
+
+type SingleInputEngine<TOptions, TOutput> = EngineMeta<TOptions> & {
+  cardinality: 'single';
   validate(file: File, opts: TOptions): ValidationResult;
   convert(file: File, opts: TOptions, signal: AbortSignal): Promise<TOutput>;
 };
+
+type MultiInputEngine<TOptions, TOutput> = EngineMeta<TOptions> & {
+  cardinality: 'multi';
+  validate(files: File[], opts: TOptions): ValidationResult;
+  convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
+};
+
+type ConversionEngine<TOptions, TOutput> =
+  | SingleInputEngine<TOptions, TOutput>
+  | MultiInputEngine<TOptions, TOutput>;
 ```
 
-Each engine lives in its own file under `src/engines/<id>/`, exporting only this interface plus its options type.
+Each engine lives under `src/engines/<id>/`, exporting only this interface plus its options type. Batch operations on single-input engines (e.g., converting 10 HEICs) are handled by a shared queue harness, not by the engine itself.
 
 ## 7. UX / interaction model
 
 ### 7.1 Layout
+
+**Viewport:** desktop only. Minimum supported viewport `1280×720`; reference design at `1440×900`. Below `1280` width, render a "desktop required" notice rather than degrade silently. No mobile breakpoints in v1.
 
 Two-column persistent layout:
 
@@ -176,11 +194,21 @@ Two-column persistent layout:
 
 ### 7.4 Output handling (smart default)
 
-- **Single-file ops** auto-download to the OS Downloads folder (one file, one download).
-- **Multi-file ops** stage output on-screen with previews. User clicks per-row Download or "Download all (zip)".
-- **Batch ZIP threshold:** >5 files → single ZIP by default; toggle to switch to individual downloads.
-- **Filename strategy:** original basename + new extension (`vacation.heic` → `vacation.png`).
-- **Previews:** thumbnails for images; first-page render for PDFs; text head for documents.
+The rule is keyed on **output count**, not input count:
+
+- **One output file** → auto-download to OS Downloads folder.
+- **2–5 output files** → stage on-screen with previews; per-row Download buttons; "Download all" downloads each individually.
+- **6+ output files** → stage on-screen; default to "Download all (zip)" packaging; toggle exists for those who want individual downloads.
+
+This handles the asymmetric cases cleanly:
+- HEIC → PNG (single → single): auto-download.
+- 3 PDFs → merged PDF (multi → single): auto-download.
+- 50-page PDF → 50 images (single → many): staged with ZIP default.
+- 10 HEICs → 10 PNGs (multi → many): staged with ZIP default.
+
+**Batch ZIP threshold:** triggered when `outputCount > zipBatchThreshold`. Default `zipBatchThreshold = 5` (i.e., 6 or more outputs → ZIP). Configurable in preferences.
+**Filename strategy:** original basename + new extension (`vacation.heic` → `vacation.png`). For multi-page → multi-image, suffix with `-page-N` (`doc.pdf` → `doc-page-1.png`).
+**Previews:** thumbnails for images; first-page render for PDFs; text head for documents.
 
 ### 7.5 Keyboard shortcuts (light)
 
@@ -363,6 +391,7 @@ Migrations: keyed by `schemaVersion`. On version mismatch, stale keys are nuked 
 | Performance | Playwright + custom metric | Wall-clock for representative conversions; warning (not failing) above 2× target |
 | Accessibility | axe via Playwright | Zero AA violations on every route |
 | Bundle size | `next bundle-analyzer` in CI | Per-route budget; fails if HEIC tool route bloats the homepage bundle |
+| Lighthouse | `@lhci/cli` (Lighthouse CI) on the deployed preview | Performance, Accessibility, Best Practices, SEO — fails PR if any category drops below 95 |
 | Privacy regression | Playwright | One E2E test asserts zero outbound network during a representative conversion |
 
 **Mocking policy:** **no mocks for conversion libraries** in correctness tests. We test the real libheif, the real pdf-lib. Mocking those would invalidate the test value.
@@ -388,7 +417,8 @@ PR opened/updated:
   ├── E2E (Playwright, headless Chromium + Firefox + WebKit)
   ├── Bundle-size budget check
   ├── axe accessibility audit
-  └── Privacy regression test (no outbound network)
+  ├── Privacy regression test (no outbound network)
+  └── Lighthouse CI on Vercel preview (≥95 each category)
 
 Merge to main:
   └── Vercel auto-deploys static export
