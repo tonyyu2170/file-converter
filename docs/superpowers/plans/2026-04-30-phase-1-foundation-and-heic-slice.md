@@ -2245,7 +2245,7 @@ gets its own per-row download button."
 
 ### Task 12: HEIC tool route + universal homepage routing
 
-**Goal:** `/tools/heic-to-png` runs the engine end-to-end. Universal homepage detects HEIC drops and forwards to the tool route. Single-output auto-download triggers; multi-output (none in this engine) would stage on-screen, that path is exercised by the `ResultList` rendering when present.
+**Goal:** `/tools/heic-to-png` runs the engine end-to-end. Universal homepage detects HEIC drops and forwards to the tool route. All outputs stage in the result list with per-row download buttons; no auto-download (user clicks to save).
 
 **Files:**
 - Create: `src/components/tool-frame.tsx`, `src/app/tools/heic-to-png/page.tsx`
@@ -2260,7 +2260,6 @@ import { useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { StatusIndicator, type Status } from "./status-indicator";
-import { download } from "@/lib/download";
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 
 type Props<TOptions> = {
@@ -2289,15 +2288,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         const ctrl = new AbortController();
         const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
         const out = Array.isArray(result) ? result : [result];
-        if (out.length === 1) {
-          // Single output: auto-download.
-          const item = out[0];
-          if (item) download(item.blob, item.filename);
-          setItems(out);
-        } else {
-          // Multi output: stage.
-          setItems(out);
-        }
+        setItems(out);
         setStatus("done");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
@@ -2460,15 +2451,10 @@ import path from "node:path";
 test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   await page.goto("/tools/heic-to-png");
 
-  // Status starts ready.
   await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
 
-  // Locate the hidden file input.
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
-
-  // Set up the download promise BEFORE triggering the conversion.
-  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
 
   await input.setInputFiles(fixture);
 
@@ -2478,6 +2464,13 @@ test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   // would flake on a perfectly-working app.
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", { timeout: 30_000 });
 
+  const downloadButton = page.getByRole("button", { name: /^download / });
+  await expect(downloadButton).toBeVisible();
+
+  // Set up the download promise BEFORE clicking the button — download events
+  // fire near-instantly after the click handler runs.
+  const downloadPromise = page.waitForEvent("download", { timeout: 5_000 });
+  await downloadButton.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.png$/i);
 });

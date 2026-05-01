@@ -1,7 +1,6 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
-import { download } from "@/lib/download";
 import { useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
@@ -33,10 +32,6 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         const ctrl = new AbortController();
         const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
         const out = Array.isArray(result) ? result : [result];
-        if (out.length === 1) {
-          const item = out[0];
-          if (item) download(item.blob, item.filename);
-        }
         setItems(out);
         setStatus("done");
       } catch (err) {

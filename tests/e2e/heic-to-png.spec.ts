@@ -10,9 +10,6 @@ test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
 
-  // Set up the download promise BEFORE triggering the conversion.
-  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
-
   await input.setInputFiles(fixture);
 
   // Wait for terminal state. We do NOT assert the intermediate `[ CONVERTING ]`
@@ -23,6 +20,13 @@ test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
     timeout: 30_000,
   });
 
+  const downloadButton = page.getByRole("button", { name: /^download / });
+  await expect(downloadButton).toBeVisible();
+
+  // Set up the download promise BEFORE clicking, since download events
+  // fire near-instantly after the click handler runs.
+  const downloadPromise = page.waitForEvent("download", { timeout: 5_000 });
+  await downloadButton.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.png$/i);
   const dlPath = await download.path();
