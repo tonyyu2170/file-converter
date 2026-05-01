@@ -1554,7 +1554,7 @@ export const defaultHeicToPngOptions: HeicToPngOptions = {};
 
 ```ts
 import * as Comlink from "comlink";
-import libheif from "libheif-js";
+import libheif from "libheif-js/wasm-bundle";
 import type { OutputItem } from "@/engines/_shared/types";
 import type { HeicToPngOptions } from "./options";
 
@@ -1574,8 +1574,8 @@ const api = {
     _type: string,
     _opts: HeicToPngOptions,
   ): Promise<OutputItem> {
-    const decoder = libheif.HeifDecoder();
-    const data = decoder.decode(bytes);
+    const decoder = new libheif.HeifDecoder();
+    const data = decoder.decode(new Uint8Array(bytes));
     if (!data || data.length === 0) {
       throw new Error("libheif: no images decoded from HEIC");
     }
@@ -1708,6 +1708,33 @@ pnpm test
 ```
 
 Expected: all pass, including the new metadata test and registry positive-path.
+
+- [ ] **Step 8b: Verify the engine builds when actually imported by a page**
+
+Unit tests don't exercise Webpack's module resolution for the engine
+(no page imports it yet). Run a temporary build-probe to confirm the
+worker's libheif-js subpath resolves correctly for the browser target.
+
+Add a single `import` line at the top of `src/app/page.tsx` (do NOT
+commit this change):
+
+```ts
+import "@/engines/heic-to-png";
+```
+
+Run `pnpm build`. Expected: exits 0; build emits a worker chunk and
+a wasm-payload chunk. If build fails on
+`Module not found: Can't resolve 'fs'` or similar, the engine's
+libheif-js import path is the Node variant — fix the import in
+`worker.ts` to use a browser subpath (e.g., `libheif-js/wasm-bundle`).
+
+Revert the probe edit in `src/app/page.tsx`:
+
+```bash
+git checkout -- src/app/page.tsx
+```
+
+Confirm with `git status`: working tree clean.
 
 - [ ] **Step 9: Commit**
 

@@ -1,6 +1,6 @@
 declare module "libheif-js" {
   interface DisplayTarget {
-    data: Uint8ClampedArray;
+    data: Uint8ClampedArray<ArrayBuffer>;
     width: number;
     height: number;
   }
@@ -20,5 +20,10 @@ declare module "libheif-js" {
   }
 
   const libheif: LibHeif;
+  export default libheif;
+}
+
+declare module "libheif-js/wasm-bundle" {
+  import libheif from "libheif-js";
   export default libheif;
 }
