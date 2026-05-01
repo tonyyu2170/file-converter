@@ -36,10 +36,8 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         if (out.length === 1) {
           const item = out[0];
           if (item) download(item.blob, item.filename);
-          setItems(out);
-        } else {
-          setItems(out);
         }
+        setItems(out);
         setStatus("done");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
