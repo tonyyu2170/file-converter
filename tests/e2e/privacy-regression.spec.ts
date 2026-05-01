@@ -21,15 +21,28 @@ test("conversion produces zero outbound network requests beyond initial load", a
       conversionRequests.push(req.url());
     }
   });
+  const conversionWebSockets: string[] = [];
+  page.on("websocket", (ws) => {
+    const origin = new URL(ws.url()).origin;
+    if (origin !== new URL(page.url()).origin) {
+      conversionWebSockets.push(ws.url());
+    }
+  });
 
   // Phase 3: run the conversion.
   await page.getByTestId("run").click();
   await expect(page.getByTestId("status")).toHaveText("done", { timeout: 5000 });
+  // Catch deferred (setTimeout-style) exfiltration that lands after `done`.
+  await page.waitForLoadState("networkidle");
 
   // Phase 4: assert.
   expect(
     conversionRequests,
     `Conversion made off-origin requests: ${conversionRequests.join(", ")}`,
+  ).toEqual([]);
+  expect(
+    conversionWebSockets,
+    `Conversion opened off-origin WebSockets: ${conversionWebSockets.join(", ")}`,
   ).toEqual([]);
 
   // Sanity: the conversion did produce output.

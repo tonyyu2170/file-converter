@@ -27,5 +27,22 @@
       "quoteStyle": "double",
       "semicolons": "always"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["src/engines/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": ["fetch", "XMLHttpRequest", "WebSocket", "EventSource"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

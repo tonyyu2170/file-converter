@@ -1493,11 +1493,11 @@ Expected: all green.
 git add src/app/test-only tests/e2e/privacy-regression.spec.ts
 git commit -m "test(privacy): regression E2E asserts zero outbound network
 
-Test mounts an unadvertised /test-only/stub-runner route, invokes the stub
-engine from the browser, and verifies no off-origin requests are
-made during conversion. Written against the stub before the HEIC
-engine is wired so the assertion is genuinely a regression
-check rather than a 'did it work once' snapshot."
+Test mounts an unadvertised /test-only/stub-runner route, invokes
+the stub engine from the browser, and verifies no off-origin
+requests are made during conversion. Written against the stub
+before the HEIC engine is wired so the assertion is genuinely a
+regression check rather than a 'did it work once' snapshot."
 ```
 
 ---
