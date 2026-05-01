@@ -19,9 +19,12 @@ export function ResultList({ items }: Props) {
           key={item.filename}
           className="flex items-center justify-between px-3 py-2 text-[var(--text-sm)]"
         >
-          <span className="truncate text-[var(--color-fg)]">{item.filename}</span>
+          <span className="truncate text-[var(--color-fg)]" title={item.filename}>
+            {item.filename}
+          </span>
           <button
             type="button"
+            aria-label={`download ${item.filename}`}
             onClick={() => download(item.blob, item.filename)}
             className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] hover:border-[var(--color-accent)]"
           >

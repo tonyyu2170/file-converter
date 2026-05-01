@@ -30,32 +30,7 @@ export function DropZone({
   );
 
   return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        handleFiles(e.dataTransfer?.files ?? null);
-      }}
-      data-testid="drop-zone"
-      data-state={over ? "over" : "idle"}
-      className={`flex w-full flex-col items-center justify-center border border-[var(--color-hairline)] bg-[var(--color-surface)] p-12 text-center transition-colors ${
-        over ? "border-[var(--color-accent)]" : ""
-      }`}
-      style={{
-        backgroundImage: over
-          ? "repeating-linear-gradient(45deg, #0d0d0d 0 6px, #0a0a0a 6px 12px)"
-          : undefined,
-      }}
-    >
-      <span className="mb-1 text-[var(--text-base)] text-[var(--color-fg-strong)]">{prompt}</span>
-      <span className="text-[var(--text-xs)] text-[var(--color-fg-muted)]">{hint}</span>
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -64,6 +39,33 @@ export function DropZone({
         onChange={(e) => handleFiles(e.target.files)}
         className="sr-only"
       />
-    </button>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          handleFiles(e.dataTransfer?.files ?? null);
+        }}
+        data-testid="drop-zone"
+        data-state={over ? "over" : "idle"}
+        className={`flex w-full flex-col items-center justify-center border border-[var(--color-hairline)] bg-[var(--color-surface)] p-12 text-center transition-colors ${
+          over ? "border-[var(--color-accent)]" : ""
+        }`}
+        style={{
+          backgroundImage: over
+            ? "repeating-linear-gradient(45deg, #0d0d0d 0 6px, #0a0a0a 6px 12px)"
+            : undefined,
+        }}
+      >
+        <span className="mb-1 text-[var(--text-base)] text-[var(--color-fg-strong)]">{prompt}</span>
+        <span className="text-[var(--text-xs)] text-[var(--color-fg-muted)]">{hint}</span>
+      </button>
+    </>
   );
 }

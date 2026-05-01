@@ -22,14 +22,14 @@ describe("ResultList", () => {
         ]}
       />,
     );
-    expect(screen.getAllByRole("button", { name: "download" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^download / })).toHaveLength(2);
     expect(screen.getByText("a.png")).toBeInTheDocument();
   });
 
   it("invokes download with the item's blob and filename when clicked", () => {
     const item = { filename: "a.png", mime: "image/png", blob: new Blob(["a"]) };
     render(<ResultList items={[item]} />);
-    fireEvent.click(screen.getByRole("button", { name: "download" }));
+    fireEvent.click(screen.getByRole("button", { name: /^download / }));
     expect(downloadMock).toHaveBeenCalledWith(item.blob, item.filename);
   });
 });

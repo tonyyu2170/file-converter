@@ -12,6 +12,13 @@ if (typeof Blob !== "undefined" && Blob.prototype.arrayBuffer === undefined) {
   };
 }
 
+if (typeof URL.createObjectURL !== "function") {
+  URL.createObjectURL = () => "";
+}
+if (typeof URL.revokeObjectURL !== "function") {
+  URL.revokeObjectURL = () => undefined;
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
