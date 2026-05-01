@@ -880,7 +880,7 @@ export function pageSuffixedName(originalName: string, page: number, newExtensio
 }
 
 export function sanitizeFilename(name: string): string {
-  return name.replace(/[ -<>:"/\\|?*]/g, "_").slice(0, 255);
+  return name.replace(/[<>:"/\\|?* ]/g, "_").slice(0, 255);
 }
 ```
 
@@ -920,12 +920,22 @@ describe("pageSuffixedName", () => {
 });
 
 describe("sanitizeFilename", () => {
-  it("replaces forbidden characters", () => {
-    expect(sanitizeFilename('weird/name<>:"|?*.txt')).toBe("weird_name________.txt");
+  it("preserves dot, digits, hyphens, underscores in normal names", () => {
+    expect(sanitizeFilename("vacation.png")).toBe("vacation.png");
+    expect(sanitizeFilename("doc-page-1.png")).toBe("doc-page-1.png");
+    expect(sanitizeFilename("IMG_1234.heic")).toBe("IMG_1234.heic");
+  });
+
+  it("replaces forbidden cross-platform chars", () => {
+    expect(sanitizeFilename('a/b\\c<d>e:f"g|h?i*j.txt')).toBe("a_b_c_d_e_f_g_h_i_j.txt");
+  });
+
+  it("replaces spaces", () => {
+    expect(sanitizeFilename("my file.txt")).toBe("my_file.txt");
   });
 
   it("truncates to 255 chars", () => {
-    const long = "a".repeat(300) + ".txt";
+    const long = `${"a".repeat(300)}.txt`;
     expect(sanitizeFilename(long)).toHaveLength(255);
   });
 });

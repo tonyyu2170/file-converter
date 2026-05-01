@@ -13,5 +13,5 @@ export function pageSuffixedName(originalName: string, page: number, newExtensio
 }
 
 export function sanitizeFilename(name: string): string {
-  return name.replace(/[ -<>:"/\\|?*]/g, "_").slice(0, 255);
+  return name.replace(/[<>:"/\\|?* ]/g, "_").slice(0, 255);
 }
