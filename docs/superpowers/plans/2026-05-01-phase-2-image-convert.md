@@ -28,6 +28,7 @@
 **Files:**
 - Modify: `src/engines/_shared/types.ts`
 - Modify: `src/engines/_shared/types.test-d.ts`
+- Modify: `src/engines/_shared/registry.ts` — the new `isReadyToConvert?: (opts: TOptions) => boolean` field puts a function in input-contravariant position. With `exactOptionalPropertyTypes`, the existing `Loader` type's `ConversionEngine<unknown, ...>` default no longer accepts concrete engine types (e.g., `(opts: HeicToPngOptions) => boolean` is not assignable to `(opts: unknown) => boolean`). Widen `Loader` to use `ConversionEngine<any, OutputItem | OutputItem[]>` (factored as `type AnyEngine = ...` for a labeled `any` boundary), with a `biome-ignore lint/suspicious/noExplicitAny` annotation. The registry is the canonical type-erasure boundary; `loadEngine`'s public return type stays `ConversionEngine` (unparameterized) so callers are unaffected.
 
 - [ ] **Step 1: Add the new optional fields to both engine types**
 
