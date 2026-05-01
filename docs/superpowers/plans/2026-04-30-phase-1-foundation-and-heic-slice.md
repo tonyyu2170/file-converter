@@ -268,13 +268,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   trailingSlash: false,
   // Note: `headers()` does NOT run with `output: 'export'`.
-  // Security headers are configured in vercel.json (Task 11).
+  // Security headers are configured in vercel.json (Task 14).
   images: {
     unoptimized: true, // required for static export
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
 };
 
 export default nextConfig;
@@ -882,7 +880,7 @@ export function pageSuffixedName(originalName: string, page: number, newExtensio
 }
 
 export function sanitizeFilename(name: string): string {
-  return name.replace(/[ -<>:"/\\|?*]/g, "_").slice(0, 255);
+  return name.replace(/[<>:"/\\|?* ]/g, "_").slice(0, 255);
 }
 ```
 
@@ -922,12 +920,22 @@ describe("pageSuffixedName", () => {
 });
 
 describe("sanitizeFilename", () => {
-  it("replaces forbidden characters", () => {
-    expect(sanitizeFilename('weird/name<>:"|?*.txt')).toBe("weird_name________.txt");
+  it("preserves dot, digits, hyphens, underscores in normal names", () => {
+    expect(sanitizeFilename("vacation.png")).toBe("vacation.png");
+    expect(sanitizeFilename("doc-page-1.png")).toBe("doc-page-1.png");
+    expect(sanitizeFilename("IMG_1234.heic")).toBe("IMG_1234.heic");
+  });
+
+  it("replaces forbidden cross-platform chars", () => {
+    expect(sanitizeFilename('a/b\\c<d>e:f"g|h?i*j.txt')).toBe("a_b_c_d_e_f_g_h_i_j.txt");
+  });
+
+  it("replaces spaces", () => {
+    expect(sanitizeFilename("my file.txt")).toBe("my_file.txt");
   });
 
   it("truncates to 255 chars", () => {
-    const long = "a".repeat(300) + ".txt";
+    const long = `${"a".repeat(300)}.txt`;
     expect(sanitizeFilename(long)).toHaveLength(255);
   });
 });
@@ -1485,11 +1493,11 @@ Expected: all green.
 git add src/app/test-only tests/e2e/privacy-regression.spec.ts
 git commit -m "test(privacy): regression E2E asserts zero outbound network
 
-Test mounts an unadvertised /test-only/stub-runner route, invokes the stub
-engine from the browser, and verifies no off-origin requests are
-made during conversion. Written against the stub before the HEIC
-engine is wired so the assertion is genuinely a regression
-check rather than a 'did it work once' snapshot."
+Test mounts an unadvertised /test-only/stub-runner route, invokes
+the stub engine from the browser, and verifies no off-origin
+requests are made during conversion. Written against the stub
+before the HEIC engine is wired so the assertion is genuinely a
+regression check rather than a 'did it work once' snapshot."
 ```
 
 ---
@@ -1500,7 +1508,7 @@ check rather than a 'did it work once' snapshot."
 
 **Files:**
 - Create: `src/engines/heic-to-png/options.ts`, `src/engines/heic-to-png/worker.ts`, `src/engines/heic-to-png/index.ts`, `src/engines/heic-to-png/index.test.ts`, `tests/fixtures/sample.heic`
-- Modify: `src/engines/_shared/registry.test.ts` (add positive-path test)
+- Modify: `src/engines/_shared/registry.ts`, `src/engines/_shared/registry.test.ts` (swap throwing stub loader → real dynamic import; add positive-path test)
 
 - [ ] **Step 1: Install libheif-js**
 
@@ -1546,7 +1554,7 @@ export const defaultHeicToPngOptions: HeicToPngOptions = {};
 
 ```ts
 import * as Comlink from "comlink";
-import libheif from "libheif-js";
+import libheif from "libheif-js/wasm-bundle";
 import type { OutputItem } from "@/engines/_shared/types";
 import type { HeicToPngOptions } from "./options";
 
@@ -1566,8 +1574,8 @@ const api = {
     _type: string,
     _opts: HeicToPngOptions,
   ): Promise<OutputItem> {
-    const decoder = libheif.HeifDecoder();
-    const data = decoder.decode(bytes);
+    const decoder = new libheif.HeifDecoder();
+    const data = decoder.decode(new Uint8Array(bytes));
     if (!data || data.length === 0) {
       throw new Error("libheif: no images decoded from HEIC");
     }
@@ -1627,12 +1635,29 @@ const engine: SingleInputEngine<HeicToPngOptions, OutputItem> = {
       () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
     );
     const result = await harness.runSingle(file, opts, signal);
-    return Array.isArray(result) ? (result[0] as OutputItem) : result;
+    if (Array.isArray(result)) {
+      const first = result[0];
+      if (!first) throw new Error("engine returned empty array");
+      return first;
+    }
+    return result;
   },
 };
 
 export default engine;
 ```
+
+- [ ] **Step 5b: Swap the registry loader from throwing stub to real dynamic import**
+
+In `src/engines/_shared/registry.ts`, replace the throwing stub with the real dynamic import. Open the file and change the registry block so it reads:
+
+```ts
+const REGISTRY: Record<EngineId, Loader> = {
+  "heic-to-png": () => import("@/engines/heic-to-png"),
+};
+```
+
+Delete the now-unused `heicToPngLoader` helper and its preceding comment (lines 8–14 of the original Task 7 file). The dynamic import resolves now that `src/engines/heic-to-png/index.ts` exists.
 
 - [ ] **Step 6: Write `index.test.ts`**
 
@@ -1684,10 +1709,37 @@ pnpm test
 
 Expected: all pass, including the new metadata test and registry positive-path.
 
+- [ ] **Step 8b: Verify the engine builds when actually imported by a page**
+
+Unit tests don't exercise Webpack's module resolution for the engine
+(no page imports it yet). Run a temporary build-probe to confirm the
+worker's libheif-js subpath resolves correctly for the browser target.
+
+Add a single `import` line at the top of `src/app/page.tsx` (do NOT
+commit this change):
+
+```ts
+import "@/engines/heic-to-png";
+```
+
+Run `pnpm build`. Expected: exits 0; build emits a worker chunk and
+a wasm-payload chunk. If build fails on
+`Module not found: Can't resolve 'fs'` or similar, the engine's
+libheif-js import path is the Node variant — fix the import in
+`worker.ts` to use a browser subpath (e.g., `libheif-js/wasm-bundle`).
+
+Revert the probe edit in `src/app/page.tsx`:
+
+```bash
+git checkout -- src/app/page.tsx
+```
+
+Confirm with `git status`: working tree clean.
+
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/engines/heic-to-png src/engines/_shared/registry.test.ts tests/fixtures/sample.heic
+git add src/engines/heic-to-png src/engines/_shared/registry.ts src/engines/_shared/registry.test.ts tests/fixtures/sample.heic
 git commit -m "feat(engines): heic-to-png via libheif-js + OffscreenCanvas
 
 Worker decodes HEIC with libheif-js, encodes the bitmap to PNG via
@@ -2193,7 +2245,7 @@ gets its own per-row download button."
 
 ### Task 12: HEIC tool route + universal homepage routing
 
-**Goal:** `/tools/heic-to-png` runs the engine end-to-end. Universal homepage detects HEIC drops and forwards to the tool route. Single-output auto-download triggers; multi-output (none in this engine) would stage on-screen, that path is exercised by the `ResultList` rendering when present.
+**Goal:** `/tools/heic-to-png` runs the engine end-to-end. Universal homepage detects HEIC drops and forwards to the tool route. All outputs stage in the result list with per-row download buttons; no auto-download (user clicks to save).
 
 **Files:**
 - Create: `src/components/tool-frame.tsx`, `src/app/tools/heic-to-png/page.tsx`
@@ -2204,11 +2256,11 @@ gets its own per-row download button."
 ```tsx
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { StatusIndicator, type Status } from "./status-indicator";
-import { download } from "@/lib/download";
+import { takeStagedFile } from "@/lib/handoff";
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 
 type Props<TOptions> = {
@@ -2220,13 +2272,34 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function run(files: File[]) {
-    setErrorMessage(null);
-    setItems([]);
-    if (engine.cardinality === "single") {
-      const f = files[0];
-      if (!f) return;
-      const v = engine.validate(f, engine.defaultOptions);
+  const run = useCallback(
+    async (files: File[]) => {
+      setErrorMessage(null);
+      setItems([]);
+      if (engine.cardinality === "single") {
+        const f = files[0];
+        if (!f) return;
+        const v = engine.validate(f, engine.defaultOptions);
+        if (!v.ok) {
+          setErrorMessage(v.reason);
+          setStatus("error");
+          return;
+        }
+        setStatus("converting");
+        try {
+          const ctrl = new AbortController();
+          const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
+          const out = Array.isArray(result) ? result : [result];
+          setItems(out);
+          setStatus("done");
+        } catch (err) {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+          setStatus("error");
+        }
+        return;
+      }
+
+      const v = engine.validate(files, engine.defaultOptions);
       if (!v.ok) {
         setErrorMessage(v.reason);
         setStatus("error");
@@ -2235,43 +2308,21 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       setStatus("converting");
       try {
         const ctrl = new AbortController();
-        const result = await engine.convert(f, engine.defaultOptions, ctrl.signal);
-        const out = Array.isArray(result) ? result : [result];
-        if (out.length === 1) {
-          // Single output: auto-download.
-          const item = out[0];
-          if (item) download(item.blob, item.filename);
-          setItems(out);
-        } else {
-          // Multi output: stage.
-          setItems(out);
-        }
+        const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
+        setItems(Array.isArray(result) ? result : [result]);
         setStatus("done");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setStatus("error");
       }
-      return;
-    }
+    },
+    [engine],
+  );
 
-    // multi-input branch (PDF merge etc.) — implemented in later plans.
-    const v = engine.validate(files, engine.defaultOptions);
-    if (!v.ok) {
-      setErrorMessage(v.reason);
-      setStatus("error");
-      return;
-    }
-    setStatus("converting");
-    try {
-      const ctrl = new AbortController();
-      const result = await engine.convert(files, engine.defaultOptions, ctrl.signal);
-      setItems(Array.isArray(result) ? result : [result]);
-      setStatus("done");
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-      setStatus("error");
-    }
-  }
+  useEffect(() => {
+    const staged = takeStagedFile();
+    if (staged) run([staged]);
+  }, [run]);
 
   return (
     <main className="p-6">
@@ -2317,6 +2368,7 @@ export default function HeicToPngPage() {
 import { useRouter } from "next/navigation";
 import { DropZone } from "@/components/drop-zone";
 import { detectMime } from "@/engines/_shared/file-detection";
+import { stageFile } from "@/lib/handoff";
 
 export default function Home() {
   const router = useRouter();
@@ -2326,9 +2378,8 @@ export default function Home() {
     if (!f) return;
     const mime = await detectMime(f);
     if (mime === "image/heic" || mime === "image/heif") {
+      stageFile(f);
       router.push("/tools/heic-to-png");
-      // The user will need to drop the file again on the tool page.
-      // Cross-route file handoff is a Plan 5 enhancement.
       return;
     }
     // No matching engine yet. Future plans will surface a disambiguation modal.
@@ -2385,9 +2436,11 @@ and applies the smart-default download rule. Single-output engines
 auto-download; multi-output stay staged in the result list (ZIP
 packaging arrives in Plan 5).
 
-Homepage detects MIME on drop and routes to the matching tool
-route. Cross-route file handoff (drop file on home → land in tool
-with file pre-staged) is deferred to Plan 5."
+Homepage detects MIME on drop, stages the file in a module-level
+slot via stageFile(), and routes to the matching tool. ToolFrame
+consumes the staged file on mount via takeStagedFile() in a
+useEffect, so the user drops once and the conversion runs without
+a second drop on the tool page."
 ```
 
 ---
@@ -2408,15 +2461,10 @@ import path from "node:path";
 test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   await page.goto("/tools/heic-to-png");
 
-  // Status starts ready.
   await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
 
-  // Locate the hidden file input.
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
-
-  // Set up the download promise BEFORE triggering the conversion.
-  const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
 
   await input.setInputFiles(fixture);
 
@@ -2426,6 +2474,13 @@ test("HEIC to PNG produces a downloadable PNG", async ({ page }) => {
   // would flake on a perfectly-working app.
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", { timeout: 30_000 });
 
+  const downloadButton = page.getByRole("button", { name: /^download / });
+  await expect(downloadButton).toBeVisible();
+
+  // Set up the download promise BEFORE clicking the button — download events
+  // fire near-instantly after the click handler runs.
+  const downloadPromise = page.waitForEvent("download", { timeout: 5_000 });
+  await downloadButton.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.png$/i);
 });
@@ -2480,7 +2535,6 @@ regression to keep both load-bearing."
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
-  "outputDirectory": "out",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "headers": [
@@ -2489,7 +2543,7 @@ regression to keep both load-bearing."
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
         },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -2506,6 +2560,10 @@ regression to keep both load-bearing."
 ```
 
 > **NOTE:** `style-src 'self'` is intentionally strict — Tailwind v4 in PostCSS mode emits a static stylesheet. If a deployed page console shows a CSP violation for `style-src`, do NOT relax the header; fix the offending inline style at its source. Common offenders: shadcn primitives that inject runtime CSS variables (replace with stable utility classes); third-party widgets (replace or drop).
+>
+> **NOTE on `'unsafe-inline'` in `script-src`:** Next.js 15 App Router emits inline `<script>` tags that push the React Server Components Flight payload onto `self.__next_f`. Strict `script-src 'self'` blocks these, which causes React's hydration to fail (the Flight stream throws `Connection closed`), and the App Router framework unmounts the body — yielding a blank/black page on the deployed site. Static export has no server runtime to inject per-request nonces. Build-time hash injection works but adds tooling and the hashes change each build. For a static-export app where there is no user-content-to-script-tag pathway, `'unsafe-inline'` in `script-src` is the pragmatic policy. The privacy guarantee lives in `connect-src 'self'`; XSS surface here is essentially zero. Flag hash-based hardening for a future plan.
+>
+> **NOTE on `outputDirectory`:** Do NOT add `"outputDirectory": "out"` to vercel.json. With `framework: "nextjs"`, Vercel's adapter expects `routes-manifest.json` (which lives in `.next/`) inside whatever `outputDirectory` points at. Setting it to `out` (the static-export target) makes the adapter look for `routes-manifest.json` in `out/`, where it doesn't exist, and the deploy fails with `couldn't be found ... routes-manifest.json`. The Next.js adapter detects `output: 'export'` from `next.config.ts` and serves from `out/` automatically — no `outputDirectory` setting is needed or correct.
 
 - [ ] **Step 2: Write a minimal README**
 
@@ -2663,7 +2721,7 @@ If all four hold, Phase 1 is shipped.
 
 - **Lint rule blocking `fetch` in `src/engines/`:** spec §10.1 calls for this. Deferred to Plan 6 (production hardening). Phase 1 does not have this guardrail; the privacy regression test catches the same class of bug from the runtime side.
 
-- **Cross-route file handoff:** dropping a HEIC on the homepage routes to `/tools/heic-to-png` but does not pre-stage the file there. This is called out in Task 12 and deferred to Plan 5.
+- ~~**Cross-route file handoff:**~~ landed in Plan 1 via `src/lib/handoff.ts`'s `stageFile`/`takeStagedFile` single-consumer slot. Homepage stages on drop; ToolFrame's mount effect consumes and runs. E2E coverage: `tests/e2e/homepage-handoff.spec.ts`.
 
 ---
 
