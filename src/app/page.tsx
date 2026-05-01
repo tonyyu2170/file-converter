@@ -1,9 +1,12 @@
 export default function Home() {
   return (
-    <main className="p-4">
-      <h1 className="text-[var(--text-lg)] text-[var(--color-fg-strong)]">file-converter</h1>
-      <p className="text-[var(--color-fg-muted)]">tokens are wired</p>
-      <span className="text-[var(--color-accent)]">[ READY ]</span>
+    <main className="flex h-full items-center justify-center p-6">
+      <div className="border border-[var(--color-hairline)] p-12 text-center">
+        <div className="mb-2 text-[var(--text-lg)] text-[var(--color-fg-strong)]">drop a file</div>
+        <div className="text-[var(--text-xs)] text-[var(--color-fg-muted)]">
+          or click a tool in the sidebar
+        </div>
+      </div>
     </main>
   );
 }
