@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sidebar />
           <div className="flex-1 overflow-auto">{children}</div>
         </div>
-        <Footer status="ready" count={0} version="v0.1.0" />
+        <Footer count={0} version="v0.1.0" />
       </body>
     </html>
   );
