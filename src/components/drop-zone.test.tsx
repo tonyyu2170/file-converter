@@ -27,4 +27,26 @@ describe("DropZone", () => {
     fireEvent.dragLeave(zone);
     expect(zone).toHaveAttribute("data-state", "idle");
   });
+
+  it("renders muted state when disabled", () => {
+    render(<DropZone onFiles={() => undefined} disabled />);
+    expect(screen.getByTestId("drop-zone")).toHaveAttribute("data-state", "disabled");
+  });
+
+  it("does not call onFiles when a drop occurs while disabled", () => {
+    const onFiles = vi.fn();
+    render(<DropZone onFiles={onFiles} disabled />);
+    const file = new File(["x"], "a.heic", { type: "image/heic" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+    expect(onFiles).not.toHaveBeenCalled();
+  });
+
+  it("does not toggle data-state to 'over' on dragover while disabled", () => {
+    render(<DropZone onFiles={() => undefined} disabled />);
+    const zone = screen.getByTestId("drop-zone");
+    fireEvent.dragOver(zone);
+    expect(zone).toHaveAttribute("data-state", "disabled");
+  });
 });
