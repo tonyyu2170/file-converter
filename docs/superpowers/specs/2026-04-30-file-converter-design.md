@@ -590,6 +590,7 @@ In rough priority order:
 6. **PWA / offline mode** — once feature surface stabilizes.
 7. **Mobile responsive layout** — when desktop is mature.
 8. **Custom domain + branding refresh** — when ready.
+9. **AI image transforms** — background removal, watermark removal, possibly upscaling/inpainting. Browser-side only to honor `connect-src 'self'` (server-side ML breaks the privacy guarantee). Candidates: MediaPipe Selfie Segmentation (~10 MB) for background removal, in-browser inpainting models (larger; gated on bundle-size strategy from Phase 6) for watermark removal. Each fits the engine pattern as `bg-remove`, `watermark-remove` etc.
 
 Each future engine plugs into the `convert()` interface (Section 6.3) as a lazy-loaded module. v1's modular structure is what makes future scope cheap.
 
