@@ -2532,7 +2532,6 @@ regression to keep both load-bearing."
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
-  "outputDirectory": "out",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "headers": [
@@ -2558,6 +2557,8 @@ regression to keep both load-bearing."
 ```
 
 > **NOTE:** `style-src 'self'` is intentionally strict — Tailwind v4 in PostCSS mode emits a static stylesheet. If a deployed page console shows a CSP violation for `style-src`, do NOT relax the header; fix the offending inline style at its source. Common offenders: shadcn primitives that inject runtime CSS variables (replace with stable utility classes); third-party widgets (replace or drop).
+>
+> **NOTE on `outputDirectory`:** Do NOT add `"outputDirectory": "out"` to vercel.json. With `framework: "nextjs"`, Vercel's adapter expects `routes-manifest.json` (which lives in `.next/`) inside whatever `outputDirectory` points at. Setting it to `out` (the static-export target) makes the adapter look for `routes-manifest.json` in `out/`, where it doesn't exist, and the deploy fails with `couldn't be found ... routes-manifest.json`. The Next.js adapter detects `output: 'export'` from `next.config.ts` and serves from `out/` automatically — no `outputDirectory` setting is needed or correct.
 
 - [ ] **Step 2: Write a minimal README**
 
