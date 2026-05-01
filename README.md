@@ -2,7 +2,7 @@
 
 Local, private file conversion. Files never leave your device.
 
-- Live: (set after first deploy)
+- Live: https://file-converter-omega-rosy.vercel.app
 - Spec: [`docs/superpowers/specs/2026-04-30-file-converter-design.md`](docs/superpowers/specs/2026-04-30-file-converter-design.md)
 - Plan 1: [`docs/superpowers/plans/2026-04-30-phase-1-foundation-and-heic-slice.md`](docs/superpowers/plans/2026-04-30-phase-1-foundation-and-heic-slice.md)
 
