@@ -15,4 +15,10 @@ describe("registry", () => {
     expect(e.id).toBe("heic-to-png");
     expect(e.cardinality).toBe("single");
   });
+
+  it("loadEngine returns the image-convert engine module", async () => {
+    const e = await loadEngine("image-convert");
+    expect(e.id).toBe("image-convert");
+    expect(e.cardinality).toBe("single");
+  });
 });

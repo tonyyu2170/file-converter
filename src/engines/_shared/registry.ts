@@ -1,7 +1,6 @@
 import type { ConversionEngine, OutputItem } from "./types";
 
-export type EngineId = "heic-to-png";
-// Future engine ids declared as engines are added in later plans.
+export type EngineId = "heic-to-png" | "image-convert";
 
 // biome-ignore lint/suspicious/noExplicitAny: registry erases per-engine TOptions
 type AnyEngine = ConversionEngine<any, OutputItem | OutputItem[]>;
@@ -10,6 +9,7 @@ type Loader = () => Promise<{ default: AnyEngine }>;
 
 const REGISTRY: Record<EngineId, Loader> = {
   "heic-to-png": () => import("@/engines/heic-to-png"),
+  "image-convert": () => import("@/engines/image-convert"),
 };
 
 export async function loadEngine(id: EngineId): Promise<ConversionEngine> {
