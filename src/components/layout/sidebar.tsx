@@ -6,6 +6,7 @@ const TOOLS: ToolEntry[] = [
   { id: "image-convert", href: "/tools/image-convert", label: "image convert", group: "IMAGES" },
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
+  { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
 ];
 
 export function Sidebar() {

@@ -1,5 +1,6 @@
 "use client";
 
+import { parseRange } from "@/engines/_shared/range";
 import type { StagingAreaProps } from "@/engines/_shared/types";
 import {
   DndContext,
@@ -19,7 +20,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PdfMergeOptions, PdfMergeRow } from "./options";
-import { parseRange } from "./range";
 import { renderFirstPageThumbnail } from "./render-thumbnail";
 
 type RowMeta = {

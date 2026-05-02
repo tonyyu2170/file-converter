@@ -27,4 +27,10 @@ describe("registry", () => {
     expect(e.id).toBe("pdf-merge");
     expect(e.cardinality).toBe("multi");
   });
+
+  it("loadEngine returns the pdf-split engine module", async () => {
+    const e = await loadEngine("pdf-split");
+    expect(e.id).toBe("pdf-split");
+    expect(e.cardinality).toBe("single");
+  });
 });

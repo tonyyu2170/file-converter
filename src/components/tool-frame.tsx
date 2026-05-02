@@ -18,6 +18,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  const [singleSourceFile, setSingleSourceFile] = useState<File | null>(null);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
@@ -31,6 +32,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       if (engine.cardinality === "single") {
         const f = files[0];
         if (!f) return;
+        setSingleSourceFile(f);
         const v = engine.validate(f, opts);
         if (!v.ok) {
           setErrorMessage(v.reason);
@@ -112,6 +114,16 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     run(stagedFiles, options);
   }
 
+  // Compute archiveBasename for multi-output ZIP downloads. Single-cardinality
+  // engines: strip the extension from the input file's name. Multi-cardinality
+  // engines: use the first staged file's basename, or undefined if none staged.
+  const archiveBasename = (() => {
+    const sourceFile =
+      engine.cardinality === "single" ? singleSourceFile : (stagedFiles[0] ?? null);
+    if (!sourceFile) return undefined;
+    return sourceFile.name.replace(/\.[^.]+$/, "");
+  })();
+
   return (
     <main className="p-6">
       <div className="mb-3 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]">
@@ -150,7 +162,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
           {errorMessage}
         </div>
       )}
-      <ResultList items={items} />
+      <ResultList
+        items={items}
+        {...(archiveBasename !== undefined ? { archiveBasename } : {})}
+        {...(engine.archiveSuffix !== undefined ? { archiveSuffix: engine.archiveSuffix } : {})}
+      />
     </main>
   );
 }

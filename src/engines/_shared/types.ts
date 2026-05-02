@@ -15,6 +15,11 @@ export type EngineMeta<TOptions> = {
   outputMime: string;
   defaultOptions: TOptions;
   convertButtonLabel?: string;
+  /** Filename suffix for ZIP archive when an engine produces multiple
+   * outputs. ResultList builds the archive as `<basename><archiveSuffix>.zip`
+   * (e.g., "myfile" + "-split" → "myfile-split.zip"). Engines that always
+   * produce a single output don't need to set this. */
+  archiveSuffix?: string;
 };
 
 export type OptionsPanelProps<TOptions> = {
