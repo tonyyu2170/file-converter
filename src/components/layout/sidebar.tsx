@@ -8,6 +8,7 @@ const TOOLS: ToolEntry[] = [
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
   { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
+  { id: "pdf-to-image", href: "/tools/pdf-to-image", label: "pdf→image", group: "PDFS" },
 ];
 
 const GROUP_ORDER = ["HOME", "IMAGES", "PDFS"] as const;
