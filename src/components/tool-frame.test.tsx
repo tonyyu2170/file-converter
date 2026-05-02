@@ -39,16 +39,18 @@ describe("ToolFrame", () => {
     expect(screen.getByTestId("status-indicator")).toHaveTextContent("[ READY ]");
   });
 
-  it("disables the DropZone when isReadyToConvert returns false", () => {
+  it("disables the Convert button when isReadyToConvert returns false", () => {
     const engine = makeStubEngine({
       isReadyToConvert: () => false,
     });
+    const staged = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    stageFiles([staged]);
     render(<ToolFrame engine={engine} />);
-    expect(screen.getByTestId("drop-zone")).toHaveAttribute("data-state", "disabled");
+    expect(screen.getByTestId("convert-button")).toBeDisabled();
   });
 
-  it("enables the DropZone when isReadyToConvert returns true (or is undefined)", () => {
-    const engine = makeStubEngine();
+  it("the DropZone is enabled regardless of isReadyToConvert for single-cardinality engines", () => {
+    const engine = makeStubEngine({ isReadyToConvert: () => false });
     render(<ToolFrame engine={engine} />);
     expect(screen.getByTestId("drop-zone")).not.toHaveAttribute("data-state", "disabled");
   });
@@ -62,6 +64,10 @@ describe("ToolFrame", () => {
     fireEvent.drop(screen.getByTestId("drop-zone"), {
       dataTransfer: { files: [file] },
     });
+    await waitFor(() => {
+      expect(screen.getByTestId("convert-button")).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByTestId("convert-button"));
     await waitFor(() => {
       expect(screen.getByText("no good")).toBeInTheDocument();
     });
@@ -77,7 +83,7 @@ describe("ToolFrame", () => {
     expect(screen.getByTestId("stub-panel")).toBeInTheDocument();
   });
 
-  it("holds a staged file until isReadyToConvert flips to true, then runs conversion", async () => {
+  it("stages a handed-off file on mount but does not auto-fire convert; click runs it once ready", async () => {
     const Panel = ({ value, onChange }: { value: StubOpts; onChange: (n: StubOpts) => void }) => (
       <button type="button" data-testid="ready-button" onClick={() => onChange({ ready: true })}>
         ready={String(value.ready)}
@@ -100,15 +106,163 @@ describe("ToolFrame", () => {
 
     render(<ToolFrame engine={engine} />);
 
+    await waitFor(() => {
+      expect(screen.getByTestId("clear-staged-file")).toBeInTheDocument();
+    });
     expect(convert).not.toHaveBeenCalled();
-    expect(screen.getByTestId("drop-zone")).toHaveAttribute("data-state", "disabled");
+    expect(screen.getByTestId("convert-button")).toBeDisabled();
 
     fireEvent.click(screen.getByTestId("ready-button"));
+
+    expect(screen.getByTestId("convert-button")).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId("convert-button"));
 
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
     expect(convert).toHaveBeenCalledWith(staged, expect.anything(), expect.anything());
+  });
+
+  it("single-cardinality drop stages the file and does NOT call convert", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    }));
+    const engine = makeStubEngine({ convert });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("clear-staged-file")).toBeInTheDocument();
+    });
+    expect(screen.getByText("in.bin")).toBeInTheDocument();
+    expect(convert).not.toHaveBeenCalled();
+  });
+
+  it("single-cardinality Convert button click fires convert with the staged file", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    }));
+    const engine = makeStubEngine({ convert });
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    stageFiles([file]);
+
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("convert-button")).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() => {
+      expect(convert).toHaveBeenCalledOnce();
+    });
+    expect(convert).toHaveBeenCalledWith(file, expect.anything(), expect.anything());
+  });
+
+  it("single-cardinality re-drop replaces staged file and clears prior state", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    }));
+    const engine = makeStubEngine({ convert });
+    render(<ToolFrame engine={engine} />);
+
+    const a = new File(["a"], "a.bin", { type: "application/octet-stream" });
+    const b = new File(["b"], "b.bin", { type: "application/octet-stream" });
+
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [a] } });
+    await waitFor(() => {
+      expect(screen.getByText("a.bin")).toBeInTheDocument();
+    });
+
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [b] } });
+    await waitFor(() => {
+      expect(screen.getByText("b.bin")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("a.bin")).toBeNull();
+    expect(convert).not.toHaveBeenCalled();
+  });
+
+  it("single-cardinality clear-staged-file empties staging", async () => {
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    stageFiles([file]);
+    const engine = makeStubEngine();
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("clear-staged-file")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("clear-staged-file"));
+
+    expect(screen.queryByTestId("clear-staged-file")).toBeNull();
+    expect(screen.queryByText(/current file:/i)).toBeNull();
+    expect(screen.getByTestId("convert-button")).toBeDisabled();
+  });
+
+  it("cross-route handoff for single-cardinality populates staging without firing convert", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    }));
+    const engine = makeStubEngine({ convert });
+    const file = new File(["x"], "handoff.bin", { type: "application/octet-stream" });
+    stageFiles([file]);
+
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("handoff.bin")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("clear-staged-file")).toBeInTheDocument();
+    expect(convert).not.toHaveBeenCalled();
+  });
+
+  it("single-cardinality clear-staged-file is disabled while converting", async () => {
+    let resolveConvert: (v: OutputItem) => void = () => {};
+    const convert = vi.fn(
+      () =>
+        new Promise<OutputItem>((r) => {
+          resolveConvert = r;
+        }),
+    );
+    const engine = makeStubEngine({ convert });
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    stageFiles([file]);
+
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("convert-button")).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("clear-staged-file")).toBeDisabled();
+    });
+
+    resolveConvert({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status-indicator")).toHaveTextContent("[ DONE ]");
+    });
   });
 
   it("renders engine.StagingArea and Convert button for multi-cardinality engines", () => {

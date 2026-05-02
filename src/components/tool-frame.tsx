@@ -83,46 +83,66 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
-  // Single-cardinality: fire conversion when both file and ready materialize.
-  // Multi-cardinality: populate the staging area (no auto-fire — user reviews
-  // and clicks Convert).
+  // Mount-time pendingFiles → stagedFiles for both cardinalities. Single is
+  // capped at 1 (last wins); multi appends. No auto-fire — user reviews
+  // options and clicks Convert.
   useEffect(() => {
     if (pendingFiles.length === 0) return;
     if (isMulti) {
       setStagedFiles((prev) => [...prev, ...pendingFiles]);
-      setPendingFiles([]);
-      return;
+    } else {
+      const first = pendingFiles[0];
+      if (first) {
+        setStagedFiles([first]);
+        setItems([]);
+        setErrorMessage(null);
+        setSingleSourceFile(null);
+        setStatus("ready");
+      }
     }
-    if (ready) {
-      const f = pendingFiles[0];
-      if (f) run([f], options);
-      setPendingFiles([]);
-    }
-  }, [pendingFiles, ready, run, options, isMulti]);
+    setPendingFiles([]);
+  }, [pendingFiles, isMulti]);
 
   function handleDrop(files: File[]) {
     if (isMulti) {
-      // Multi: append to staging.
       setStagedFiles((prev) => [...prev, ...files]);
       return;
     }
-    // Single: fire conversion immediately.
-    run(files, options);
+    const first = files[0];
+    if (!first) return;
+    setStagedFiles([first]);
+    setItems([]);
+    setErrorMessage(null);
+    setSingleSourceFile(null);
+    setStatus("ready");
   }
 
   function handleConvertClick() {
     run(stagedFiles, options);
   }
 
-  // Compute archiveBasename for multi-output ZIP downloads. Single-cardinality
-  // engines: strip the extension from the input file's name. Multi-cardinality
-  // engines: use the first staged file's basename, or undefined if none staged.
+  function handleClearStaged() {
+    setStagedFiles([]);
+    setItems([]);
+    setErrorMessage(null);
+    setSingleSourceFile(null);
+    setStatus("ready");
+  }
+
+  // Compute archiveBasename for multi-output ZIP downloads. Prefer the
+  // currently staged file (explicit source) and fall back to the file
+  // captured by `run` so the basename survives a `[ clear ]` after a
+  // completed conversion.
   const archiveBasename = (() => {
     const sourceFile =
-      engine.cardinality === "single" ? singleSourceFile : (stagedFiles[0] ?? null);
+      engine.cardinality === "single"
+        ? (stagedFiles[0] ?? singleSourceFile)
+        : (stagedFiles[0] ?? null);
     if (!sourceFile) return undefined;
     return sourceFile.name.replace(/\.[^.]+$/, "");
   })();
+
+  const stagedFile: File | undefined = stagedFiles[0];
 
   return (
     <main className="p-6">
@@ -140,23 +160,32 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
           setOptions={setOptions}
         />
       )}
-      <DropZone
-        accept={engine.inputAccept}
-        multiple={isMulti}
-        onFiles={handleDrop}
-        disabled={!isMulti && !ready}
-      />
-      {isMulti && (
-        <button
-          type="button"
-          data-testid="convert-button"
-          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
-          onClick={handleConvertClick}
-          className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
-        >
-          {engine.convertButtonLabel ?? "[ convert ]"}
-        </button>
+      {!isMulti && stagedFile && (
+        <div className="mb-3 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]">
+          <span>
+            current file: <span className="text-[var(--color-fg-strong)]">{stagedFile.name}</span>
+          </span>
+          <button
+            type="button"
+            data-testid="clear-staged-file"
+            disabled={status === "converting"}
+            onClick={handleClearStaged}
+            className="text-[var(--color-accent)] hover:text-[var(--color-fg-strong)] disabled:text-[var(--color-fg-very-muted)]"
+          >
+            [ clear ]
+          </button>
+        </div>
       )}
+      <DropZone accept={engine.inputAccept} multiple={isMulti} onFiles={handleDrop} />
+      <button
+        type="button"
+        data-testid="convert-button"
+        disabled={stagedFiles.length === 0 || !ready || status === "converting"}
+        onClick={handleConvertClick}
+        className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
+      >
+        {engine.convertButtonLabel ?? "[ convert ]"}
+      </button>
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">
           {errorMessage}
