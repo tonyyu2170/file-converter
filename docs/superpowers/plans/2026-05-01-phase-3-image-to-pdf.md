@@ -525,7 +525,8 @@ off-origin network during conversion."
 let staged: File[] = [];
 
 export function stageFiles(files: File[]): void {
-  staged = files;
+  // Defensive copy — caller-side mutations after stage shouldn't leak in.
+  staged = [...files];
 }
 
 export function takeStagedFiles(): File[] {
@@ -574,6 +575,13 @@ describe("file handoff", () => {
     const f = new File(["f"], "single.heic", { type: "image/heic" });
     stageFiles([f]);
     expect(takeStagedFiles()).toEqual([f]);
+  });
+
+  it("does not leak external mutations into the staged slot", () => {
+    const arr = [new File(["a"], "a.png", { type: "image/png" })];
+    stageFiles(arr);
+    arr.push(new File(["b"], "b.png", { type: "image/png" }));
+    expect(takeStagedFiles()).toHaveLength(1);
   });
 });
 ```
@@ -718,6 +726,8 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     [engine],
   );
 
+  // Mount-time staged-file consumption. Single-shot: takeStagedFiles clears
+  // the slot, so React Strict Mode's double-mount fires this once net.
   const consumedRef = useRef(false);
   useEffect(() => {
     if (consumedRef.current) return;
@@ -726,6 +736,9 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
+  // Fires conversion when both file and ready state materialize. If options
+  // start out ready (HEIC), this runs as soon as pendingFiles is set. If not
+  // (image-convert with output unselected), waits until user picks a format.
   useEffect(() => {
     if (pendingFiles.length > 0 && ready) {
       const f = pendingFiles[0];

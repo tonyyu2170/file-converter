@@ -33,4 +33,11 @@ describe("file handoff", () => {
     stageFiles([f]);
     expect(takeStagedFiles()).toEqual([f]);
   });
+
+  it("does not leak external mutations into the staged slot", () => {
+    const arr = [new File(["a"], "a.png", { type: "image/png" })];
+    stageFiles(arr);
+    arr.push(new File(["b"], "b.png", { type: "image/png" }));
+    expect(takeStagedFiles()).toHaveLength(1);
+  });
 });

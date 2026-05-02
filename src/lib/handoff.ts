@@ -1,7 +1,7 @@
 let staged: File[] = [];
 
 export function stageFiles(files: File[]): void {
-  staged = files;
+  staged = [...files];
 }
 
 export function takeStagedFiles(): File[] {
