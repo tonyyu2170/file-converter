@@ -52,10 +52,7 @@ test("JPEG format produces .jpg outputs", async ({ page }) => {
   await page.goto("/tools/pdf-to-image");
 
   // Switch format to JPEG.
-  await page
-    .getByTestId("pdf-to-image-format")
-    .getByRole("radio", { name: /jpeg/i })
-    .check();
+  await page.getByTestId("pdf-to-image-format").getByRole("radio", { name: /jpeg/i }).check();
 
   const input = page.locator('input[type="file"]');
   await input.setInputFiles(fix("sample-5page.pdf"));
