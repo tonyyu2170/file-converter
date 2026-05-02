@@ -16,17 +16,18 @@ export default function Home() {
     const f = files[0];
     if (!f) return;
     const mime = await detectMime(f);
-    if (mime === "image/heic" || mime === "image/heif") {
-      stageFiles([f]);
-      router.push("/tools/heic-to-png");
-      return;
-    }
-    if (mime === "image/png" || mime === "image/jpeg" || mime === "image/webp") {
+    if (
+      mime === "image/heic" ||
+      mime === "image/heif" ||
+      mime === "image/png" ||
+      mime === "image/jpeg" ||
+      mime === "image/webp"
+    ) {
       stageFiles([f]);
       router.push("/tools/image-convert");
       return;
     }
-    setError("No tool for this file type yet. Phase 2 supports HEIC, PNG, JPEG, WebP.");
+    setError("No tool for this file type yet. Phase 3 supports HEIC, PNG, JPEG, WebP.");
   }
 
   return (
