@@ -25,6 +25,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={() => undefined}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     expect(screen.getAllByTestId("staging-row")).toHaveLength(3);
@@ -40,6 +41,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={() => undefined}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     const upButtons = screen.getAllByTestId("move-up");
@@ -60,6 +62,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={onChange}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     const upButtons = screen.getAllByTestId("move-up");
@@ -75,6 +78,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={onChange}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     const downButtons = screen.getAllByTestId("move-down");
@@ -90,6 +94,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={onChange}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     const removes = screen.getAllByTestId("remove");
@@ -104,6 +109,7 @@ describe("ImageToPdfStagingArea", () => {
         files={files}
         onChange={() => undefined}
         options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
       />,
     );
     await waitFor(() => {
@@ -119,6 +125,7 @@ describe("ImageToPdfStagingArea", () => {
           files={files}
           onChange={() => undefined}
           options={defaultImageToPdfOptions}
+          setOptions={() => undefined}
         />
       </StrictMode>,
     );

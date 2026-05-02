@@ -42,6 +42,14 @@ if (typeof globalThis.OffscreenCanvas !== "function") {
   (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = StubOffscreenCanvas;
 }
 
+if (typeof globalThis.crypto === "undefined") {
+  (globalThis as { crypto: Crypto }).crypto = {} as Crypto;
+}
+if (typeof globalThis.crypto.randomUUID !== "function") {
+  let counter = 0;
+  (globalThis.crypto as { randomUUID: () => string }).randomUUID = () => `test-uuid-${++counter}`;
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
