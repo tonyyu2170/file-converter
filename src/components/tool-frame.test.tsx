@@ -1,11 +1,11 @@
 import type { ConversionEngine, OutputItem, ValidationResult } from "@/engines/_shared/types";
-import { stageFile, takeStagedFile } from "@/lib/handoff";
+import { stageFiles, takeStagedFiles } from "@/lib/handoff";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ToolFrame } from "./tool-frame";
 
 afterEach(() => {
-  takeStagedFile();
+  takeStagedFiles();
   vi.restoreAllMocks();
 });
 
@@ -96,7 +96,7 @@ describe("ToolFrame", () => {
     });
 
     const staged = new File(["x"], "in.bin", { type: "application/octet-stream" });
-    stageFile(staged);
+    stageFiles([staged]);
 
     render(<ToolFrame engine={engine} />);
 

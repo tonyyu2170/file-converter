@@ -2,7 +2,7 @@
 
 import { DropZone } from "@/components/drop-zone";
 import { detectMime } from "@/engines/_shared/file-detection";
-import { stageFile } from "@/lib/handoff";
+import { stageFiles } from "@/lib/handoff";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -12,16 +12,17 @@ export default function Home() {
 
   async function handleFiles(files: File[]) {
     setError(null);
+    if (files.length === 0) return;
     const f = files[0];
     if (!f) return;
     const mime = await detectMime(f);
     if (mime === "image/heic" || mime === "image/heif") {
-      stageFile(f);
+      stageFiles([f]);
       router.push("/tools/heic-to-png");
       return;
     }
     if (mime === "image/png" || mime === "image/jpeg" || mime === "image/webp") {
-      stageFile(f);
+      stageFiles([f]);
       router.push("/tools/image-convert");
       return;
     }

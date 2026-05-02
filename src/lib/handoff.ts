@@ -1,11 +1,11 @@
-let staged: File | null = null;
+let staged: File[] = [];
 
-export function stageFile(file: File): void {
-  staged = file;
+export function stageFiles(files: File[]): void {
+  staged = files;
 }
 
-export function takeStagedFile(): File | null {
-  const file = staged;
-  staged = null;
-  return file;
+export function takeStagedFiles(): File[] {
+  const r = staged;
+  staged = [];
+  return r;
 }
