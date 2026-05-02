@@ -33,4 +33,10 @@ describe("registry", () => {
     expect(e.id).toBe("pdf-split");
     expect(e.cardinality).toBe("single");
   });
+
+  it("loadEngine returns the pdf-to-image engine module", async () => {
+    const e = await loadEngine("pdf-to-image");
+    expect(e.id).toBe("pdf-to-image");
+    expect(e.cardinality).toBe("single");
+  });
 });
