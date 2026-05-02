@@ -21,4 +21,10 @@ describe("registry", () => {
     expect(e.id).toBe("image-to-pdf");
     expect(e.cardinality).toBe("multi");
   });
+
+  it("loadEngine returns the pdf-merge engine module", async () => {
+    const e = await loadEngine("pdf-merge");
+    expect(e.id).toBe("pdf-merge");
+    expect(e.cardinality).toBe("multi");
+  });
 });
