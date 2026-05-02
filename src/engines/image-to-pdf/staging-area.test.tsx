@@ -66,7 +66,9 @@ describe("ImageToPdfStagingArea", () => {
       />,
     );
     const upButtons = screen.getAllByTestId("move-up");
-    fireEvent.click(upButtons[1]!);
+    const upBtn1 = upButtons[1];
+    if (!upBtn1) throw new Error("move-up[1] not found");
+    fireEvent.click(upBtn1);
     expect(onChange).toHaveBeenCalledWith([files[1], files[0], files[2]]);
   });
 
@@ -82,7 +84,9 @@ describe("ImageToPdfStagingArea", () => {
       />,
     );
     const downButtons = screen.getAllByTestId("move-down");
-    fireEvent.click(downButtons[0]!);
+    const downBtn0 = downButtons[0];
+    if (!downBtn0) throw new Error("move-down[0] not found");
+    fireEvent.click(downBtn0);
     expect(onChange).toHaveBeenCalledWith([files[1], files[0], files[2]]);
   });
 
@@ -98,7 +102,9 @@ describe("ImageToPdfStagingArea", () => {
       />,
     );
     const removes = screen.getAllByTestId("remove");
-    fireEvent.click(removes[1]!);
+    const remove1 = removes[1];
+    if (!remove1) throw new Error("remove[1] not found");
+    fireEvent.click(remove1);
     expect(onChange).toHaveBeenCalledWith([files[0], files[2]]);
   });
 

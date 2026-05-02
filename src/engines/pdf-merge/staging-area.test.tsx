@@ -200,7 +200,9 @@ describe("PdfMergeStagingArea", () => {
     onChange.mockClear();
     setOptions.mockClear();
     const upButtons = screen.getAllByTestId("move-up");
-    fireEvent.click(upButtons[1]!);
+    const upBtn1 = upButtons[1];
+    if (!upBtn1) throw new Error("move-up[1] not found");
+    fireEvent.click(upBtn1);
     expect(onChange).toHaveBeenCalledWith([fileB, fileA]);
     const last = lastSetOptionsCall(setOptions);
     expect(last.rows.map((r) => r.id)).toEqual(["r2", "r1"]);
@@ -242,7 +244,9 @@ describe("PdfMergeStagingArea", () => {
     onChange.mockClear();
     setOptions.mockClear();
     const removes = screen.getAllByTestId("remove");
-    fireEvent.click(removes[0]!);
+    const remove0 = removes[0];
+    if (!remove0) throw new Error("remove[0] not found");
+    fireEvent.click(remove0);
     expect(onChange).toHaveBeenCalledWith([fileB]);
     const last = lastSetOptionsCall(setOptions);
     expect(last.rows.map((r) => r.id)).toEqual(["r2"]);
