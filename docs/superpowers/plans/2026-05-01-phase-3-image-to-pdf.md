@@ -288,7 +288,7 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   validate(file) {
     return SUPPORTED_INPUT_MIMES.includes(file.type)
       ? { ok: true }
-      : { ok: false, reason: "Expected an HEIC, PNG, JPEG, or WebP file" };
+      : { ok: false, reason: "Expected a HEIC, HEIF, PNG, JPEG, or WebP file" };
   },
   async convert(file, opts, signal) {
     const detected = await detectMime(file);

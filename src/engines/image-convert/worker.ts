@@ -30,6 +30,7 @@ const api = {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
 
+      // Alpha-on-JPEG: fill opaque white background before drawing.
       if (opts.output === "jpeg") {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, bitmap.width, bitmap.height);
