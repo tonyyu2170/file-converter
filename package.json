@@ -44,6 +44,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "docx": "^9.6.1",
     "jsdom": "^25.0.0",
     "postcss": "^8.4.0",
     "subset-font": "^2.5.0",
