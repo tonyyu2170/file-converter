@@ -46,7 +46,9 @@ async function loadLibheif() {
 }
 
 async function decodeHeic(file: File): Promise<ImageBitmap> {
-  const lib = await loadLibheif();
+  // Dynamic import() returns a module namespace { default: LibHeif },
+  // not the default export — destructure .default to reach HeifDecoder.
+  const lib = (await loadLibheif()).default;
   const decoder = new lib.HeifDecoder();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const data = decoder.decode(bytes);
@@ -57,10 +59,17 @@ async function decodeHeic(file: File): Promise<ImageBitmap> {
   if (!first) throw new Error("libheif: first image missing");
   const width = first.get_width();
   const height = first.get_height();
-  const rgba = await new Promise<Uint8ClampedArray>((resolve, reject) => {
+  // Uint8ClampedArray<ArrayBuffer> annotation is required under TS strict +
+  // exactOptionalPropertyTypes for compatibility with DisplayTarget.data and
+  // the ImageData constructor signature.
+  const rgba = await new Promise<Uint8ClampedArray<ArrayBuffer>>((resolve, reject) => {
     first.display(
-      { data: new Uint8ClampedArray(width * height * 4), width, height },
-      (display: { data: Uint8ClampedArray; width: number; height: number } | null) => {
+      {
+        data: new Uint8ClampedArray(new ArrayBuffer(width * height * 4)),
+        width,
+        height,
+      },
+      (display: { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } | null) => {
         if (!display) reject(new Error("libheif: display callback received null"));
         else resolve(display.data);
       },
@@ -97,9 +106,8 @@ describe("decodeImage", () => {
   it("dispatches HEIC files via the libheif path", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/heic");
     const file = new File([new Uint8Array([0])], "x.heic", { type: "image/heic" });
-    // libheif lazy-import will fail in jsdom (no real wasm); we assert that
-    // the dispatcher reaches the libheif branch by catching the predictable
-    // load failure rather than the createImageBitmap-on-empty-bytes branch.
+    // libheif's parser rejects bytes too small to be a HEIF box; reaching
+    // that rejection confirms the dispatcher took the HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 
@@ -112,7 +120,8 @@ describe("decodeImage", () => {
   it("dispatches PNG files via createImageBitmap", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/png");
     const file = new File([new Uint8Array([0])], "x.png", { type: "image/png" });
-    // jsdom's createImageBitmap is a real function but rejects on invalid bytes.
+    // test-setup.ts stubs createImageBitmap to reject; reaching that
+    // rejection confirms the dispatcher took the non-HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 
@@ -279,7 +288,7 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   validate(file) {
     return SUPPORTED_INPUT_MIMES.includes(file.type)
       ? { ok: true }
-      : { ok: false, reason: "Expected an HEIC, PNG, JPEG, or WebP file" };
+      : { ok: false, reason: "Expected a HEIC, HEIF, PNG, JPEG, or WebP file" };
   },
   async convert(file, opts, signal) {
     const detected = await detectMime(file);
@@ -516,7 +525,8 @@ off-origin network during conversion."
 let staged: File[] = [];
 
 export function stageFiles(files: File[]): void {
-  staged = files;
+  // Defensive copy — caller-side mutations after stage shouldn't leak in.
+  staged = [...files];
 }
 
 export function takeStagedFiles(): File[] {
@@ -565,6 +575,13 @@ describe("file handoff", () => {
     const f = new File(["f"], "single.heic", { type: "image/heic" });
     stageFiles([f]);
     expect(takeStagedFiles()).toEqual([f]);
+  });
+
+  it("does not leak external mutations into the staged slot", () => {
+    const arr = [new File(["a"], "a.png", { type: "image/png" })];
+    stageFiles(arr);
+    arr.push(new File(["b"], "b.png", { type: "image/png" }));
+    expect(takeStagedFiles()).toHaveLength(1);
   });
 });
 ```
@@ -709,6 +726,8 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     [engine],
   );
 
+  // Mount-time staged-file consumption. Single-shot: takeStagedFiles clears
+  // the slot, so React Strict Mode's double-mount fires this once net.
   const consumedRef = useRef(false);
   useEffect(() => {
     if (consumedRef.current) return;
@@ -717,6 +736,9 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
+  // Fires conversion when both file and ready state materialize. If options
+  // start out ready (HEIC), this runs as soon as pendingFiles is set. If not
+  // (image-convert with output unselected), waits until user picks a format.
   useEffect(() => {
     if (pendingFiles.length > 0 && ready) {
       const f = pendingFiles[0];
@@ -840,6 +862,7 @@ export type EngineMeta<TOptions> = {
   inputMime: string[];
   outputMime: string;
   defaultOptions: TOptions;
+  convertButtonLabel?: string;
 };
 
 export type OptionsPanelProps<TOptions> = {
@@ -1080,11 +1103,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <button
           type="button"
           data-testid="convert-button"
-          disabled={stagedFiles.length === 0 || !ready}
+          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
           onClick={handleConvertClick}
           className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
         >
-          [ convert to pdf ]
+          {engine.convertButtonLabel ?? "[ convert ]"}
         </button>
       )}
       {errorMessage && (
@@ -1104,7 +1127,7 @@ Notes:
 - The mount effect / handoff watcher branch on `isMulti`: multi engines populate staging WITHOUT auto-firing; single engines auto-fire from `pendingFiles[0]`.
 - `handleDrop` distinguishes multi (append) vs single (fire). DropZone's `multiple` is true only for multi engines.
 - Convert button renders only for multi engines, disabled when staging is empty OR `!ready`.
-- The button label is hardcoded `"[ convert to pdf ]"` — this is fine for v1 since image-to-pdf is the only multi engine. Plan 4 (PDF merge) might want a configurable label; cross that bridge later.
+- The button label is engine-controlled via `engine.convertButtonLabel`. Image-to-pdf sets it to `"[ convert to pdf ]"` (Task 12). Plan 4's PDF merge can declare its own label without ToolFrame changes — preserves the engine-pattern's "no shared code touched" promise.
 
 - [ ] **Step 2: Update `src/components/tool-frame.test.tsx`**
 
@@ -1581,12 +1604,17 @@ export function ImageToPdfStagingArea({
   // Per-file thumbnail URLs. Keyed by File reference (Map for stability across reorder).
   const [thumbs, setThumbs] = useState<Map<File, string | "loading" | "error">>(new Map());
   const urlsToRevoke = useRef<string[]>([]);
+  const startedFiles = useRef<Set<File>>(new Set());
 
-  // Decode any new files that don't have thumbs yet.
+  // Decode any newly-added files. The startedFiles ref prevents re-decoding
+  // on re-render (deps include files only) and survives React Strict Mode's
+  // double-mount: mount #1 starts the decode + setThumbs("loading"); mount
+  // #2 sees the file already started and returns early. Mount #1's
+  // Promise.all eventually resolves and commits via the "loading" gate.
   useEffect(() => {
-    let cancelled = false;
-    const newFiles = files.filter((f) => !thumbs.has(f));
+    const newFiles = files.filter((f) => !startedFiles.current.has(f));
     if (newFiles.length === 0) return;
+    for (const f of newFiles) startedFiles.current.add(f);
 
     setThumbs((prev) => {
       const next = new Map(prev);
@@ -1604,23 +1632,23 @@ export function ImageToPdfStagingArea({
         }
       }),
     ).then((results) => {
-      if (cancelled) return;
+      // Gate on "loading" — handles the case where the file was removed
+      // during decode (cleanup effect cleared its Map entry); skip the
+      // commit, the orphan URL gets cleaned up on unmount via urlsToRevoke.
       setThumbs((prev) => {
         const next = new Map(prev);
         for (const r of results) {
-          next.set(r.file, r.url);
-          if (r.url !== "error") urlsToRevoke.current.push(r.url);
+          if (prev.get(r.file) === "loading") next.set(r.file, r.url);
         }
         return next;
       });
+      for (const r of results) {
+        if (r.url !== "error") urlsToRevoke.current.push(r.url);
+      }
     });
+  }, [files]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [files, thumbs]);
-
-  // Revoke thumb URLs when files are removed (or on unmount).
+  // Revoke all thumb URLs on unmount.
   useEffect(() => {
     return () => {
       for (const url of urlsToRevoke.current) URL.revokeObjectURL(url);
@@ -1628,23 +1656,34 @@ export function ImageToPdfStagingArea({
     };
   }, []);
 
-  // Also revoke thumbs of files that have been removed from the list.
+  // Sync thumbs Map when files are removed: revoke URLs and delete the ref
+  // entry so re-adding the same File reference triggers a fresh decode.
+  // Side effects (URL revoke, ref delete) happen OUTSIDE the setThumbs
+  // updater because Strict Mode invokes updaters twice.
   useEffect(() => {
+    const filesSet = new Set(files);
+    const removed: Array<[File, string | "loading" | "error"]> = [];
+    for (const f of startedFiles.current) {
+      if (!filesSet.has(f)) {
+        removed.push([f, thumbs.get(f) ?? "loading"]);
+        startedFiles.current.delete(f);
+      }
+    }
+    for (const [, v] of removed) {
+      if (typeof v === "string" && v !== "error" && v !== "loading") {
+        URL.revokeObjectURL(v);
+      }
+    }
+    if (removed.length === 0) return;
     setThumbs((prev) => {
       const next = new Map<File, string | "loading" | "error">();
       for (const f of files) {
         const v = prev.get(f);
         if (v !== undefined) next.set(f, v);
       }
-      // Revoke URLs of files no longer present.
-      for (const [f, v] of prev) {
-        if (!files.includes(f) && typeof v === "string" && v !== "error" && v !== "loading") {
-          URL.revokeObjectURL(v);
-        }
-      }
       return next;
     });
-  }, [files]);
+  }, [files, thumbs]);
 
   function moveUp(i: number) {
     if (i <= 0) return;
@@ -1856,8 +1895,26 @@ describe("ImageToPdfStagingArea", () => {
       expect(screen.getByText("?")).toBeInTheDocument();
     });
   });
+
+  it("commits decode result under React Strict Mode (no double-mount cancellation)", async () => {
+    const files = [makeFile("a.png")];
+    render(
+      <StrictMode>
+        <ImageToPdfStagingArea
+          files={files}
+          onChange={() => undefined}
+          options={defaultImageToPdfOptions}
+        />
+      </StrictMode>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("?")).toBeInTheDocument();
+    });
+  });
 });
 ```
+
+The `StrictMode` import comes from `"react"` — add it to the imports at the top of the file. The plan's verbatim test imports do not yet include it; this test is the only one that needs it.
 
 - [ ] **Step 3: Run unit gates**
 
@@ -1865,7 +1922,7 @@ describe("ImageToPdfStagingArea", () => {
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Expected: all exit 0. Test count: 82 (76 + 6 new staging-area tests).
+Expected: all exit 0. Test count: 84 (76 + 7 staging-area tests + 1 prior task baseline correction). The 7 staging-area tests cover: rows-rendered, boundary-disabled, move-up, move-down, remove, decode-failure-placeholder, Strict-Mode commit safety.
 
 - [ ] **Step 4: Commit**
 
@@ -1906,21 +1963,20 @@ import { PAGE_MARGIN, PAPER_DIMS, type ImageToPdfOptions } from "./options";
 
 const api = {
   async convertMulti(
-    filesAsBytes: ArrayBuffer[],
-    names: string[],
-    types: string[],
+    files: Array<{ bytes: ArrayBuffer; name: string; type: string }>,
     opts: ImageToPdfOptions,
   ): Promise<OutputItem> {
-    if (filesAsBytes.length === 0) {
+    if (files.length === 0) {
       throw new Error("image-to-pdf: no input files");
     }
 
     const pdf = await PDFDocument.create();
     const [paperW, paperH] = PAPER_DIMS[opts.paper];
 
-    for (let i = 0; i < filesAsBytes.length; i++) {
-      const blob = new Blob([filesAsBytes[i]!], { type: types[i] });
-      const file = new File([blob], names[i] ?? `page-${i + 1}`, { type: types[i] });
+    for (const [i, f] of files.entries()) {
+      const mimeType = f.type || "application/octet-stream";
+      const blob = new Blob([f.bytes], { type: mimeType });
+      const file = new File([blob], f.name || `page-${i + 1}`, { type: mimeType });
 
       const bitmap = await decodeImage(file);
       try {
@@ -2147,6 +2203,7 @@ const engine: MultiInputEngine<ImageToPdfOptions, OutputItem> = {
   inputMime: SUPPORTED_INPUT_MIMES,
   outputMime: "application/pdf",
   defaultOptions: defaultImageToPdfOptions,
+  convertButtonLabel: "[ convert to pdf ]",
   cardinality: "multi",
   OptionsPanel: ImageToPdfOptionsPanel,
   StagingArea: ImageToPdfStagingArea,

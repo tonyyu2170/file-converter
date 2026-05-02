@@ -1,7 +1,7 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
-import { takeStagedFile } from "@/lib/handoff";
+import { takeStagedFiles } from "@/lib/handoff";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
@@ -16,10 +16,13 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
+  const Staging = engine.cardinality === "multi" ? engine.StagingArea : undefined;
+  const isMulti = engine.cardinality === "multi";
 
   const run = useCallback(
     async (files: File[], opts: TOptions) => {
@@ -68,25 +71,46 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     [engine],
   );
 
-  // Mount-time staged-file consumption. Single-shot: takeStagedFile clears
+  // Mount-time staged-file consumption. Single-shot: takeStagedFiles clears
   // the slot, so React Strict Mode's double-mount fires this once net.
   const consumedRef = useRef(false);
   useEffect(() => {
     if (consumedRef.current) return;
     consumedRef.current = true;
-    const staged = takeStagedFile();
-    if (staged) setPendingFile(staged);
+    const staged = takeStagedFiles();
+    if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
-  // Fires conversion when both file and ready state materialize. If options
-  // start out ready (HEIC), this runs as soon as pendingFile is set. If not
-  // (image-convert with output unselected), waits until user picks a format.
+  // Single-cardinality: fire conversion when both file and ready materialize.
+  // Multi-cardinality: populate the staging area (no auto-fire — user reviews
+  // and clicks Convert).
   useEffect(() => {
-    if (pendingFile && ready) {
-      run([pendingFile], options);
-      setPendingFile(null);
+    if (pendingFiles.length === 0) return;
+    if (isMulti) {
+      setStagedFiles((prev) => [...prev, ...pendingFiles]);
+      setPendingFiles([]);
+      return;
     }
-  }, [pendingFile, ready, run, options]);
+    if (ready) {
+      const f = pendingFiles[0];
+      if (f) run([f], options);
+      setPendingFiles([]);
+    }
+  }, [pendingFiles, ready, run, options, isMulti]);
+
+  function handleDrop(files: File[]) {
+    if (isMulti) {
+      // Multi: append to staging.
+      setStagedFiles((prev) => [...prev, ...files]);
+      return;
+    }
+    // Single: fire conversion immediately.
+    run(files, options);
+  }
+
+  function handleConvertClick() {
+    run(stagedFiles, options);
+  }
 
   return (
     <main className="p-6">
@@ -96,12 +120,26 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <StatusIndicator status={status} />
       </div>
       {Panel && <Panel value={options} onChange={setOptions} />}
+      {Staging && stagedFiles.length > 0 && (
+        <Staging files={stagedFiles} onChange={setStagedFiles} options={options} />
+      )}
       <DropZone
         accept={engine.inputAccept}
-        multiple={engine.cardinality === "multi"}
-        onFiles={(files) => run(files, options)}
+        multiple={isMulti}
+        onFiles={handleDrop}
         disabled={!ready}
       />
+      {isMulti && (
+        <button
+          type="button"
+          data-testid="convert-button"
+          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
+          onClick={handleConvertClick}
+          className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
+        >
+          {engine.convertButtonLabel ?? "[ convert ]"}
+        </button>
+      )}
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">
           {errorMessage}

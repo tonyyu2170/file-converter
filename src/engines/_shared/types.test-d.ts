@@ -5,6 +5,7 @@ import type {
   OptionsPanelProps,
   OutputItem,
   SingleInputEngine,
+  StagingAreaProps,
   ValidationResult,
 } from "./types";
 
@@ -52,6 +53,23 @@ describe("types", () => {
     expectTypeOf<OptionsPanelProps<OptsType>>().toEqualTypeOf<{
       value: OptsType;
       onChange: (next: OptsType) => void;
+    }>();
+  });
+
+  it("StagingArea is optional on MultiInputEngine and absent on SingleInputEngine", () => {
+    type MOpts = { paper: "letter" | "a4" };
+    type ME = MultiInputEngine<MOpts, { filename: string; mime: string; blob: Blob }>;
+    expectTypeOf<ME["StagingArea"]>().toEqualTypeOf<
+      import("react").ComponentType<StagingAreaProps<MOpts>> | undefined
+    >();
+  });
+
+  it("StagingAreaProps shape is correctly parameterized", () => {
+    type Opts = { foo: string };
+    expectTypeOf<StagingAreaProps<Opts>>().toEqualTypeOf<{
+      files: File[];
+      onChange: (next: File[]) => void;
+      options: Opts;
     }>();
   });
 });

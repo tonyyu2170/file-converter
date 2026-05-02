@@ -73,3 +73,31 @@ test("EXIF-rotated JPEG output preserves visual orientation", async ({ page }) =
   // After auto-rotate, the visible image is 200x300 (portrait).
   expect(dims.width).toBeLessThan(dims.height);
 });
+
+test("HEIC → PNG via shared decoder produces a valid PNG download", async ({ page }) => {
+  await page.goto("/tools/image-convert");
+  await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
+  await page.getByTestId("output-format").selectOption("png");
+
+  const input = page.locator('input[type="file"]');
+  const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
+  await input.setInputFiles(fixture);
+
+  await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
+    timeout: 30_000,
+  });
+
+  const downloadButton = page.getByRole("button", { name: /^download / });
+  await expect(downloadButton).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download", { timeout: 5_000 });
+  await downloadButton.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.png$/i);
+  const dlPath = await download.path();
+  const bytes = await readFile(dlPath);
+  expect(bytes.subarray(0, 8)).toEqual(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
+  expect(bytes.length).toBeGreaterThan(100);
+});

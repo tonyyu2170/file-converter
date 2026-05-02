@@ -1,3 +1,4 @@
+import { decodeImage } from "@/engines/_shared/decode-image";
 import type { OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
 import { OUTPUT_EXTENSION, OUTPUT_MIME } from "./options";
@@ -21,9 +22,8 @@ const api = {
     }
 
     const inputBlob = new Blob([bytes], { type });
-    const bitmap = await createImageBitmap(inputBlob, {
-      imageOrientation: "from-image",
-    });
+    const file = new File([inputBlob], name, { type });
+    const bitmap = await decodeImage(file);
 
     try {
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);

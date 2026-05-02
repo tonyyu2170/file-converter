@@ -14,11 +14,18 @@ export type EngineMeta<TOptions> = {
   inputMime: string[];
   outputMime: string;
   defaultOptions: TOptions;
+  convertButtonLabel?: string;
 };
 
 export type OptionsPanelProps<TOptions> = {
   value: TOptions;
   onChange: (next: TOptions) => void;
+};
+
+export type StagingAreaProps<TOptions> = {
+  files: File[];
+  onChange: (next: File[]) => void;
+  options: TOptions;
 };
 
 export type SingleInputEngine<
@@ -41,6 +48,7 @@ export type MultiInputEngine<
   convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
   OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
+  StagingArea?: ComponentType<StagingAreaProps<TOptions>>;
 };
 
 export type ConversionEngine<
