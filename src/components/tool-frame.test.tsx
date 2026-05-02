@@ -110,4 +110,102 @@ describe("ToolFrame", () => {
     });
     expect(convert).toHaveBeenCalledWith(staged, expect.anything(), expect.anything());
   });
+
+  it("renders engine.StagingArea and Convert button for multi-cardinality engines", () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div data-testid="staging-files">{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn(async () => ({
+        filename: "out.pdf",
+        mime: "application/pdf",
+        blob: new Blob(["x"]),
+      })) as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    // No staging visible until something is dropped/staged.
+    expect(screen.queryByTestId("staging-files")).toBeNull();
+    // Convert button is present and disabled.
+    expect(screen.getByTestId("convert-button")).toBeDisabled();
+  });
+
+  it("staged file from cross-route handoff populates a multi-cardinality engine's staging area without firing convert", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div data-testid="staging-files">{files.length} files</div>
+    );
+    const convert = vi.fn(async () => ({
+      filename: "out.pdf",
+      mime: "application/pdf",
+      blob: new Blob(["x"]),
+    }));
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: convert as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    const f1 = new File(["a"], "a.png", { type: "image/png" });
+    const f2 = new File(["b"], "b.jpg", { type: "image/jpeg" });
+    stageFiles([f1, f2]);
+
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("staging-files")).toHaveTextContent("2 files");
+    });
+    expect(convert).not.toHaveBeenCalled();
+    expect(screen.getByTestId("convert-button")).not.toBeDisabled();
+  });
+
+  it("Convert button click fires run with stagedFiles", async () => {
+    let stagedRef: File[] = [];
+    const Staging = ({
+      files,
+      onChange,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => {
+      stagedRef = files;
+      void onChange;
+      return <div data-testid="staging-files">{files.length} files</div>;
+    };
+    const convert = vi.fn(async () => ({
+      filename: "out.pdf",
+      mime: "application/pdf",
+      blob: new Blob(["x"]),
+    }));
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: convert as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    const f1 = new File(["a"], "a.png", { type: "image/png" });
+    const f2 = new File(["b"], "b.jpg", { type: "image/jpeg" });
+    stageFiles([f1, f2]);
+
+    render(<ToolFrame engine={engine} />);
+
+    await waitFor(() => {
+      expect(stagedRef.length).toBe(2);
+    });
+
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() => {
+      expect(convert).toHaveBeenCalledOnce();
+    });
+    expect(convert).toHaveBeenCalledWith([f1, f2], expect.anything(), expect.anything());
+  });
 });

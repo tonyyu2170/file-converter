@@ -17,9 +17,12 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
+  const Staging = engine.cardinality === "multi" ? engine.StagingArea : undefined;
+  const isMulti = engine.cardinality === "multi";
 
   const run = useCallback(
     async (files: File[], opts: TOptions) => {
@@ -78,16 +81,36 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
-  // Fires conversion when both file and ready state materialize. If options
-  // start out ready (HEIC), this runs as soon as pendingFiles is set. If not
-  // (image-convert with output unselected), waits until user picks a format.
+  // Single-cardinality: fire conversion when both file and ready materialize.
+  // Multi-cardinality: populate the staging area (no auto-fire — user reviews
+  // and clicks Convert).
   useEffect(() => {
-    if (pendingFiles.length > 0 && ready) {
+    if (pendingFiles.length === 0) return;
+    if (isMulti) {
+      setStagedFiles((prev) => [...prev, ...pendingFiles]);
+      setPendingFiles([]);
+      return;
+    }
+    if (ready) {
       const f = pendingFiles[0];
       if (f) run([f], options);
       setPendingFiles([]);
     }
-  }, [pendingFiles, ready, run, options]);
+  }, [pendingFiles, ready, run, options, isMulti]);
+
+  function handleDrop(files: File[]) {
+    if (isMulti) {
+      // Multi: append to staging.
+      setStagedFiles((prev) => [...prev, ...files]);
+      return;
+    }
+    // Single: fire conversion immediately.
+    run(files, options);
+  }
+
+  function handleConvertClick() {
+    run(stagedFiles, options);
+  }
 
   return (
     <main className="p-6">
@@ -97,12 +120,26 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <StatusIndicator status={status} />
       </div>
       {Panel && <Panel value={options} onChange={setOptions} />}
+      {Staging && stagedFiles.length > 0 && (
+        <Staging files={stagedFiles} onChange={setStagedFiles} options={options} />
+      )}
       <DropZone
         accept={engine.inputAccept}
-        multiple={engine.cardinality === "multi"}
-        onFiles={(files) => run(files, options)}
+        multiple={isMulti}
+        onFiles={handleDrop}
         disabled={!ready}
       />
+      {isMulti && (
+        <button
+          type="button"
+          data-testid="convert-button"
+          disabled={stagedFiles.length === 0 || !ready}
+          onClick={handleConvertClick}
+          className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
+        >
+          [ convert to pdf ]
+        </button>
+      )}
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">
           {errorMessage}
