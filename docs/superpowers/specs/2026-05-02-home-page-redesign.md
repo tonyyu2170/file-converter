@@ -19,18 +19,56 @@ Phase 7 retires the hub. `/` becomes a real landing page that affirms what the a
 
 Hero (headline + privacy claim) at top, 2×2 tool grid below, no in-page footer (the global `<Footer>` already provides version + count). Order is fixed; the grid is the action surface.
 
-### D2. Hero copy (option P2a — pure terminal voice)
+### D2. Hero design (revised after first-pass review)
+
+The first-pass hero (`// CONVERT FILES. LOCALLY.` + privacy paragraph) was visually thin — readable but didn't carry rhetorical weight on first impression. Revised to a display-typography hero with three structural elements:
+
+**1. Status bar (top of page)**
 
 ```
-// CONVERT FILES. LOCALLY.
-
-files never leave your device. every
-conversion runs in a web worker inside
-your browser. no upload, no server, no
-telemetry.
+[ v0.1.0 ]  // 4 TOOLS ONLINE
 ```
 
-Rationale: matches the `// HOME / // IMAGES / // PDFS` voice in the sidebar and `[ READY ] / [ DONE ]` voice in the status indicator. Lowercase body copy mirrors the rest of the app. Three short lines wrap to ~50 chars each — readable on mobile without breaking the terminal aesthetic.
+`v0.1.0` rendered inside a hairline-bordered tag (matches `[ READY ]`/`[ convert ]` bracket idiom). Tool count is computed from `TOOLS.length` so adding a 5th tool updates automatically. Phase numbers are an internal artifact (planning docs only); not surfaced here.
+
+**2. Display headline**
+
+Four lines, each its own `<span class="block">`, with per-word color treatment:
+
+| Line | Color |
+|---|---|
+| `convert files` | `var(--color-fg-strong)` |
+| `without` | `var(--color-fg-muted)` |
+| `uploading` | `var(--color-accent)` |
+| `them.` | `var(--color-fg-strong)` |
+
+The accent on `uploading` does the rhetorical work — it visually completes the privacy claim before the body paragraph spells out the mechanism. Font weight: 500 (`font-medium`, the existing JetBrains Mono Medium face). Mobile size: 40px. Desktop (≥768px): 72px (new `--text-display` token). Line-height tight (1.0).
+
+**3. Body paragraph**
+
+```
+files never leave your device. every byte stays in the browser tab — decoded, re-encoded, and downloaded by web workers running on your machine. zero servers. zero telemetry.
+```
+
+`text-base` (16px), `fg-muted`, `leading-relaxed`, `max-w-lg` (512px) so it wraps at ~60 chars. More mechanically specific than the first-pass copy ("every byte stays in the browser tab — decoded, re-encoded, and downloaded by web workers" replaces "every conversion runs in a web worker"). The "zero servers. zero telemetry." cadence does the closing rhythm.
+
+**4. Terminal prompt card (bridges hero → tool grid)**
+
+```
+[ $ pick a tool below ↓ ]
+```
+
+Inline-flex card with hairline border, accent `$` glyph, fg-strong body. The `↓` arrow is the directional cue to the grid. Replaces the first-pass `// tools` divider (label + grid) with a single, more directional element. Critically: the card does NOT imply drop-on-home (no "drop a file" copy) — Phase 7 killed the universal hub and we're not silently reverting that decision via misleading affordances.
+
+### D2.1. New token
+
+Add to `globals.css`:
+
+```css
+--text-display: 72px;
+```
+
+Used on the headline at `md:` and up. Mobile uses raw `text-[40px]`. This is a deliberate single-token addition (not the broad scale token-set the first-pass spec said to avoid) — display-scale typography is its own register and deserves a name.
 
 ### D3. Tool cards (option P3b — title + 1-line description)
 
@@ -59,26 +97,44 @@ The hub is the sole consumer of `stageFiles` / `takeStagedFiles`. After the hub 
 
 Net effect: dead code disappears. Nothing breaks because nothing else uses these modules.
 
-### D5. Visual design — frozen markup
+### D5. Visual design — frozen markup (revised)
 
-The page lives in the existing brutalist/terminal aesthetic. Tokens come from `src/app/globals.css` only (no new CSS variables). Cards link directly to tools — they're `<Link>` elements, which are anchor tags, so global `:focus-visible` styling applies for free.
+The page lives in the existing brutalist/terminal aesthetic. One new token (`--text-display`) added to `globals.css` per D2.1; everything else is existing tokens. Cards link directly to tools — they're `<Link>` elements, so global `:focus-visible` styling applies for free.
 
 **Layout:**
 
 ```jsx
 <main className="p-6">
-  <section className="mb-12 max-w-2xl">
-    <h1 className="mb-4 text-[var(--text-lg)] uppercase tracking-[0.15em] text-[var(--color-accent)]">
-      // CONVERT FILES. LOCALLY.
-    </h1>
-    <p className="text-[var(--text-sm)] text-[var(--color-fg-muted)] leading-relaxed">
-      files never leave your device. every conversion runs in a web worker inside your browser. no upload, no server, no telemetry.
-    </p>
-  </section>
-
-  <div className="mb-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-very-muted)]">
-    // tools
+  {/* Status bar */}
+  <div className="mb-10 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em]" data-testid="status-bar">
+    <span className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--color-fg-strong)]">
+      {VERSION}
+    </span>
+    <span className="text-[var(--color-fg-very-muted)]">
+      {`// ${TOOLS.length} TOOLS ONLINE`}
+    </span>
   </div>
+
+  {/* Display headline */}
+  <h1 className="mb-8 font-medium text-[40px] leading-[1.0] md:text-[var(--text-display)]" data-testid="hero-headline">
+    <span className="block text-[var(--color-fg-strong)]">convert files</span>
+    <span className="block text-[var(--color-fg-muted)]">without</span>
+    <span className="block text-[var(--color-accent)]">uploading</span>
+    <span className="block text-[var(--color-fg-strong)]">them.</span>
+  </h1>
+
+  {/* Privacy paragraph */}
+  <p className="mb-10 max-w-lg text-[var(--text-base)] text-[var(--color-fg-muted)] leading-relaxed">
+    files never leave your device. every byte stays in the browser tab — decoded, re-encoded, and downloaded by web workers running on your machine. zero servers. zero telemetry.
+  </p>
+
+  {/* Terminal prompt → grid */}
+  <div className="mb-12 inline-flex items-center gap-3 border border-[var(--color-hairline)] px-4 py-3 text-[var(--text-sm)]" data-testid="terminal-prompt">
+    <span className="text-[var(--color-accent)]">$</span>
+    <span className="text-[var(--color-fg-strong)]">pick a tool below ↓</span>
+  </div>
+
+  {/* Tool grid */}
   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
     {TOOLS.map((tool) => (
       <Link
@@ -99,7 +155,7 @@ The page lives in the existing brutalist/terminal aesthetic. Tokens come from `s
 </main>
 ```
 
-**Spacing** uses existing Tailwind primitives only: `p-6` for the page wrapper (matches tool pages), `p-5` for card interior, `gap-3` (12px) between cards, `mb-12` (48px) hero/grid gap, `mb-3` (12px) `// tools` label / grid gap.
+**Spacing** uses existing Tailwind primitives plus the new `--text-display` token: `p-6` page wrapper, `mb-10` between status bar / paragraph / prompt, `mb-8` headline / paragraph gap, `mb-12` prompt / grid gap, `p-5` card interior, `gap-3` between cards.
 
 **Hover state** is a single property (`border-color`) transition — no transform, no shadow, no scale. Avoids the layout-shift footgun called out in the ui-ux-pro-max checklist. `transition-colors` defaults to ~150ms which sits in the recommended 150–300ms range for micro-interactions.
 
@@ -143,15 +199,16 @@ Single-column grid below `md:` (768px). Hero copy width is capped at `max-w-2xl`
 
 ### Component tests
 
-- **New** `src/app/page.test.tsx` (or co-located equivalent — match existing pattern):
-  - Renders the hero headline (`// CONVERT FILES. LOCALLY.`)
-  - Renders the privacy claim text
-  - Renders 4 tool cards with the correct testids (`tool-card-image-convert`, `tool-card-image-to-pdf`, `tool-card-pdf-merge`, `tool-card-pdf-split`)
-  - Each card has the correct `href`
-  - Each card has the correct title + description text
+- **New** `src/app/page.test.tsx` (co-located):
+  - Renders the status bar with version + tool count (`v0.1.0`, `4 TOOLS ONLINE`)
+  - Renders the hero headline as four colored spans (text content matches `convert files without uploading them.`)
+  - Renders the privacy claim with the new mechanism copy (`files never leave your device`, `web workers running on your machine`)
+  - Renders the terminal prompt directing to the tool grid (`$`, `pick a tool below`)
+  - Renders 4 tool cards with the correct testids, hrefs, titles, descriptions
+  - Renders exactly 4 tool cards
 - **Update** `src/components/tool-frame.test.tsx`:
-  - Remove the two cross-route handoff tests (single + multi) per D4.
-  - Confirm remaining 13 tests still pass (15 → 13).
+  - Remove the cross-route handoff tests per D4.
+  - Confirm remaining tests still pass.
 
 ### E2E
 
