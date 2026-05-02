@@ -1963,21 +1963,20 @@ import { PAGE_MARGIN, PAPER_DIMS, type ImageToPdfOptions } from "./options";
 
 const api = {
   async convertMulti(
-    filesAsBytes: ArrayBuffer[],
-    names: string[],
-    types: string[],
+    files: Array<{ bytes: ArrayBuffer; name: string; type: string }>,
     opts: ImageToPdfOptions,
   ): Promise<OutputItem> {
-    if (filesAsBytes.length === 0) {
+    if (files.length === 0) {
       throw new Error("image-to-pdf: no input files");
     }
 
     const pdf = await PDFDocument.create();
     const [paperW, paperH] = PAPER_DIMS[opts.paper];
 
-    for (let i = 0; i < filesAsBytes.length; i++) {
-      const blob = new Blob([filesAsBytes[i]!], { type: types[i] });
-      const file = new File([blob], names[i] ?? `page-${i + 1}`, { type: types[i] });
+    for (const [i, f] of files.entries()) {
+      const mimeType = f.type || "application/octet-stream";
+      const blob = new Blob([f.bytes], { type: mimeType });
+      const file = new File([blob], f.name || `page-${i + 1}`, { type: mimeType });
 
       const bitmap = await decodeImage(file);
       try {
