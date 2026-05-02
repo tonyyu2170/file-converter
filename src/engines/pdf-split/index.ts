@@ -1,6 +1,7 @@
 import { WorkerHarness } from "@/engines/_shared/harness";
 import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type PdfSplitOptions, defaultPdfSplitOptions } from "./options";
+import { PdfSplitOptionsPanel } from "./options-panel";
 
 const SUPPORTED_INPUT_MIMES = ["application/pdf"];
 
@@ -12,6 +13,7 @@ const engine: SingleInputEngine<PdfSplitOptions, OutputItem[]> = {
   defaultOptions: defaultPdfSplitOptions,
   archiveSuffix: "-split",
   cardinality: "single",
+  OptionsPanel: PdfSplitOptionsPanel,
   isReadyToConvert(opts) {
     return opts.rangeInput.trim().length > 0;
   },
