@@ -24,6 +24,24 @@ if (typeof globalThis.createImageBitmap !== "function") {
     Promise.reject(new Error("createImageBitmap stub"))) as typeof createImageBitmap;
 }
 
+if (typeof globalThis.OffscreenCanvas !== "function") {
+  class StubOffscreenCanvas {
+    width: number;
+    height: number;
+    constructor(w: number, h: number) {
+      this.width = w;
+      this.height = h;
+    }
+    getContext() {
+      return { drawImage: () => undefined } as unknown as OffscreenCanvasRenderingContext2D;
+    }
+    async convertToBlob() {
+      return new Blob([], { type: "image/png" });
+    }
+  }
+  (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = StubOffscreenCanvas;
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
