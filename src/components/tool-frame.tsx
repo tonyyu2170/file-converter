@@ -121,13 +121,18 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       </div>
       {Panel && <Panel value={options} onChange={setOptions} />}
       {Staging && stagedFiles.length > 0 && (
-        <Staging files={stagedFiles} onChange={setStagedFiles} options={options} />
+        <Staging
+          files={stagedFiles}
+          onChange={setStagedFiles}
+          options={options}
+          setOptions={setOptions}
+        />
       )}
       <DropZone
         accept={engine.inputAccept}
         multiple={isMulti}
         onFiles={handleDrop}
-        disabled={!ready}
+        disabled={!isMulti && !ready}
       />
       {isMulti && (
         <button

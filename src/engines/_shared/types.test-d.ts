@@ -70,6 +70,7 @@ describe("types", () => {
       files: File[];
       onChange: (next: File[]) => void;
       options: Opts;
+      setOptions: (next: Opts) => void;
     }>();
   });
 });

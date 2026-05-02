@@ -26,6 +26,7 @@ export type StagingAreaProps<TOptions> = {
   files: File[];
   onChange: (next: File[]) => void;
   options: TOptions;
+  setOptions: (next: TOptions) => void;
 };
 
 export type SingleInputEngine<

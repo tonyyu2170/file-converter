@@ -66,3 +66,20 @@ test("HEIC + PNG mix produces a downloadable PDF (shared decoder)", async ({ pag
   const bytes = await readFile(dlPath);
   expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
 });
+
+test("image-to-pdf drag handle is present per row (dnd-kit retrofit)", async ({ page }) => {
+  await page.goto("/tools/image-to-pdf");
+
+  const input = page.locator('input[type="file"]');
+  await input.setInputFiles([
+    path.resolve(__dirname, "../fixtures/sample.png"),
+    path.resolve(__dirname, "../fixtures/sample.jpg"),
+    path.resolve(__dirname, "../fixtures/sample.webp"),
+  ]);
+
+  await expect(page.getByTestId("staging-row")).toHaveCount(3);
+  await expect(page.getByTestId("drag-handle")).toHaveCount(3);
+  // ↑↓ buttons still present (kept alongside drag).
+  await expect(page.getByTestId("move-up")).toHaveCount(3);
+  await expect(page.getByTestId("move-down")).toHaveCount(3);
+});

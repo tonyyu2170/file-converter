@@ -15,29 +15,40 @@ export default function Home() {
     if (files.length === 0) return;
 
     const mimes = await Promise.all(files.map(detectMime));
-    const SUPPORTED = new Set([
+    const IMAGE_MIMES = new Set([
       "image/heic",
       "image/heif",
       "image/png",
       "image/jpeg",
       "image/webp",
     ]);
-    const allImages = mimes.every((m) => SUPPORTED.has(m));
+    const allImages = mimes.every((m) => IMAGE_MIMES.has(m));
+    const allPdfs = mimes.every((m) => m === "application/pdf");
 
-    if (!allImages) {
-      setError("No tool for this file type yet. Phase 3 supports HEIC, PNG, JPEG, WebP.");
-      return;
-    }
-
-    if (files.length >= 2) {
+    if (allImages) {
+      if (files.length >= 2) {
+        stageFiles(files);
+        router.push("/tools/image-to-pdf");
+        return;
+      }
       stageFiles(files);
-      router.push("/tools/image-to-pdf");
+      router.push("/tools/image-convert");
       return;
     }
 
-    // Single file: HEIC + PNG/JPEG/WebP all → image-convert (post-consolidation)
-    stageFiles(files);
-    router.push("/tools/image-convert");
+    if (allPdfs) {
+      if (files.length >= 2) {
+        stageFiles(files);
+        router.push("/tools/pdf-merge");
+        return;
+      }
+      setError("Need 2+ PDFs to merge.");
+      return;
+    }
+
+    setError(
+      "All files must be the same type. Phase 4 supports HEIC/PNG/JPEG/WebP for images and PDF for merging.",
+    );
   }
 
   return (

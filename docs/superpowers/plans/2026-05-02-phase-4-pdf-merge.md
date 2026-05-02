@@ -273,7 +273,7 @@ export function parseRange(input: string, pageCount: number): RangeParseResult {
 pnpm test src/engines/pdf-merge/range.test.ts
 ```
 
-Expected: all tests pass. Test count: 14 accept + 18 reject = 32 in this file.
+Expected: all tests pass. Test count: 15 accept + 18 reject = 33 in this file.
 
 - [ ] **Step 5: Run all unit gates**
 
@@ -281,7 +281,7 @@ Expected: all tests pass. Test count: 14 accept + 18 reject = 32 in this file.
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Expected: all exit 0. Total test count: 94 + 32 = 126.
+Expected: all exit 0. Total test count: 94 + 33 = 127.
 
 - [ ] **Step 6: Commit**
 
@@ -979,11 +979,12 @@ export function PdfMergeStagingArea({
           const doc = await PDFDocument.load(bytes);
           commitMetadata(rowId, { pageCount: doc.getPageCount(), encrypted: false });
         } catch (err: unknown) {
-          const isEncrypted =
-            typeof err === "object" &&
-            err !== null &&
-            "constructor" in err &&
-            (err as { constructor: { name?: string } }).constructor.name === "EncryptedPDFError";
+          // pdf-lib's EncryptedPDFError doesn't round-trip reliably as
+          // instanceof / constructor.name across lazy-loaded bundles.
+          // Detect via the thrown message instead — confirmed in Task 4
+          // smoke test: encrypted PDFs throw with message containing
+          // "encrypted".
+          const isEncrypted = err instanceof Error && /encrypted/i.test(err.message);
           commitMetadata(rowId, {
             pageCount: 0,
             encrypted: isEncrypted,
