@@ -88,8 +88,14 @@
   will-change: transform;
 }
 
+.pet-stroll-reverse {
+  animation: pet-stroll 14s linear infinite reverse;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .pet-stroll {
+  .pet-stroll,
+  .pet-stroll-reverse {
     animation: none;
     transform: translateX(0) scaleX(1);
   }

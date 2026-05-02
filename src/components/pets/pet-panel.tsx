@@ -12,7 +12,22 @@ export function PetPanel() {
           alt=""
           width={87}
           height={57}
+          data-testid="pet-walk"
           className="pet-stroll absolute bottom-0 left-0 [image-rendering:pixelated]"
+        />
+      </picture>
+      <picture>
+        <source
+          srcSet="/pets/akita_with_ball_static.png"
+          media="(prefers-reduced-motion: reduce)"
+        />
+        <img
+          src="/pets/akita_with_ball_8fps.gif"
+          alt=""
+          width={87}
+          height={57}
+          data-testid="pet-ball"
+          className="pet-stroll-reverse absolute bottom-[140px] left-0 [image-rendering:pixelated]"
         />
       </picture>
     </div>
