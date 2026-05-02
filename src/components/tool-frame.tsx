@@ -1,8 +1,7 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
-import { takeStagedFiles } from "@/lib/handoff";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
 import { type Status, StatusIndicator } from "./status-indicator";
@@ -16,7 +15,6 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [items, setItems] = useState<OutputItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
@@ -25,10 +23,8 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const isMulti = engine.cardinality === "multi";
 
   // Single-cardinality reset helper. Centralises the four-setter block used
-  // by the mount effect, handleDrop, and handleClearStaged. Multi-cardinality
-  // appends to stagedFiles instead of replacing, so it does not use this.
-  // Wrapped in useCallback so the mount effect can list it as a dependency
-  // without re-running on every render (useState setters are stable).
+  // by handleDrop and handleClearStaged. Multi-cardinality appends to
+  // stagedFiles instead of replacing, so it does not use this.
   const resetSingleStaging = useCallback((next: File | null) => {
     setStagedFiles(next ? [next] : []);
     setItems([]);
@@ -82,32 +78,6 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     },
     [engine],
   );
-
-  // Mount-time staged-file consumption. Single-shot: takeStagedFiles clears
-  // the slot, so React Strict Mode's double-mount fires this once net.
-  const consumedRef = useRef(false);
-  useEffect(() => {
-    if (consumedRef.current) return;
-    consumedRef.current = true;
-    const staged = takeStagedFiles();
-    if (staged.length > 0) setPendingFiles(staged);
-  }, []);
-
-  // Mount-time pendingFiles → stagedFiles for both cardinalities. Single is
-  // capped at 1 (last wins); multi appends. No auto-fire — user reviews
-  // options and clicks Convert.
-  useEffect(() => {
-    if (pendingFiles.length === 0) return;
-    if (isMulti) {
-      setStagedFiles((prev) => [...prev, ...pendingFiles]);
-    } else {
-      const first = pendingFiles[0];
-      if (first) {
-        resetSingleStaging(first);
-      }
-    }
-    setPendingFiles([]);
-  }, [pendingFiles, isMulti, resetSingleStaging]);
 
   function handleDrop(files: File[]) {
     if (isMulti) {
