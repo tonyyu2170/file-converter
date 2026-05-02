@@ -18,12 +18,23 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
-  const [singleSourceFile, setSingleSourceFile] = useState<File | null>(null);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
   const Staging = engine.cardinality === "multi" ? engine.StagingArea : undefined;
   const isMulti = engine.cardinality === "multi";
+
+  // Single-cardinality reset helper. Centralises the four-setter block used
+  // by the mount effect, handleDrop, and handleClearStaged. Multi-cardinality
+  // appends to stagedFiles instead of replacing, so it does not use this.
+  // Wrapped in useCallback so the mount effect can list it as a dependency
+  // without re-running on every render (useState setters are stable).
+  const resetSingleStaging = useCallback((next: File | null) => {
+    setStagedFiles(next ? [next] : []);
+    setItems([]);
+    setErrorMessage(null);
+    setStatus("ready");
+  }, []);
 
   const run = useCallback(
     async (files: File[], opts: TOptions) => {
@@ -32,7 +43,6 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       if (engine.cardinality === "single") {
         const f = files[0];
         if (!f) return;
-        setSingleSourceFile(f);
         const v = engine.validate(f, opts);
         if (!v.ok) {
           setErrorMessage(v.reason);
@@ -83,46 +93,50 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     if (staged.length > 0) setPendingFiles(staged);
   }, []);
 
-  // Single-cardinality: fire conversion when both file and ready materialize.
-  // Multi-cardinality: populate the staging area (no auto-fire — user reviews
-  // and clicks Convert).
+  // Mount-time pendingFiles → stagedFiles for both cardinalities. Single is
+  // capped at 1 (last wins); multi appends. No auto-fire — user reviews
+  // options and clicks Convert.
   useEffect(() => {
     if (pendingFiles.length === 0) return;
     if (isMulti) {
       setStagedFiles((prev) => [...prev, ...pendingFiles]);
-      setPendingFiles([]);
-      return;
+    } else {
+      const first = pendingFiles[0];
+      if (first) {
+        resetSingleStaging(first);
+      }
     }
-    if (ready) {
-      const f = pendingFiles[0];
-      if (f) run([f], options);
-      setPendingFiles([]);
-    }
-  }, [pendingFiles, ready, run, options, isMulti]);
+    setPendingFiles([]);
+  }, [pendingFiles, isMulti, resetSingleStaging]);
 
   function handleDrop(files: File[]) {
     if (isMulti) {
-      // Multi: append to staging.
       setStagedFiles((prev) => [...prev, ...files]);
       return;
     }
-    // Single: fire conversion immediately.
-    run(files, options);
+    const first = files[0];
+    if (!first) return;
+    resetSingleStaging(first);
   }
 
   function handleConvertClick() {
     run(stagedFiles, options);
   }
 
-  // Compute archiveBasename for multi-output ZIP downloads. Single-cardinality
-  // engines: strip the extension from the input file's name. Multi-cardinality
-  // engines: use the first staged file's basename, or undefined if none staged.
+  function handleClearStaged() {
+    resetSingleStaging(null);
+  }
+
+  // Compute archiveBasename for multi-output ZIP downloads from the currently
+  // staged file. With staged-on-drop semantics, stagedFiles[0] is the single
+  // source of truth for the input file across both cardinalities.
   const archiveBasename = (() => {
-    const sourceFile =
-      engine.cardinality === "single" ? singleSourceFile : (stagedFiles[0] ?? null);
+    const sourceFile = stagedFiles[0];
     if (!sourceFile) return undefined;
     return sourceFile.name.replace(/\.[^.]+$/, "");
   })();
+
+  const stagedFile: File | undefined = stagedFiles[0];
 
   return (
     <main className="p-6">
@@ -140,23 +154,32 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
           setOptions={setOptions}
         />
       )}
-      <DropZone
-        accept={engine.inputAccept}
-        multiple={isMulti}
-        onFiles={handleDrop}
-        disabled={!isMulti && !ready}
-      />
-      {isMulti && (
-        <button
-          type="button"
-          data-testid="convert-button"
-          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
-          onClick={handleConvertClick}
-          className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
-        >
-          {engine.convertButtonLabel ?? "[ convert ]"}
-        </button>
+      {!isMulti && stagedFile && (
+        <div className="mb-3 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]">
+          <span>
+            current file: <span className="text-[var(--color-fg-strong)]">{stagedFile.name}</span>
+          </span>
+          <button
+            type="button"
+            data-testid="clear-staged-file"
+            disabled={status === "converting"}
+            onClick={handleClearStaged}
+            className="text-[var(--color-accent)] hover:text-[var(--color-fg-strong)] disabled:text-[var(--color-fg-very-muted)]"
+          >
+            [ clear ]
+          </button>
+        </div>
       )}
+      <DropZone accept={engine.inputAccept} multiple={isMulti} onFiles={handleDrop} />
+      <button
+        type="button"
+        data-testid="convert-button"
+        disabled={stagedFiles.length === 0 || !ready || status === "converting"}
+        onClick={handleConvertClick}
+        className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
+      >
+        {engine.convertButtonLabel ?? "[ convert ]"}
+      </button>
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">
           {errorMessage}

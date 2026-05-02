@@ -7,17 +7,13 @@ test("JPEG → PNG produces a valid PNG download", async ({ page }) => {
 
   await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
 
-  // DropZone is disabled until output format is picked.
-  await expect(page.getByTestId("drop-zone")).toHaveAttribute("data-state", "disabled");
-
-  // Pick PNG output.
   await page.getByTestId("output-format").selectOption("png");
-
-  await expect(page.getByTestId("drop-zone")).not.toHaveAttribute("data-state", "disabled");
 
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.jpg");
   await input.setInputFiles(fixture);
+
+  await page.getByTestId("convert-button").click();
 
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
     timeout: 30_000,
@@ -45,6 +41,8 @@ test("EXIF-rotated JPEG output preserves visual orientation", async ({ page }) =
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample-rotated.jpg");
   await input.setInputFiles(fixture);
+
+  await page.getByTestId("convert-button").click();
 
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
     timeout: 30_000,
@@ -82,6 +80,8 @@ test("HEIC → PNG via shared decoder produces a valid PNG download", async ({ p
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
   await input.setInputFiles(fixture);
+
+  await page.getByTestId("convert-button").click();
 
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
     timeout: 30_000,

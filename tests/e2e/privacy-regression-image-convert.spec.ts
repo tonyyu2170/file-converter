@@ -31,6 +31,7 @@ test("JPEG → PNG conversion produces zero outbound network requests beyond ini
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.jpg");
   await input.setInputFiles(fixture);
+  await page.getByTestId("convert-button").click();
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", { timeout: 30_000 });
   await page.waitForLoadState("networkidle");
 
@@ -74,6 +75,7 @@ test("HEIC → PNG conversion produces zero outbound network requests beyond ini
   const input = page.locator('input[type="file"]');
   const fixture = path.resolve(__dirname, "../fixtures/sample.heic");
   await input.setInputFiles(fixture);
+  await page.getByTestId("convert-button").click();
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", { timeout: 30_000 });
   await page.waitForLoadState("networkidle");
 
