@@ -1,3 +1,4 @@
+import { PetPanel } from "@/components/pets/pet-panel";
 import Link from "next/link";
 
 const TOOLS = [
@@ -31,7 +32,8 @@ const VERSION = "v0.1.0";
 
 export default function Home() {
   return (
-    <main className="p-6">
+    <main className="relative p-6">
+      <PetPanel />
       <div
         className="mb-10 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em]"
         data-testid="status-bar"

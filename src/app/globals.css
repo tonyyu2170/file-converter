@@ -65,3 +65,32 @@
     outline-offset: 2px;
   }
 }
+
+/* 400px = panel width, 87px = sprite render width — keep in sync with pet-panel.tsx */
+@keyframes pet-stroll {
+  0%,
+  100% {
+    transform: translateX(0) scaleX(1);
+  }
+  47% {
+    transform: translateX(calc(400px - 87px)) scaleX(1);
+  }
+  50% {
+    transform: translateX(calc(400px - 87px)) scaleX(-1);
+  }
+  97% {
+    transform: translateX(0) scaleX(-1);
+  }
+}
+
+.pet-stroll {
+  animation: pet-stroll 10s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-stroll {
+    animation: none;
+    transform: translateX(0) scaleX(1);
+  }
+}

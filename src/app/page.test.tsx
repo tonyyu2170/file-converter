@@ -74,4 +74,9 @@ describe("Home", () => {
     const cards = screen.getAllByTestId(/^tool-card-/);
     expect(cards).toHaveLength(4);
   });
+
+  it("renders the pet panel inside the hero", () => {
+    render(<Home />);
+    expect(screen.getByTestId("pet-panel")).toBeInTheDocument();
+  });
 });
