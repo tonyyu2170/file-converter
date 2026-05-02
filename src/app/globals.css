@@ -66,6 +66,7 @@
   }
 }
 
+/* 400px = panel width, 174px = sprite width — keep in sync with pet-panel.tsx */
 @keyframes pet-stroll {
   0%,
   100% {
