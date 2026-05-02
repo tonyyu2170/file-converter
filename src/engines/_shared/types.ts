@@ -21,6 +21,12 @@ export type OptionsPanelProps<TOptions> = {
   onChange: (next: TOptions) => void;
 };
 
+export type StagingAreaProps<TOptions> = {
+  files: File[];
+  onChange: (next: File[]) => void;
+  options: TOptions;
+};
+
 export type SingleInputEngine<
   TOptions,
   TOutput extends OutputItem | OutputItem[],
@@ -41,6 +47,7 @@ export type MultiInputEngine<
   convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
   OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
+  StagingArea?: ComponentType<StagingAreaProps<TOptions>>;
 };
 
 export type ConversionEngine<
