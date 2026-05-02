@@ -15,4 +15,10 @@ describe("registry", () => {
     expect(e.id).toBe("image-convert");
     expect(e.cardinality).toBe("single");
   });
+
+  it("loadEngine returns the image-to-pdf engine module", async () => {
+    const e = await loadEngine("image-to-pdf");
+    expect(e.id).toBe("image-to-pdf");
+    expect(e.cardinality).toBe("multi");
+  });
 });
