@@ -1,73 +1,64 @@
-"use client";
+import Link from "next/link";
 
-import { DropZone } from "@/components/drop-zone";
-import { detectMime } from "@/engines/_shared/file-detection";
-import { stageFiles } from "@/lib/handoff";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+const TOOLS = [
+  {
+    id: "image-convert",
+    title: "image convert",
+    description: "heic, png, jpg, webp · convert between formats",
+    href: "/tools/image-convert",
+  },
+  {
+    id: "image-to-pdf",
+    title: "image→pdf",
+    description: "combine multiple images into a single pdf",
+    href: "/tools/image-to-pdf",
+  },
+  {
+    id: "pdf-merge",
+    title: "merge",
+    description: "combine multiple pdfs into one",
+    href: "/tools/pdf-merge",
+  },
+  {
+    id: "pdf-split",
+    title: "split",
+    description: "extract page ranges from a pdf",
+    href: "/tools/pdf-split",
+  },
+] as const;
 
 export default function Home() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleFiles(files: File[]) {
-    setError(null);
-    if (files.length === 0) return;
-
-    const mimes = await Promise.all(files.map(detectMime));
-    const IMAGE_MIMES = new Set([
-      "image/heic",
-      "image/heif",
-      "image/png",
-      "image/jpeg",
-      "image/webp",
-    ]);
-    const allImages = mimes.every((m) => IMAGE_MIMES.has(m));
-    const allPdfs = mimes.every((m) => m === "application/pdf");
-
-    if (allImages) {
-      if (files.length >= 2) {
-        stageFiles(files);
-        router.push("/tools/image-to-pdf");
-        return;
-      }
-      stageFiles(files);
-      router.push("/tools/image-convert");
-      return;
-    }
-
-    if (allPdfs) {
-      if (files.length >= 2) {
-        stageFiles(files);
-        router.push("/tools/pdf-merge");
-        return;
-      }
-      setError("Need 2+ PDFs to merge.");
-      return;
-    }
-
-    setError(
-      "All files must be the same type. Phase 4 supports HEIC/PNG/JPEG/WebP for images and PDF for merging.",
-    );
-  }
-
   return (
-    <main className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-2xl">
-        <DropZone
-          multiple
-          onFiles={handleFiles}
-          prompt="drop a file"
-          hint="HEIC supported. More tools shipping in subsequent phases."
-        />
-        {error && (
-          <output
-            aria-live="polite"
-            className="mt-3 block border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]"
+    <main className="p-6">
+      <section className="mb-12 max-w-2xl">
+        <h1 className="mb-4 text-[var(--text-lg)] uppercase tracking-[0.15em] text-[var(--color-accent)]">
+          {"// CONVERT FILES. LOCALLY."}
+        </h1>
+        <p className="text-[var(--text-sm)] text-[var(--color-fg-muted)] leading-relaxed">
+          files never leave your device. every conversion runs in a web worker inside your browser.
+          no upload, no server, no telemetry.
+        </p>
+      </section>
+
+      <div className="mb-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-very-muted)]">
+        {"// tools"}
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {TOOLS.map((tool) => (
+          <Link
+            key={tool.id}
+            href={tool.href}
+            data-testid={`tool-card-${tool.id}`}
+            className="block border border-[var(--color-hairline)] p-5 transition-colors hover:border-[var(--color-accent)]"
           >
-            {error}
-          </output>
-        )}
+            <div className="mb-1 text-[var(--text-base)] text-[var(--color-fg-strong)]">
+              {tool.title}
+            </div>
+            <div className="text-[var(--text-xs)] text-[var(--color-fg-muted)]">
+              {tool.description}
+            </div>
+          </Link>
+        ))}
       </div>
     </main>
   );
