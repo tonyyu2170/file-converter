@@ -4,11 +4,11 @@ import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type ImageConvertOptions, defaultImageConvertOptions } from "./options";
 import { ImageConvertOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = ["image/png", "image/jpeg", "image/webp"];
+const SUPPORTED_INPUT_MIMES = ["image/heic", "image/heif", "image/png", "image/jpeg", "image/webp"];
 
 const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   id: "image-convert",
-  inputAccept: [".png", ".jpg", ".jpeg", ".webp"],
+  inputAccept: [".heic", ".heif", ".png", ".jpg", ".jpeg", ".webp"],
   inputMime: SUPPORTED_INPUT_MIMES,
   outputMime: "image/png",
   defaultOptions: defaultImageConvertOptions,
@@ -18,7 +18,7 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   validate(file) {
     return SUPPORTED_INPUT_MIMES.includes(file.type)
       ? { ok: true }
-      : { ok: false, reason: "Expected a PNG, JPEG, or WebP file" };
+      : { ok: false, reason: "Expected an HEIC, PNG, JPEG, or WebP file" };
   },
   async convert(file, opts, signal) {
     const detected = await detectMime(file);

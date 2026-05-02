@@ -1,3 +1,4 @@
+import { decodeImage } from "@/engines/_shared/decode-image";
 import type { OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
 import { OUTPUT_EXTENSION, OUTPUT_MIME } from "./options";
@@ -21,16 +22,14 @@ const api = {
     }
 
     const inputBlob = new Blob([bytes], { type });
-    const bitmap = await createImageBitmap(inputBlob, {
-      imageOrientation: "from-image",
-    });
+    const file = new File([inputBlob], name, { type });
+    const bitmap = await decodeImage(file);
 
     try {
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
 
-      // Alpha-on-JPEG: fill opaque white background before drawing.
       if (opts.output === "jpeg") {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, bitmap.width, bitmap.height);
