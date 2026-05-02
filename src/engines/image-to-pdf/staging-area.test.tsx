@@ -133,4 +133,17 @@ describe("ImageToPdfStagingArea", () => {
       expect(screen.getByText("?")).toBeInTheDocument();
     });
   });
+
+  it("renders a drag handle for each row", () => {
+    const files = [makeFile("a.png"), makeFile("b.png")];
+    render(
+      <ImageToPdfStagingArea
+        files={files}
+        onChange={() => undefined}
+        options={defaultImageToPdfOptions}
+        setOptions={() => undefined}
+      />,
+    );
+    expect(screen.getAllByTestId("drag-handle")).toHaveLength(2);
+  });
 });
