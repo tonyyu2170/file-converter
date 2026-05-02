@@ -4,6 +4,10 @@ import { parseRangeTokens } from "@/engines/_shared/range";
 import type { OptionsPanelProps } from "@/engines/_shared/types";
 import type { PdfToImageOptions } from "./options";
 
+// Use Number.MAX_SAFE_INTEGER as a sentinel pageCount so the parser surfaces
+// syntax errors (commas, bare dashes, non-numeric tokens) but never reports
+// "exceeds N" — bounds checks happen in the worker once the real pageCount
+// is known after pdfjs-dist loads the document.
 const SYNTAX_CHECK_PAGE_COUNT = Number.MAX_SAFE_INTEGER;
 
 function syntaxErrorOf(input: string): string | undefined {

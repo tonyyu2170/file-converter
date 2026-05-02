@@ -9,6 +9,8 @@ const engine: SingleInputEngine<PdfToImageOptions, OutputItem[]> = {
   id: "pdf-to-image",
   inputAccept: [".pdf"],
   inputMime: SUPPORTED_INPUT_MIMES,
+  // Default for the engine; per-OutputItem `mime` is authoritative when
+  // format=jpeg (worker emits "image/jpeg" + .jpg filenames in that case).
   outputMime: "image/png",
   defaultOptions: defaultPdfToImageOptions,
   archiveSuffix: "-images",
