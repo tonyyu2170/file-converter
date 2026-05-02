@@ -19,6 +19,11 @@ if (typeof URL.revokeObjectURL !== "function") {
   URL.revokeObjectURL = () => undefined;
 }
 
+if (typeof globalThis.createImageBitmap !== "function") {
+  globalThis.createImageBitmap = (() =>
+    Promise.reject(new Error("createImageBitmap stub"))) as typeof createImageBitmap;
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,
