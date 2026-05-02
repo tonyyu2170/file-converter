@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRange } from "./range";
+import { parseRange, parseRangeTokens } from "./range";
 
 describe("parseRange — accepts", () => {
   it.each([
@@ -69,5 +69,91 @@ describe("parseRange — pageCount = 0", () => {
   });
   it("rejects any positive page reference", () => {
     expect(parseRange("1", 0)).toEqual({ ok: false, reason: expect.stringMatching(/exceeds 0/) });
+  });
+});
+
+describe("parseRangeTokens — accepts", () => {
+  it("returns no tokens for empty input", () => {
+    const r = parseRangeTokens("", 5);
+    expect(r).toEqual({ ok: true, tokens: [] });
+  });
+
+  it("returns no tokens for whitespace-only input", () => {
+    const r = parseRangeTokens("   ", 5);
+    expect(r).toEqual({ ok: true, tokens: [] });
+  });
+
+  it("returns one token for single-page input", () => {
+    const r = parseRangeTokens("3", 5);
+    expect(r).toEqual({ ok: true, tokens: [{ original: "3", indices: [2] }] });
+  });
+
+  it("returns one token for closed-range input", () => {
+    const r = parseRangeTokens("1-3", 5);
+    expect(r).toEqual({ ok: true, tokens: [{ original: "1-3", indices: [0, 1, 2] }] });
+  });
+
+  it("returns one token for open-ended start", () => {
+    const r = parseRangeTokens("3-", 5);
+    expect(r).toEqual({ ok: true, tokens: [{ original: "3-", indices: [2, 3, 4] }] });
+  });
+
+  it("returns one token for open-ended end", () => {
+    const r = parseRangeTokens("-3", 5);
+    expect(r).toEqual({ ok: true, tokens: [{ original: "-3", indices: [0, 1, 2] }] });
+  });
+
+  it("returns multiple tokens, each preserving original text", () => {
+    const r = parseRangeTokens("1-3, 5, 7-", 10);
+    expect(r).toEqual({
+      ok: true,
+      tokens: [
+        { original: "1-3", indices: [0, 1, 2] },
+        { original: "5", indices: [4] },
+        { original: "7-", indices: [6, 7, 8, 9] },
+      ],
+    });
+  });
+
+  it("trims whitespace in original token text", () => {
+    const r = parseRangeTokens(" 1 - 3 , 5 ", 5);
+    // original is the trimmed token, not the raw input slice
+    expect(r).toEqual({
+      ok: true,
+      tokens: [
+        { original: "1 - 3", indices: [0, 1, 2] },
+        { original: "5", indices: [4] },
+      ],
+    });
+  });
+});
+
+describe("parseRangeTokens — rejects", () => {
+  it("rejects on first malformed token (short-circuit)", () => {
+    const r = parseRangeTokens("1, abc, 3", 5);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/can't parse 'abc'/);
+  });
+
+  it("rejects on first reversed token", () => {
+    const r = parseRangeTokens("1-2, 5-3, 4", 5);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/reversed/);
+  });
+
+  it("rejects on first OOB token", () => {
+    const r = parseRangeTokens("1-2, 7", 5);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/exceeds 5/);
+  });
+});
+
+describe("parseRange / parseRangeTokens asymmetry", () => {
+  it("parseRange returns all-pages on empty input (legacy pdf-merge behavior)", () => {
+    expect(parseRange("", 5)).toEqual({ ok: true, indices: [0, 1, 2, 3, 4] });
+  });
+
+  it("parseRangeTokens returns no tokens on empty input (engine-gate behavior)", () => {
+    expect(parseRangeTokens("", 5)).toEqual({ ok: true, tokens: [] });
   });
 });
