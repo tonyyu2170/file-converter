@@ -7,8 +7,13 @@ describe("buildZipBlob", () => {
   });
 
   it("returns the supplied archive name and a Blob", async () => {
+    // Use a duck-typed { blob: async () => Blob } instead of `new Response(blob)`
+    // because Response.blob() chains through Blob.stream() which has cross-realm
+    // issues between jsdom's Blob and Node 20's undici Response (CI-only failure
+    // on Node 20; passes on Node 24+ locally). The production code only depends
+    // on the awaited .blob() shape.
     const fakeBlob = new Blob(["fake-zip-bytes"], { type: "application/zip" });
-    const downloadZip = vi.fn(() => new Response(fakeBlob));
+    const downloadZip = vi.fn(() => ({ blob: async () => fakeBlob }));
     vi.doMock("client-zip", () => ({ downloadZip }));
     // Reset the module cache so the lazy import picks up the mock.
     vi.resetModules();
@@ -32,7 +37,9 @@ describe("buildZipBlob", () => {
     vi.doMock("client-zip", () => {
       importCount += 1;
       return {
-        downloadZip: () => new Response(new Blob(["zip"], { type: "application/zip" })),
+        downloadZip: () => ({
+          blob: async () => new Blob(["zip"], { type: "application/zip" }),
+        }),
       };
     });
     vi.resetModules();
