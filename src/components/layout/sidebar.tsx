@@ -4,6 +4,7 @@ type ToolEntry = { id: string; href: string; label: string; group: string };
 
 const TOOLS: ToolEntry[] = [
   { id: "image-convert", href: "/tools/image-convert", label: "image convert", group: "IMAGES" },
+  { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
 ];
 
 export function Sidebar() {

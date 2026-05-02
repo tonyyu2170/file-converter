@@ -13,27 +13,38 @@ export default function Home() {
   async function handleFiles(files: File[]) {
     setError(null);
     if (files.length === 0) return;
-    const f = files[0];
-    if (!f) return;
-    const mime = await detectMime(f);
-    if (
-      mime === "image/heic" ||
-      mime === "image/heif" ||
-      mime === "image/png" ||
-      mime === "image/jpeg" ||
-      mime === "image/webp"
-    ) {
-      stageFiles([f]);
-      router.push("/tools/image-convert");
+
+    const mimes = await Promise.all(files.map(detectMime));
+    const SUPPORTED = new Set([
+      "image/heic",
+      "image/heif",
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ]);
+    const allImages = mimes.every((m) => SUPPORTED.has(m));
+
+    if (!allImages) {
+      setError("No tool for this file type yet. Phase 3 supports HEIC, PNG, JPEG, WebP.");
       return;
     }
-    setError("No tool for this file type yet. Phase 3 supports HEIC, PNG, JPEG, WebP.");
+
+    if (files.length >= 2) {
+      stageFiles(files);
+      router.push("/tools/image-to-pdf");
+      return;
+    }
+
+    // Single file: HEIC + PNG/JPEG/WebP all → image-convert (post-consolidation)
+    stageFiles(files);
+    router.push("/tools/image-convert");
   }
 
   return (
     <main className="flex h-full items-center justify-center p-6">
       <div className="w-full max-w-2xl">
         <DropZone
+          multiple
           onFiles={handleFiles}
           prompt="drop a file"
           hint="HEIC supported. More tools shipping in subsequent phases."
