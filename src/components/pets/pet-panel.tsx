@@ -10,9 +10,9 @@ export function PetPanel() {
         <img
           src="/pets/akita_walk_8fps.gif"
           alt=""
-          width={174}
-          height={115}
-          className="pet-stroll absolute bottom-0 left-0"
+          width={87}
+          height={57}
+          className="pet-stroll absolute bottom-0 left-0 [image-rendering:pixelated]"
         />
       </picture>
     </div>

@@ -26,8 +26,8 @@ describe("PetPanel", () => {
     expect(img).not.toBeNull();
     expect(img).toHaveAttribute("src", "/pets/akita_walk_8fps.gif");
     expect(img).toHaveAttribute("alt", "");
-    expect(img).toHaveAttribute("width", "174");
-    expect(img).toHaveAttribute("height", "115");
+    expect(img).toHaveAttribute("width", "87");
+    expect(img).toHaveAttribute("height", "57");
     expect(img?.className).toContain("pet-stroll");
   });
 });
