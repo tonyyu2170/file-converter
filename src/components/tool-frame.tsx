@@ -18,12 +18,23 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
-  const [singleSourceFile, setSingleSourceFile] = useState<File | null>(null);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
   const Staging = engine.cardinality === "multi" ? engine.StagingArea : undefined;
   const isMulti = engine.cardinality === "multi";
+
+  // Single-cardinality reset helper. Centralises the four-setter block used
+  // by the mount effect, handleDrop, and handleClearStaged. Multi-cardinality
+  // appends to stagedFiles instead of replacing, so it does not use this.
+  // Wrapped in useCallback so the mount effect can list it as a dependency
+  // without re-running on every render (useState setters are stable).
+  const resetSingleStaging = useCallback((next: File | null) => {
+    setStagedFiles(next ? [next] : []);
+    setItems([]);
+    setErrorMessage(null);
+    setStatus("ready");
+  }, []);
 
   const run = useCallback(
     async (files: File[], opts: TOptions) => {
@@ -32,7 +43,6 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       if (engine.cardinality === "single") {
         const f = files[0];
         if (!f) return;
-        setSingleSourceFile(f);
         const v = engine.validate(f, opts);
         if (!v.ok) {
           setErrorMessage(v.reason);
@@ -93,15 +103,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     } else {
       const first = pendingFiles[0];
       if (first) {
-        setStagedFiles([first]);
-        setItems([]);
-        setErrorMessage(null);
-        setSingleSourceFile(null);
-        setStatus("ready");
+        resetSingleStaging(first);
       }
     }
     setPendingFiles([]);
-  }, [pendingFiles, isMulti]);
+  }, [pendingFiles, isMulti, resetSingleStaging]);
 
   function handleDrop(files: File[]) {
     if (isMulti) {
@@ -110,11 +116,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     }
     const first = files[0];
     if (!first) return;
-    setStagedFiles([first]);
-    setItems([]);
-    setErrorMessage(null);
-    setSingleSourceFile(null);
-    setStatus("ready");
+    resetSingleStaging(first);
   }
 
   function handleConvertClick() {
@@ -122,22 +124,14 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   }
 
   function handleClearStaged() {
-    setStagedFiles([]);
-    setItems([]);
-    setErrorMessage(null);
-    setSingleSourceFile(null);
-    setStatus("ready");
+    resetSingleStaging(null);
   }
 
-  // Compute archiveBasename for multi-output ZIP downloads. Prefer the
-  // currently staged file (explicit source) and fall back to the file
-  // captured by `run` so the basename survives a `[ clear ]` after a
-  // completed conversion.
+  // Compute archiveBasename for multi-output ZIP downloads from the currently
+  // staged file. With staged-on-drop semantics, stagedFiles[0] is the single
+  // source of truth for the input file across both cardinalities.
   const archiveBasename = (() => {
-    const sourceFile =
-      engine.cardinality === "single"
-        ? (stagedFiles[0] ?? singleSourceFile)
-        : (stagedFiles[0] ?? null);
+    const sourceFile = stagedFiles[0];
     if (!sourceFile) return undefined;
     return sourceFile.name.replace(/\.[^.]+$/, "");
   })();
