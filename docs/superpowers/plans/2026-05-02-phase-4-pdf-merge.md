@@ -979,11 +979,12 @@ export function PdfMergeStagingArea({
           const doc = await PDFDocument.load(bytes);
           commitMetadata(rowId, { pageCount: doc.getPageCount(), encrypted: false });
         } catch (err: unknown) {
-          const isEncrypted =
-            typeof err === "object" &&
-            err !== null &&
-            "constructor" in err &&
-            (err as { constructor: { name?: string } }).constructor.name === "EncryptedPDFError";
+          // pdf-lib's EncryptedPDFError doesn't round-trip reliably as
+          // instanceof / constructor.name across lazy-loaded bundles.
+          // Detect via the thrown message instead — confirmed in Task 4
+          // smoke test: encrypted PDFs throw with message containing
+          // "encrypted".
+          const isEncrypted = err instanceof Error && /encrypted/i.test(err.message);
           commitMetadata(rowId, {
             pageCount: 0,
             encrypted: isEncrypted,
