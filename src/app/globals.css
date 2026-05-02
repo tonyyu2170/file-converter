@@ -84,7 +84,7 @@
 }
 
 .pet-stroll {
-  animation: pet-stroll 15s linear infinite;
+  animation: pet-stroll 10s linear infinite;
   will-change: transform;
 }
 

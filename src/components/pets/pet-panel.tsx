@@ -1,7 +1,7 @@
 export function PetPanel() {
   return (
     <div
-      className="pointer-events-none absolute right-6 top-6 hidden h-[140px] w-[400px] xl:block"
+      className="pointer-events-none absolute right-6 top-6 hidden h-[240px] w-[400px] xl:block"
       data-testid="pet-panel"
       aria-hidden="true"
     >
