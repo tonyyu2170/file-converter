@@ -27,22 +27,46 @@ const TOOLS = [
   },
 ] as const;
 
+const VERSION = "v0.1.0";
+
 export default function Home() {
   return (
     <main className="p-6">
-      <section className="mb-12 max-w-2xl">
-        <h1 className="mb-4 text-[var(--text-lg)] uppercase tracking-[0.15em] text-[var(--color-accent)]">
-          {"// CONVERT FILES. LOCALLY."}
-        </h1>
-        <p className="text-[var(--text-sm)] text-[var(--color-fg-muted)] leading-relaxed">
-          files never leave your device. every conversion runs in a web worker inside your browser.
-          no upload, no server, no telemetry.
-        </p>
-      </section>
-
-      <div className="mb-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-very-muted)]">
-        {"// tools"}
+      <div
+        className="mb-10 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em]"
+        data-testid="status-bar"
+      >
+        <span className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--color-fg-strong)]">
+          {VERSION}
+        </span>
+        <span className="text-[var(--color-fg-very-muted)]">
+          {`// ${TOOLS.length} TOOLS ONLINE`}
+        </span>
       </div>
+
+      <h1
+        className="mb-8 font-medium text-[40px] leading-[1.0] md:text-[var(--text-display)]"
+        data-testid="hero-headline"
+      >
+        <span className="block text-[var(--color-fg-strong)]">convert files</span>
+        <span className="block text-[var(--color-fg-muted)]">without</span>
+        <span className="block text-[var(--color-accent)]">uploading</span>
+        <span className="block text-[var(--color-fg-strong)]">them.</span>
+      </h1>
+
+      <p className="mb-10 max-w-lg text-[var(--text-base)] text-[var(--color-fg-muted)] leading-relaxed">
+        files never leave your device. every byte stays in the browser tab — decoded, re-encoded,
+        and downloaded by web workers running on your machine. zero servers. zero telemetry.
+      </p>
+
+      <div
+        className="mb-12 inline-flex items-center gap-3 border border-[var(--color-hairline)] px-4 py-3 text-[var(--text-sm)]"
+        data-testid="terminal-prompt"
+      >
+        <span className="text-[var(--color-accent)]">$</span>
+        <span className="text-[var(--color-fg-strong)]">pick a tool below ↓</span>
+      </div>
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {TOOLS.map((tool) => (
           <Link

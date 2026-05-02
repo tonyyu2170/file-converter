@@ -9,9 +9,10 @@ const TOOLS = [
 
 test("home page renders hero headline", async ({ page }) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "// CONVERT FILES. LOCALLY." }),
-  ).toBeVisible();
+  const headline = page.getByTestId("hero-headline");
+  await expect(headline).toBeVisible();
+  await expect(headline).toContainText("convert files");
+  await expect(headline).toContainText("uploading");
 });
 
 for (const tool of TOOLS) {

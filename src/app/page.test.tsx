@@ -3,16 +3,34 @@ import { describe, expect, it } from "vitest";
 import Home from "./page";
 
 describe("Home", () => {
-  it("renders the hero headline", () => {
+  it("renders the status bar with version and tool count", () => {
     render(<Home />);
-    expect(
-      screen.getByRole("heading", { level: 1, name: "// CONVERT FILES. LOCALLY." }),
-    ).toBeInTheDocument();
+    const bar = screen.getByTestId("status-bar");
+    expect(bar).toHaveTextContent("v0.1.0");
+    expect(bar).toHaveTextContent("4 TOOLS ONLINE");
   });
 
-  it("renders the privacy claim", () => {
+  it("renders the hero headline as four colored spans", () => {
+    render(<Home />);
+    const headline = screen.getByTestId("hero-headline");
+    expect(headline.tagName).toBe("H1");
+    expect(headline).toHaveTextContent("convert files");
+    expect(headline).toHaveTextContent("without");
+    expect(headline).toHaveTextContent("uploading");
+    expect(headline).toHaveTextContent("them.");
+  });
+
+  it("renders the privacy claim with the new mechanism copy", () => {
     render(<Home />);
     expect(screen.getByText(/files never leave your device/i)).toBeInTheDocument();
+    expect(screen.getByText(/web workers running on your machine/i)).toBeInTheDocument();
+  });
+
+  it("renders the terminal prompt directing to the tool grid", () => {
+    render(<Home />);
+    const prompt = screen.getByTestId("terminal-prompt");
+    expect(prompt).toHaveTextContent(/pick a tool below/i);
+    expect(prompt).toHaveTextContent("$");
   });
 
   it.each([
