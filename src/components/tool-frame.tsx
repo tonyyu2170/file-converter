@@ -132,7 +132,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         accept={engine.inputAccept}
         multiple={isMulti}
         onFiles={handleDrop}
-        disabled={!ready}
+        disabled={!isMulti && !ready}
       />
       {isMulti && (
         <button
