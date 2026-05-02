@@ -862,6 +862,7 @@ export type EngineMeta<TOptions> = {
   inputMime: string[];
   outputMime: string;
   defaultOptions: TOptions;
+  convertButtonLabel?: string;
 };
 
 export type OptionsPanelProps<TOptions> = {
@@ -1102,11 +1103,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <button
           type="button"
           data-testid="convert-button"
-          disabled={stagedFiles.length === 0 || !ready}
+          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
           onClick={handleConvertClick}
           className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
         >
-          [ convert to pdf ]
+          {engine.convertButtonLabel ?? "[ convert ]"}
         </button>
       )}
       {errorMessage && (
@@ -1126,7 +1127,7 @@ Notes:
 - The mount effect / handoff watcher branch on `isMulti`: multi engines populate staging WITHOUT auto-firing; single engines auto-fire from `pendingFiles[0]`.
 - `handleDrop` distinguishes multi (append) vs single (fire). DropZone's `multiple` is true only for multi engines.
 - Convert button renders only for multi engines, disabled when staging is empty OR `!ready`.
-- The button label is hardcoded `"[ convert to pdf ]"` — this is fine for v1 since image-to-pdf is the only multi engine. Plan 4 (PDF merge) might want a configurable label; cross that bridge later.
+- The button label is engine-controlled via `engine.convertButtonLabel`. Image-to-pdf sets it to `"[ convert to pdf ]"` (Task 12). Plan 4's PDF merge can declare its own label without ToolFrame changes — preserves the engine-pattern's "no shared code touched" promise.
 
 - [ ] **Step 2: Update `src/components/tool-frame.test.tsx`**
 
@@ -2169,6 +2170,7 @@ const engine: MultiInputEngine<ImageToPdfOptions, OutputItem> = {
   inputMime: SUPPORTED_INPUT_MIMES,
   outputMime: "application/pdf",
   defaultOptions: defaultImageToPdfOptions,
+  convertButtonLabel: "[ convert to pdf ]",
   cardinality: "multi",
   OptionsPanel: ImageToPdfOptionsPanel,
   StagingArea: ImageToPdfStagingArea,

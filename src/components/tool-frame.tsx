@@ -133,11 +133,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <button
           type="button"
           data-testid="convert-button"
-          disabled={stagedFiles.length === 0 || !ready}
+          disabled={stagedFiles.length === 0 || !ready || status === "converting"}
           onClick={handleConvertClick}
           className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
         >
-          [ convert to pdf ]
+          {engine.convertButtonLabel ?? "[ convert ]"}
         </button>
       )}
       {errorMessage && (

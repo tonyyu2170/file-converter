@@ -14,6 +14,7 @@ export type EngineMeta<TOptions> = {
   inputMime: string[];
   outputMime: string;
   defaultOptions: TOptions;
+  convertButtonLabel?: string;
 };
 
 export type OptionsPanelProps<TOptions> = {
