@@ -273,7 +273,7 @@ export function parseRange(input: string, pageCount: number): RangeParseResult {
 pnpm test src/engines/pdf-merge/range.test.ts
 ```
 
-Expected: all tests pass. Test count: 14 accept + 18 reject = 32 in this file.
+Expected: all tests pass. Test count: 15 accept + 18 reject = 33 in this file.
 
 - [ ] **Step 5: Run all unit gates**
 
@@ -281,7 +281,7 @@ Expected: all tests pass. Test count: 14 accept + 18 reject = 32 in this file.
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Expected: all exit 0. Total test count: 94 + 32 = 126.
+Expected: all exit 0. Total test count: 94 + 33 = 127.
 
 - [ ] **Step 6: Commit**
 

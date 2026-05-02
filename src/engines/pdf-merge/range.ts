@@ -1,6 +1,7 @@
 export type RangeParseResult = { ok: true; indices: number[] } | { ok: false; reason: string };
 
 const POSITIVE_INT = /^[1-9][0-9]*$/;
+const ALL_ZEROS = /^0+$/;
 
 function parseToken(token: string, pageCount: number): RangeParseResult {
   const trimmed = token.trim();
@@ -11,7 +12,7 @@ function parseToken(token: string, pageCount: number): RangeParseResult {
   if (trimmed.endsWith("-")) {
     const head = trimmed.slice(0, -1).trim();
     if (!POSITIVE_INT.test(head)) {
-      return head === "0" || /^0+$/.test(head)
+      return ALL_ZEROS.test(head)
         ? { ok: false, reason: "page numbers must be 1 or greater" }
         : { ok: false, reason: `can't parse '${trimmed}'` };
     }
@@ -24,7 +25,7 @@ function parseToken(token: string, pageCount: number): RangeParseResult {
   if (trimmed.startsWith("-")) {
     const tail = trimmed.slice(1).trim();
     if (!POSITIVE_INT.test(tail)) {
-      return tail === "0" || /^0+$/.test(tail)
+      return ALL_ZEROS.test(tail)
         ? { ok: false, reason: "page numbers must be 1 or greater" }
         : { ok: false, reason: `can't parse '${trimmed}'` };
     }
@@ -42,7 +43,7 @@ function parseToken(token: string, pageCount: number): RangeParseResult {
     const [headRaw, tailRaw] = parts;
     const head = (headRaw ?? "").trim();
     const tail = (tailRaw ?? "").trim();
-    if (head === "0" || tail === "0" || /^0+$/.test(head) || /^0+$/.test(tail)) {
+    if (ALL_ZEROS.test(head) || ALL_ZEROS.test(tail)) {
       return { ok: false, reason: "page numbers must be 1 or greater" };
     }
     if (!POSITIVE_INT.test(head) || !POSITIVE_INT.test(tail)) {
@@ -60,7 +61,7 @@ function parseToken(token: string, pageCount: number): RangeParseResult {
   }
 
   // Single page: "N"
-  if (trimmed === "0" || /^0+$/.test(trimmed)) {
+  if (ALL_ZEROS.test(trimmed)) {
     return { ok: false, reason: "page numbers must be 1 or greater" };
   }
   if (!POSITIVE_INT.test(trimmed)) {
