@@ -23,3 +23,15 @@ for (const tool of TOOLS) {
     expect(new URL(page.url()).pathname).toBe(tool.href);
   });
 }
+
+test("pet panel is visible at xl viewport (1440x900)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.getByTestId("pet-panel")).toBeVisible();
+});
+
+test("pet panel is hidden below xl viewport (1024x768)", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+  await expect(page.getByTestId("pet-panel")).toBeHidden();
+});
