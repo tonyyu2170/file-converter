@@ -38,7 +38,6 @@ export function ImageToPdfStagingArea({ files, onChange }: StagingAreaProps<Imag
   const startedFiles = useRef<Set<File>>(new Set());
 
   useEffect(() => {
-    let cancelled = false;
     const newFiles = files.filter((f) => !startedFiles.current.has(f));
     if (newFiles.length === 0) return;
     for (const f of newFiles) startedFiles.current.add(f);
@@ -59,20 +58,21 @@ export function ImageToPdfStagingArea({ files, onChange }: StagingAreaProps<Imag
         }
       }),
     ).then((results) => {
-      if (cancelled) return;
+      // Gate on the "loading" sentinel: if the file was removed during
+      // decode (cleanup effect cleared its Map entry), prev.get returns
+      // undefined and we skip the commit. The orphan URL is tracked in
+      // urlsToRevoke so it gets cleaned up on unmount.
       setThumbs((prev) => {
         const next = new Map(prev);
         for (const r of results) {
-          next.set(r.file, r.url);
-          if (r.url !== "error") urlsToRevoke.current.push(r.url);
+          if (prev.get(r.file) === "loading") next.set(r.file, r.url);
         }
         return next;
       });
+      for (const r of results) {
+        if (r.url !== "error") urlsToRevoke.current.push(r.url);
+      }
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [files]);
 
   useEffect(() => {
@@ -83,20 +83,33 @@ export function ImageToPdfStagingArea({ files, onChange }: StagingAreaProps<Imag
   }, []);
 
   useEffect(() => {
+    // Compute removed files synchronously from current state before
+    // queueing the setThumbs updater. Side effects (URL revoke, ref
+    // delete) happen here so they don't run twice under Strict Mode's
+    // double-invoked updaters.
+    const filesSet = new Set(files);
+    const removed: Array<[File, string | "loading" | "error"]> = [];
+    for (const f of startedFiles.current) {
+      if (!filesSet.has(f)) {
+        removed.push([f, thumbs.get(f) ?? "loading"]);
+        startedFiles.current.delete(f);
+      }
+    }
+    for (const [, v] of removed) {
+      if (typeof v === "string" && v !== "error" && v !== "loading") {
+        URL.revokeObjectURL(v);
+      }
+    }
+    if (removed.length === 0) return;
     setThumbs((prev) => {
       const next = new Map<File, string | "loading" | "error">();
       for (const f of files) {
         const v = prev.get(f);
         if (v !== undefined) next.set(f, v);
       }
-      for (const [f, v] of prev) {
-        if (!files.includes(f) && typeof v === "string" && v !== "error" && v !== "loading") {
-          URL.revokeObjectURL(v);
-        }
-      }
       return next;
     });
-  }, [files]);
+  }, [files, thumbs]);
 
   function moveUp(i: number) {
     if (i <= 0) return;

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultImageToPdfOptions } from "./options";
 
@@ -104,6 +105,22 @@ describe("ImageToPdfStagingArea", () => {
         onChange={() => undefined}
         options={defaultImageToPdfOptions}
       />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("?")).toBeInTheDocument();
+    });
+  });
+
+  it("commits decode result under React Strict Mode (no double-mount cancellation)", async () => {
+    const files = [makeFile("a.png")];
+    render(
+      <StrictMode>
+        <ImageToPdfStagingArea
+          files={files}
+          onChange={() => undefined}
+          options={defaultImageToPdfOptions}
+        />
+      </StrictMode>,
     );
     await waitFor(() => {
       expect(screen.getByText("?")).toBeInTheDocument();

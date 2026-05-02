@@ -1604,12 +1604,17 @@ export function ImageToPdfStagingArea({
   // Per-file thumbnail URLs. Keyed by File reference (Map for stability across reorder).
   const [thumbs, setThumbs] = useState<Map<File, string | "loading" | "error">>(new Map());
   const urlsToRevoke = useRef<string[]>([]);
+  const startedFiles = useRef<Set<File>>(new Set());
 
-  // Decode any new files that don't have thumbs yet.
+  // Decode any newly-added files. The startedFiles ref prevents re-decoding
+  // on re-render (deps include files only) and survives React Strict Mode's
+  // double-mount: mount #1 starts the decode + setThumbs("loading"); mount
+  // #2 sees the file already started and returns early. Mount #1's
+  // Promise.all eventually resolves and commits via the "loading" gate.
   useEffect(() => {
-    let cancelled = false;
-    const newFiles = files.filter((f) => !thumbs.has(f));
+    const newFiles = files.filter((f) => !startedFiles.current.has(f));
     if (newFiles.length === 0) return;
+    for (const f of newFiles) startedFiles.current.add(f);
 
     setThumbs((prev) => {
       const next = new Map(prev);
@@ -1627,23 +1632,23 @@ export function ImageToPdfStagingArea({
         }
       }),
     ).then((results) => {
-      if (cancelled) return;
+      // Gate on "loading" — handles the case where the file was removed
+      // during decode (cleanup effect cleared its Map entry); skip the
+      // commit, the orphan URL gets cleaned up on unmount via urlsToRevoke.
       setThumbs((prev) => {
         const next = new Map(prev);
         for (const r of results) {
-          next.set(r.file, r.url);
-          if (r.url !== "error") urlsToRevoke.current.push(r.url);
+          if (prev.get(r.file) === "loading") next.set(r.file, r.url);
         }
         return next;
       });
+      for (const r of results) {
+        if (r.url !== "error") urlsToRevoke.current.push(r.url);
+      }
     });
+  }, [files]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [files, thumbs]);
-
-  // Revoke thumb URLs when files are removed (or on unmount).
+  // Revoke all thumb URLs on unmount.
   useEffect(() => {
     return () => {
       for (const url of urlsToRevoke.current) URL.revokeObjectURL(url);
@@ -1651,23 +1656,34 @@ export function ImageToPdfStagingArea({
     };
   }, []);
 
-  // Also revoke thumbs of files that have been removed from the list.
+  // Sync thumbs Map when files are removed: revoke URLs and delete the ref
+  // entry so re-adding the same File reference triggers a fresh decode.
+  // Side effects (URL revoke, ref delete) happen OUTSIDE the setThumbs
+  // updater because Strict Mode invokes updaters twice.
   useEffect(() => {
+    const filesSet = new Set(files);
+    const removed: Array<[File, string | "loading" | "error"]> = [];
+    for (const f of startedFiles.current) {
+      if (!filesSet.has(f)) {
+        removed.push([f, thumbs.get(f) ?? "loading"]);
+        startedFiles.current.delete(f);
+      }
+    }
+    for (const [, v] of removed) {
+      if (typeof v === "string" && v !== "error" && v !== "loading") {
+        URL.revokeObjectURL(v);
+      }
+    }
+    if (removed.length === 0) return;
     setThumbs((prev) => {
       const next = new Map<File, string | "loading" | "error">();
       for (const f of files) {
         const v = prev.get(f);
         if (v !== undefined) next.set(f, v);
       }
-      // Revoke URLs of files no longer present.
-      for (const [f, v] of prev) {
-        if (!files.includes(f) && typeof v === "string" && v !== "error" && v !== "loading") {
-          URL.revokeObjectURL(v);
-        }
-      }
       return next;
     });
-  }, [files]);
+  }, [files, thumbs]);
 
   function moveUp(i: number) {
     if (i <= 0) return;
@@ -1879,8 +1895,26 @@ describe("ImageToPdfStagingArea", () => {
       expect(screen.getByText("?")).toBeInTheDocument();
     });
   });
+
+  it("commits decode result under React Strict Mode (no double-mount cancellation)", async () => {
+    const files = [makeFile("a.png")];
+    render(
+      <StrictMode>
+        <ImageToPdfStagingArea
+          files={files}
+          onChange={() => undefined}
+          options={defaultImageToPdfOptions}
+        />
+      </StrictMode>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("?")).toBeInTheDocument();
+    });
+  });
 });
 ```
+
+The `StrictMode` import comes from `"react"` — add it to the imports at the top of the file. The plan's verbatim test imports do not yet include it; this test is the only one that needs it.
 
 - [ ] **Step 3: Run unit gates**
 
@@ -1888,7 +1922,7 @@ describe("ImageToPdfStagingArea", () => {
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Expected: all exit 0. Test count: 82 (76 + 6 new staging-area tests).
+Expected: all exit 0. Test count: 84 (76 + 7 staging-area tests + 1 prior task baseline correction). The 7 staging-area tests cover: rows-rendered, boundary-disabled, move-up, move-down, remove, decode-failure-placeholder, Strict-Mode commit safety.
 
 - [ ] **Step 4: Commit**
 
