@@ -21,10 +21,10 @@ test("pdf-split produces zero off-origin requests during conversion", async ({ p
     }
   });
 
-  // Type range first to enable DropZone, then drop file.
-  await page.getByTestId("range-input").fill("1-3, 5");
   const input = page.locator('input[type="file"]');
   await input.setInputFiles(path.resolve(__dirname, "../fixtures/sample-5page.pdf"));
+  await page.getByTestId("range-input").fill("1-3, 5");
+  await page.getByTestId("convert-button").click();
 
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
     timeout: 30_000,
@@ -44,10 +44,10 @@ test("pdf-split produces zero off-origin requests during conversion", async ({ p
 test("pdf-split ZIP download produces zero off-origin requests", async ({ page }) => {
   await page.goto("/tools/pdf-split", { waitUntil: "networkidle" });
 
-  // Type range first, drop file, await conversion completion.
-  await page.getByTestId("range-input").fill("1-3, 5");
   const input = page.locator('input[type="file"]');
   await input.setInputFiles(path.resolve(__dirname, "../fixtures/sample-5page.pdf"));
+  await page.getByTestId("range-input").fill("1-3, 5");
+  await page.getByTestId("convert-button").click();
   await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
     timeout: 30_000,
   });
