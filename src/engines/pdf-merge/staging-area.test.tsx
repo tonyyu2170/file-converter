@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type PdfMergeOptions, type PdfMergeRow, defaultPdfMergeOptions } from "./options";
 
 vi.mock("./render-thumbnail", () => ({
@@ -29,6 +29,14 @@ vi.mock("pdf-lib", () => {
 import { PdfMergeStagingArea } from "./staging-area";
 
 afterEach(() => vi.clearAllMocks());
+// Restore the default pdf-lib mock implementation between tests so that a
+// mockImplementation override in one test doesn't bleed into the next.
+beforeEach(async () => {
+  const { PDFDocument } = await import("pdf-lib");
+  (PDFDocument.load as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    async (_bytes: ArrayBuffer) => ({ getPageCount: () => 5 }),
+  );
+});
 
 function makeFile(name: string): File {
   return new File([new Uint8Array(100)], name, { type: "application/pdf" });
@@ -270,6 +278,103 @@ describe("PdfMergeStagingArea", () => {
     }
     render(<Wrapper />);
     await waitFor(() => {
+      expect(screen.getByText("?")).toBeInTheDocument();
+    });
+  });
+
+  it("shows '[ password-protected ]' when pdf-lib throws an EncryptedPDFError", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+    const loadSpy = PDFDocument.load as unknown as ReturnType<typeof vi.fn>;
+    // Replace the default implementation entirely so stray async calls from
+    // preceding tests don't consume a "Once" mock.
+    loadSpy.mockImplementation(async () => {
+      throw new Error("Input document to `PDFDocument.load` is encrypted.");
+    });
+
+    const onChange = vi.fn();
+    const setOptions = vi.fn();
+    const stableFile = makeFile("secret.pdf");
+    const stableFiles = [stableFile];
+    function Wrapper() {
+      const [opts, setOpts] = React.useState<PdfMergeOptions>(defaultPdfMergeOptions);
+      return (
+        <PdfMergeStagingArea
+          files={stableFiles}
+          onChange={onChange}
+          options={opts}
+          setOptions={(next) => {
+            setOptions(next);
+            setOpts(next);
+          }}
+        />
+      );
+    }
+    render(<Wrapper />);
+    await waitFor(() => {
+      expect(screen.getByText("[ password-protected ]")).toBeInTheDocument();
+    });
+  });
+
+  it("re-parses range against new pageCount when metadata resolves", async () => {
+    const { PDFDocument } = await import("pdf-lib");
+    const loadSpy = PDFDocument.load as unknown as ReturnType<typeof vi.fn>;
+    loadSpy.mockResolvedValueOnce({ getPageCount: () => 5 });
+
+    const onChange = vi.fn();
+    const setOptions = vi.fn();
+    const stableFile = makeFile("a.pdf");
+    const stableFiles = [stableFile];
+    function Wrapper() {
+      const [opts, setOpts] = React.useState<PdfMergeOptions>(defaultPdfMergeOptions);
+      return (
+        <PdfMergeStagingArea
+          files={stableFiles}
+          onChange={onChange}
+          options={opts}
+          setOptions={(next) => {
+            setOptions(next);
+            setOpts(next);
+          }}
+        />
+      );
+    }
+    render(<Wrapper />);
+
+    // Wait for metadata to land, then verify the row's parsedRange covers all 5 pages
+    // (default empty rangeInput → all pages).
+    await waitFor(() => {
+      const lastCall = setOptions.mock.calls[
+        setOptions.mock.calls.length - 1
+      ]?.[0] as PdfMergeOptions;
+      expect(lastCall?.rows[0]?.pageCount).toBe(5);
+      expect(lastCall?.rows[0]?.parsedRange).toEqual([0, 1, 2, 3, 4]);
+    });
+  });
+
+  it("commits decode result under React Strict Mode (no double-mount cancellation)", async () => {
+    const { StrictMode } = await import("react");
+    const stableFile = makeFile("a.pdf");
+    const stableFiles = [stableFile];
+    function Wrapper() {
+      const [opts, setOpts] = React.useState<PdfMergeOptions>(defaultPdfMergeOptions);
+      return (
+        <PdfMergeStagingArea
+          files={stableFiles}
+          onChange={() => undefined}
+          options={opts}
+          setOptions={setOpts}
+        />
+      );
+    }
+    render(
+      <StrictMode>
+        <Wrapper />
+      </StrictMode>,
+    );
+    await waitFor(() => {
+      // Default mock returns getPageCount: () => 5; thumbnail mock throws,
+      // so we should see "?" placeholder (thumbnail failed) AND the row should
+      // have rendered without being killed by Strict Mode's double-mount.
       expect(screen.getByText("?")).toBeInTheDocument();
     });
   });

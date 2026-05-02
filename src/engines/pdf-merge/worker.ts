@@ -30,10 +30,20 @@ const api = {
       }
 
       const src = await PDFDocument.load(f.bytes);
+      const pageCount = src.getPageCount();
+      // row.rangeError was checked above, so an empty parsedRange here means
+      // the user left the rangeInput empty → merge all pages from this source.
       const indices =
         row.parsedRange.length > 0
           ? row.parsedRange
-          : Array.from({ length: src.getPageCount() }, (_, k) => k);
+          : Array.from({ length: pageCount }, (_, k) => k);
+      for (const idx of indices) {
+        if (!Number.isInteger(idx) || idx < 0 || idx >= pageCount) {
+          throw new Error(
+            `pdf-merge: ${f.name} page index ${idx + 1} out of range (1..${pageCount})`,
+          );
+        }
+      }
       const copied = await out.copyPages(src, indices);
       for (const page of copied) {
         out.addPage(page);

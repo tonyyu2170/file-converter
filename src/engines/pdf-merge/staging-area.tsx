@@ -231,13 +231,14 @@ export function PdfMergeStagingArea({
         const bytes = await file.arrayBuffer();
         const blob = await renderFirstPageThumbnail(bytes, 32);
         const url = URL.createObjectURL(blob);
+        // Check outside the updater: state updaters must stay pure (Strict Mode
+        // double-invokes them). Side effects belong here.
+        if (!fileToId.current.has(file)) {
+          URL.revokeObjectURL(url);
+          return;
+        }
         urlsToRevoke.current.push(url);
         setThumbs((prev) => {
-          // Only commit if the row still exists (file may have been removed).
-          if (!fileToId.current.has(file)) {
-            URL.revokeObjectURL(url);
-            return prev;
-          }
           const next = new Map(prev);
           next.set(rowId, url);
           return next;

@@ -148,16 +148,19 @@ export function ImageToPdfStagingArea({ files, onChange }: StagingAreaProps<Imag
   const [thumbs, setThumbs] = useState<Map<File, string | "loading" | "error">>(new Map());
   const urlsToRevoke = useRef<string[]>([]);
   const startedFiles = useRef<Set<File>>(new Set());
-  // Stable id per File for dnd-kit. Allocated on first encounter; persisted across reorders.
+  // Stable id per File for dnd-kit. Allocated inside the file-add useEffect;
+  // persisted across reorders. Read-only during render.
   const fileIds = useRef<Map<File, string>>(new Map());
-  for (const f of files) {
-    if (!fileIds.current.has(f)) fileIds.current.set(f, newRowId());
-  }
 
   useEffect(() => {
     const newFiles = files.filter((f) => !startedFiles.current.has(f));
     if (newFiles.length === 0) return;
     for (const f of newFiles) startedFiles.current.add(f);
+
+    // Allocate stable ids before the async thumbnail work so lookups are ready.
+    for (const f of newFiles) {
+      if (!fileIds.current.has(f)) fileIds.current.set(f, newRowId());
+    }
 
     setThumbs((prev) => {
       const next = new Map(prev);
