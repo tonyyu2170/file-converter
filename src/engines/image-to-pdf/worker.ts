@@ -18,9 +18,7 @@ const api = {
     const pdf = await PDFDocument.create();
     const [paperW, paperH] = PAPER_DIMS[opts.paper];
 
-    for (let i = 0; i < filesAsBytes.length; i++) {
-      const fileBytes = filesAsBytes[i];
-      if (fileBytes === undefined) continue;
+    for (const [i, fileBytes] of filesAsBytes.entries()) {
       const mimeType = types[i] ?? "application/octet-stream";
       const blob = new Blob([fileBytes], { type: mimeType });
       const file = new File([blob], names[i] ?? `page-${i + 1}`, { type: mimeType });
