@@ -46,7 +46,9 @@ async function loadLibheif() {
 }
 
 async function decodeHeic(file: File): Promise<ImageBitmap> {
-  const lib = await loadLibheif();
+  // Dynamic import() returns a module namespace { default: LibHeif },
+  // not the default export — destructure .default to reach HeifDecoder.
+  const lib = (await loadLibheif()).default;
   const decoder = new lib.HeifDecoder();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const data = decoder.decode(bytes);
@@ -57,10 +59,17 @@ async function decodeHeic(file: File): Promise<ImageBitmap> {
   if (!first) throw new Error("libheif: first image missing");
   const width = first.get_width();
   const height = first.get_height();
-  const rgba = await new Promise<Uint8ClampedArray>((resolve, reject) => {
+  // Uint8ClampedArray<ArrayBuffer> annotation is required under TS strict +
+  // exactOptionalPropertyTypes for compatibility with DisplayTarget.data and
+  // the ImageData constructor signature.
+  const rgba = await new Promise<Uint8ClampedArray<ArrayBuffer>>((resolve, reject) => {
     first.display(
-      { data: new Uint8ClampedArray(width * height * 4), width, height },
-      (display: { data: Uint8ClampedArray; width: number; height: number } | null) => {
+      {
+        data: new Uint8ClampedArray(new ArrayBuffer(width * height * 4)),
+        width,
+        height,
+      },
+      (display: { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } | null) => {
         if (!display) reject(new Error("libheif: display callback received null"));
         else resolve(display.data);
       },
@@ -97,9 +106,8 @@ describe("decodeImage", () => {
   it("dispatches HEIC files via the libheif path", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/heic");
     const file = new File([new Uint8Array([0])], "x.heic", { type: "image/heic" });
-    // libheif lazy-import will fail in jsdom (no real wasm); we assert that
-    // the dispatcher reaches the libheif branch by catching the predictable
-    // load failure rather than the createImageBitmap-on-empty-bytes branch.
+    // libheif's parser rejects bytes too small to be a HEIF box; reaching
+    // that rejection confirms the dispatcher took the HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 
@@ -112,7 +120,8 @@ describe("decodeImage", () => {
   it("dispatches PNG files via createImageBitmap", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/png");
     const file = new File([new Uint8Array([0])], "x.png", { type: "image/png" });
-    // jsdom's createImageBitmap is a real function but rejects on invalid bytes.
+    // test-setup.ts stubs createImageBitmap to reject; reaching that
+    // rejection confirms the dispatcher took the non-HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 

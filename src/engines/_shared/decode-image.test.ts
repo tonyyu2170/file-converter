@@ -13,9 +13,8 @@ describe("decodeImage", () => {
   it("dispatches HEIC files via the libheif path", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/heic");
     const file = new File([new Uint8Array([0])], "x.heic", { type: "image/heic" });
-    // libheif lazy-import will fail in jsdom (no real wasm); we assert that
-    // the dispatcher reaches the libheif branch by catching the predictable
-    // load failure rather than the createImageBitmap-on-empty-bytes branch.
+    // libheif's parser rejects bytes too small to be a HEIF box; reaching
+    // that rejection confirms the dispatcher took the HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 
@@ -28,7 +27,8 @@ describe("decodeImage", () => {
   it("dispatches PNG files via createImageBitmap", async () => {
     mockedDetectMime.mockResolvedValueOnce("image/png");
     const file = new File([new Uint8Array([0])], "x.png", { type: "image/png" });
-    // jsdom's createImageBitmap is a real function but rejects on invalid bytes.
+    // test-setup.ts stubs createImageBitmap to reject; reaching that
+    // rejection confirms the dispatcher took the non-HEIC branch.
     await expect(decodeImage(file)).rejects.toThrow();
   });
 
