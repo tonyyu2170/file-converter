@@ -303,6 +303,72 @@ describe("layoutTable — defaults", () => {
   });
 });
 
+/* ---------- gridSpan overflow clamp (spec §10) ---------- */
+
+describe("layoutTable — gridSpan overflow clamp", () => {
+  it("clamps a cell whose gridSpan exceeds the remaining columns and emits a warning", async () => {
+    // 3-column grid (authoritative columnWidthsPt), single row whose only
+    // cell declares gridSpan: 5. Spec §10: clamp + warn rather than letting
+    // the cell silently expand the table.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps();
+    const t = makeTable([row([cell([para("Wide")], { gridSpan: 5 })])], [80, 80, 80]);
+    layoutTable(t, ctx, pdf, deps);
+    // Warning surfaced once (not double-warned by measure + draw).
+    expect(deps.warnings.filter((w) => w.includes("gridSpan clamped")).length).toBe(1);
+    expect(deps.warnings[0]).toMatch(/row 0/);
+    // The cell should have been positioned/sized using the clamped span:
+    // total table width = 240pt (3 × 80). Drawn text starts at column.x +
+    // padding (72 + 4 = 76), and the cell width is 240pt. We can't
+    // directly inspect the cell width without a draw, but we can verify
+    // the table's outer borders span exactly 3 column widths.
+    const lines = (ctx.page as MockPage).__calls.filter((c) => c.op === "drawLine");
+    // Top edge should run from tableLeftX to tableLeftX + 240.
+    const topEdge = lines.find(
+      (l) => l.op === "drawLine" && Math.abs(l.start.y - l.end.y) < 1e-6 && l.start.y > 600,
+    );
+    expect(topEdge).toBeDefined();
+    if (topEdge?.op === "drawLine") {
+      const span = topEdge.end.x - topEdge.start.x;
+      expect(span).toBeCloseTo(240, 0);
+    }
+  });
+
+  it("clamps a mid-row cell whose gridSpan would push the row past columnCount", async () => {
+    // Row: [span=1, span=1, span=5] in a 3-column grid → third cell clamps
+    // to span=1 (3 - 2 remaining).
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps();
+    const t = makeTable(
+      [row([cell([para("a")]), cell([para("b")]), cell([para("c")], { gridSpan: 5 })])],
+      [80, 80, 80],
+    );
+    layoutTable(t, ctx, pdf, deps);
+    expect(deps.warnings.filter((w) => w.includes("gridSpan clamped")).length).toBe(1);
+    // All three cells drew their text — the clamp didn't drop content.
+    const texts = (ctx.page as MockPage).__calls
+      .filter((c) => c.op === "drawText")
+      .map((c) => (c.op === "drawText" ? c.text : ""));
+    expect(texts).toContain("a");
+    expect(texts).toContain("b");
+    expect(texts).toContain("c");
+  });
+
+  it("does not warn when gridSpan fits within the column count", async () => {
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps();
+    const t = makeTable(
+      [row([cell([para("a")]), cell([para("b")], { gridSpan: 2 })])],
+      [80, 80, 80],
+    );
+    layoutTable(t, ctx, pdf, deps);
+    expect(deps.warnings.filter((w) => w.includes("gridSpan clamped")).length).toBe(0);
+  });
+});
+
 /* ---------- Cell-clip warning ---------- */
 
 describe("layoutTable — cell content clipping", () => {
