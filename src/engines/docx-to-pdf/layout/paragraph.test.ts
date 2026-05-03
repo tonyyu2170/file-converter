@@ -397,4 +397,52 @@ describe("layoutParagraph — line-height honors tallest run on the line", () =>
     const result = layoutParagraph(p, ctx, pdf);
     expect(result.drawnHeight).toBeCloseTo(24 * 1.2);
   });
+
+  it("all fragments on a mixed-size line share one baseline", async () => {
+    // Regression: each fragment used to draw at its own ascent
+    // (`frag.heightPt * 0.8`) instead of the line's tallest-run ascent.
+    // That made the 11 pt text float above the 24 pt baseline. The fix
+    // hoists baselineY out of the loop and uses line.maxHeightPt.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const p = makePara([
+      makeRun({ text: "small ", fontSizePt: 11 }),
+      makeRun({ text: "BIG", fontSizePt: 24 }),
+    ]);
+    layoutParagraph(p, ctx, pdf);
+    const draws = (ctx.page as MockPage).__calls.filter((c) => c.op === "drawText");
+    // Both fragments must draw at the same y.
+    expect(draws.length).toBeGreaterThanOrEqual(2);
+    const ys = draws.map((c) => (c.op === "drawText" ? c.y : 0));
+    const allSameY = ys.every((y) => y === ys[0]);
+    expect(allSameY).toBe(true);
+  });
+});
+
+describe("layoutParagraph — re-break safety", () => {
+  it("a pageBreakBefore run that overflows the new page returns a remainder without break flags", () => {
+    // Regression: when a run's pageBreakBefore fires and the new page
+    // also can't fit, the remainder used to spread the original run
+    // (still flag-set), so the caller would re-fire pageBreak on
+    // resume. Loop. The fix passes a stripped synth into
+    // makeOverflowFromTail.
+    const ctx = makeColumnContext({
+      yPt: 100, // very little remaining body space
+      maxYPt: 100, // new page also tiny
+      minYPt: 50,
+    });
+    const pdf = makeMockPdfDoc();
+    // Long oversized run with the break flag — guaranteed to overflow
+    // the post-break page given the tiny min/max.
+    const longText = "word ".repeat(200);
+    const p = makePara([makeRun({ text: longText, fontSizePt: 11, pageBreakBefore: true })]);
+    const result = layoutParagraph(p, ctx, pdf as unknown as PDFDocument);
+    // The run is too long for the new page — expect a remainder.
+    expect(result.remainder).toBeDefined();
+    // The remainder's first run must NOT carry the break flag (else
+    // resume would loop: pageBreak → overflow → remainder → pageBreak).
+    const firstRun = result.remainder?.runs[0];
+    expect(firstRun?.pageBreakBefore).not.toBe(true);
+    expect(firstRun?.columnBreakBefore).not.toBe(true);
+  });
 });

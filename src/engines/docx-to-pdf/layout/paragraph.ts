@@ -118,6 +118,9 @@ export function layoutParagraph(
         p.alignment,
       );
       if (outcome.kind === "overflow") {
+        // The break has already been honored on this call; the remainder
+        // must not re-trigger it on resume (else: pageBreak → overflow →
+        // remainder-with-flag → caller resumes → pageBreak again → loop).
         return makeOverflowFromTail(
           p,
           runIdx,
@@ -125,6 +128,7 @@ export function layoutParagraph(
           outcome.unflushedLine,
           ctx,
           startYPt,
+          synth,
         );
       }
       currentLine = outcome.line;
@@ -391,12 +395,15 @@ function drawLine(ctx: ColumnContext, line: LineBuf, alignment: Paragraph["align
     default:
       xOffset = 0;
   }
+  // All fragments on a single line share one baseline derived from the
+  // line's tallest fragment. Approximate ascent as 80% of the line's
+  // max-height (Latin fonts). Without this, mixed-size lines (e.g., a
+  // 24 pt heading run alongside an 11 pt body run) would draw each
+  // fragment at its own ascent, leaving the smaller text floating
+  // above the larger text's baseline.
+  const baselineY = ctx.yPt - line.maxHeightPt * 0.8;
   let xPt = ctx.column.xPt + xOffset;
   for (const frag of line.fragments) {
-    // Approximate ascent as 80% of line-height (Latin fonts) — close
-    // enough to keep glyphs above descenders for our subset fonts.
-    const ascent = frag.heightPt * 0.8;
-    const baselineY = ctx.yPt - ascent;
     drawRunSpan(ctx, frag.run, frag.text, xPt, baselineY, frag.overrides);
     xPt += frag.widthPt;
   }
@@ -488,6 +495,13 @@ function makeOverflowFromTail(
   unflushedLine: LineBuf,
   ctx: ColumnContext,
   startYPt: Pt,
+  // When the caller has already honored a `pageBreakBefore` /
+  // `columnBreakBefore` on `p.runs[currentRunIdx]` and is now reporting
+  // overflow on the resumed render, it passes a flag-stripped copy of
+  // that run so the spread below doesn't re-emit the flag onto the
+  // remainder. Default uses `p.runs[currentRunIdx]` as-is, preserving
+  // any unhonored break.
+  currentRunOverride?: Run,
 ): LayoutParagraphResult {
   // Group fragment text by runIdx, preserving order.
   const groups = new Map<number, { run: Run; text: string }>();
@@ -514,7 +528,7 @@ function makeOverflowFromTail(
 
   // The current run's remainder = its line-buf tail + un-tokenized tail.
   if (currentRunIdx < p.runs.length) {
-    const currentRun = p.runs[currentRunIdx];
+    const currentRun = currentRunOverride ?? p.runs[currentRunIdx];
     if (currentRun !== undefined) {
       const lineTail = groups.get(currentRunIdx)?.text ?? "";
       const fullText = lineTail + tailText;
