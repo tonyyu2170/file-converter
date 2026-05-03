@@ -39,4 +39,10 @@ describe("registry", () => {
     expect(e.id).toBe("pdf-to-image");
     expect(e.cardinality).toBe("single");
   });
+
+  it("loadEngine returns the pdf-to-md engine module", async () => {
+    const e = await loadEngine("pdf-to-md");
+    expect(e.id).toBe("pdf-to-md");
+    expect(e.cardinality).toBe("single");
+  });
 });
