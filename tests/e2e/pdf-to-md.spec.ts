@@ -47,10 +47,7 @@ test("pageBreaks=none produces output without horizontal rules", async ({ page }
   const input = page.locator('input[type="file"]');
   await input.setInputFiles(fix("sample-5page.pdf"));
 
-  await page
-    .getByTestId("pdf-to-md-page-breaks")
-    .getByRole("radio", { name: /none/i })
-    .check();
+  await page.getByTestId("pdf-to-md-page-breaks").getByRole("radio", { name: /none/i }).check();
 
   const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
   await page.getByTestId("convert-button").click();
