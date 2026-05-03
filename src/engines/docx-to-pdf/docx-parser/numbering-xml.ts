@@ -67,10 +67,16 @@ function normalizeFormat(raw: string | undefined): NumberingFormat {
 /*   <w:lvl> extractor                                                */
 /* ------------------------------------------------------------------ */
 
-function extractLevel(lvlNode: unknown): NumberingLevel | undefined {
+function extractLevel(lvlNode: unknown, fallbackIlvl?: number): NumberingLevel | undefined {
   const ilvlRaw = getAttr(lvlNode, "w:ilvl");
-  if (ilvlRaw === undefined) return undefined;
-  const ilvl = Number.parseInt(ilvlRaw, 10);
+  let ilvl: number;
+  if (ilvlRaw !== undefined) {
+    ilvl = Number.parseInt(ilvlRaw, 10);
+  } else if (fallbackIlvl !== undefined) {
+    ilvl = fallbackIlvl;
+  } else {
+    return undefined;
+  }
   if (!Number.isFinite(ilvl) || ilvl < 0 || ilvl > 8) return undefined;
 
   const format = normalizeFormat(getAttr(getPath(lvlNode, ["w:numFmt"]), "w:val"));
@@ -140,13 +146,26 @@ export function parseNumberingXml(xml: string): ParseNumberingResult {
     }
 
     // Apply <w:lvlOverride w:ilvl="N"><w:lvl>...</w:lvl></w:lvlOverride>.
+    // The outer w:ilvl attribute is required by OOXML and is authoritative —
+    // when the inner <w:lvl> omits its own w:ilvl (or specifies a different
+    // one), the outer wins. We pass it as a fallback into extractLevel and
+    // also force-overwrite the result's ilvl so the override slot is correct.
     // <w:lvl> is in ALWAYS_ARRAY, so even a single child arrives as an array.
     const overrides = toArray(getPath(numEntry, ["w:lvlOverride"]) as unknown);
     for (const ovr of overrides) {
+      const outerIlvlRaw = getAttr(ovr, "w:ilvl");
+      const outerIlvlParsed =
+        outerIlvlRaw !== undefined ? Number.parseInt(outerIlvlRaw, 10) : Number.NaN;
+      const validOuterIlvl =
+        Number.isFinite(outerIlvlParsed) && outerIlvlParsed >= 0 && outerIlvlParsed <= 8
+          ? outerIlvlParsed
+          : undefined;
       const innerLvls = toArray(getPath(ovr, ["w:lvl"]) as unknown);
       for (const lvlNode of innerLvls) {
-        const lvl = extractLevel(lvlNode);
-        if (lvl !== undefined) levels.set(lvl.ilvl, lvl);
+        const lvl = extractLevel(lvlNode, validOuterIlvl);
+        if (lvl === undefined) continue;
+        const finalIlvl = validOuterIlvl ?? lvl.ilvl;
+        levels.set(finalIlvl, { ...lvl, ilvl: finalIlvl });
       }
     }
 

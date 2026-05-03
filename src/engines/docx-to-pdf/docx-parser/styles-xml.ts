@@ -91,11 +91,25 @@ function readColorHex(rPr: unknown): string | undefined {
   return raw.toUpperCase();
 }
 
+// <w:u w:val="...">: presence alone doesn't imply underline=on. Word
+// emits <w:u w:val="none"/> to suppress an inherited underline; "0",
+// "false", "off" follow the OOXML boolean convention. Any other val
+// (single, double, wave, dotted, …) is a visual style — render as on.
+function readUnderline(rPr: unknown): boolean | undefined {
+  const u = getPath(rPr, ["w:u"]);
+  if (u === undefined) return undefined;
+  const val = getAttr(u, "w:val");
+  if (val === undefined) return true;
+  const lower = val.toLowerCase();
+  if (lower === "none" || lower === "0" || lower === "false" || lower === "off") return false;
+  return true;
+}
+
 function extractRunProps(rPr: unknown): StyleRunProps {
   if (rPr === undefined) return {};
   const bold = readBoolElement(rPr, "w:b");
   const italic = readBoolElement(rPr, "w:i");
-  const underline = getPath(rPr, ["w:u"]) !== undefined ? true : undefined;
+  const underline = readUnderline(rPr);
   const strike = readBoolElement(rPr, "w:strike");
   const fontFamily = readFontFamily(rPr);
   const fontSizePt = readFontSizePt(rPr);

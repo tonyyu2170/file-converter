@@ -113,6 +113,41 @@ describe("parseNumberingXml", () => {
     expect(def?.levels.get(1)?.format).toBe("lowerLetter");
   });
 
+  it("respects outer <w:lvlOverride w:ilvl=N> when inner <w:lvl> omits its own ilvl", () => {
+    // Per OOXML, the outer w:ilvl on <w:lvlOverride> is required and
+    // authoritative. If the inner <w:lvl> has no own w:ilvl attribute,
+    // the override would previously be silently dropped.
+    const xml = numbering(
+      abstractNum("0", lvl(0, "decimal", "%1."), lvl(2, "decimal", "%1.")),
+      '<w:num w:numId="1">',
+      '  <w:abstractNumId w:val="0"/>',
+      // Note: inner <w:lvl> has no w:ilvl — outer must provide it.
+      '  <w:lvlOverride w:ilvl="2"><w:lvl><w:numFmt w:val="bullet"/><w:lvlText w:val="-"/></w:lvl></w:lvlOverride>',
+      "</w:num>",
+    );
+    const def = parseNumberingXml(xml).value.get("1");
+    // Override slotted under outer ilvl=2.
+    expect(def?.levels.get(2)).toEqual({ ilvl: 2, format: "bullet", text: "-" });
+    // ilvl 0 unchanged from abstract.
+    expect(def?.levels.get(0)?.format).toBe("decimal");
+  });
+
+  it("uses outer w:ilvl when outer and inner disagree", () => {
+    // When both are present, outer wins (Word's behavior). Inner specifies 1
+    // but outer specifies 0; the override lands at 0.
+    const xml = numbering(
+      abstractNum("0", lvl(0, "decimal", "%1.")),
+      '<w:num w:numId="1">',
+      '  <w:abstractNumId w:val="0"/>',
+      `  <w:lvlOverride w:ilvl="0">${lvl(1, "upperRoman", "%1)")}</w:lvlOverride>`,
+      "</w:num>",
+    );
+    const def = parseNumberingXml(xml).value.get("1");
+    expect(def?.levels.get(0)).toEqual({ ilvl: 0, format: "upperRoman", text: "%1)" });
+    // ilvl 1 unchanged (override didn't land here).
+    expect(def?.levels.get(1)).toBeUndefined();
+  });
+
   it("does not let one num's override leak into another sharing the same abstractNum", () => {
     const xml = numbering(
       abstractNum("0", lvl(0, "decimal", "%1.")),

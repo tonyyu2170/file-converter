@@ -70,6 +70,34 @@ describe("parseStylesXml", () => {
     expect(parseStylesXml(xml).value.get("X")?.runProps.bold).toBe(true);
   });
 
+  it("treats <w:u/> with no val as underline=true", () => {
+    const xml = styles(`<w:style w:type="paragraph" w:styleId="X"><w:rPr><w:u/></w:rPr></w:style>`);
+    expect(parseStylesXml(xml).value.get("X")?.runProps.underline).toBe(true);
+  });
+
+  it("treats <w:u w:val=single> as underline=true (visible style)", () => {
+    const xml = styles(
+      `<w:style w:type="paragraph" w:styleId="X"><w:rPr><w:u w:val="single"/></w:rPr></w:style>`,
+    );
+    expect(parseStylesXml(xml).value.get("X")?.runProps.underline).toBe(true);
+  });
+
+  it("treats <w:u w:val=none> as underline=false (suppresses inherited)", () => {
+    const xml = styles(
+      `<w:style w:type="paragraph" w:styleId="X"><w:rPr><w:u w:val="none"/></w:rPr></w:style>`,
+    );
+    expect(parseStylesXml(xml).value.get("X")?.runProps.underline).toBe(false);
+  });
+
+  it("treats <w:u w:val=0|false|off> as underline=false", () => {
+    for (const off of ["0", "false", "off"]) {
+      const xml = styles(
+        `<w:style w:type="paragraph" w:styleId="X"><w:rPr><w:u w:val="${off}"/></w:rPr></w:style>`,
+      );
+      expect(parseStylesXml(xml).value.get("X")?.runProps.underline).toBe(false);
+    }
+  });
+
   it("captures basedOn parent when present (inheritance unresolved at parse time)", () => {
     const xml = styles(
       `<w:style w:type="paragraph" w:styleId="Heading1"><w:basedOn w:val="Normal"/></w:style>`,
