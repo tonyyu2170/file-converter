@@ -185,6 +185,42 @@ describe("drawRunSpan", () => {
     const advance = drawRunSpan(ctx, run, "frag", 0, 0);
     expect(advance).toBeCloseTo(4 * 10 * 0.55);
   });
+
+  it("pushes anchor-not-found warning into ctx.warnings on missing anchor", () => {
+    // Phase 13 / F2: a hyperlinkAnchor pointing to a name not in
+    // ctx.bookmarks must surface a warning so the orchestrator can dedupe
+    // and forward to ParsedDocx.warnings. Text was already drawn, so the
+    // user gets plain-text fallback + warning per spec §10.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    drawRunSpan(ctx, run, "click", 100, 200);
+    expect(ctx.warnings).toEqual(["anchor not found: missing-target"]);
+  });
+
+  it("does NOT push a warning when ctx.warnings is undefined (silent fallback)", () => {
+    // Defensive: callers that don't supply a warnings sink (older test
+    // helpers, scratch contexts) get the plain-text fallback without
+    // crashing on a push to undefined.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    // ctx.warnings stays undefined
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    expect(() => drawRunSpan(ctx, run, "click", 100, 200)).not.toThrow();
+  });
+
+  it("does NOT push a warning when anchor IS declared in ctx.bookmarks", () => {
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set(["intro"]);
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "intro" });
+    drawRunSpan(ctx, run, "click", 100, 200);
+    expect(ctx.warnings).toEqual([]);
+  });
 });
 
 describe("decorationThickness", () => {

@@ -23,6 +23,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 import { ENCRYPTED_DOCX_MESSAGE, NOT_A_DOCX_MESSAGE, parseDocx } from "./index";
@@ -324,5 +325,166 @@ describe("parseDocx — leaf data wired through orchestrator", () => {
   it("returns sections with default-shaped page setup", () => {
     expect(parsed.sections[0]?.pageSize.widthPt).toBeGreaterThan(0);
     expect(parsed.sections[0]?.pageSize.heightPt).toBeGreaterThan(0);
+  });
+
+  it("populates bookmarks set (empty for fixtures without bookmarkStart)", () => {
+    // simple-paragraphs has no bookmarks; the field is still a real Set.
+    expect(parsed.bookmarks).toBeInstanceOf(Set);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*   Bookmark collection (Phase 13 / F2)                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Encode a UTF-8 string into a Uint8Array using the *fflate-realm*
+ * Uint8Array constructor.
+ *
+ * Why: vitest's jsdom environment exposes a TextEncoder whose
+ * `.encode(...)` returns a Uint8Array allocated in the jsdom realm. fflate
+ * (loaded in the Node realm) checks `val instanceof Uint8Array` against
+ * its own realm's constructor — that check fails for jsdom-realm typed
+ * arrays, so fflate misclassifies the bytes as a sub-directory and emits
+ * one entry per byte. Re-wrapping the buffer in a fresh Node-realm
+ * Uint8Array sidesteps the cross-realm check. Production parser code is
+ * fed bytes from the worker's own realm, so this only matters for tests.
+ */
+function utf8encode(s: string): Uint8Array {
+  const enc = new TextEncoder().encode(s);
+  return new Uint8Array(enc.buffer, enc.byteOffset, enc.byteLength);
+}
+
+/**
+ * Build a minimal DOCX zip with a `[Content_Types].xml` + `word/document.xml`
+ * + optional footnotes/headers/footers containing the supplied body fragment
+ * inside `<w:body>`. Returns the bytes ready for `parseDocx`.
+ */
+function makeMinimalDocx(parts: {
+  body?: string;
+  footnotes?: string;
+  endnotes?: string;
+  header1?: string;
+  footer1?: string;
+}): Uint8Array {
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+  const wDecl = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${wDecl}><w:body>${parts.body ?? ""}</w:body></w:document>`;
+
+  const files: Record<string, Uint8Array> = {
+    "[Content_Types].xml": utf8encode(contentTypes),
+    "word/document.xml": utf8encode(documentXml),
+  };
+  if (parts.footnotes !== undefined) {
+    files["word/footnotes.xml"] = utf8encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:footnotes ${wDecl}>${parts.footnotes}</w:footnotes>`,
+    );
+  }
+  if (parts.endnotes !== undefined) {
+    files["word/endnotes.xml"] = utf8encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:endnotes ${wDecl}>${parts.endnotes}</w:endnotes>`,
+    );
+  }
+  if (parts.header1 !== undefined) {
+    files["word/header1.xml"] = utf8encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${wDecl}>${parts.header1}</w:hdr>`,
+    );
+  }
+  if (parts.footer1 !== undefined) {
+    files["word/footer1.xml"] = utf8encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ${wDecl}>${parts.footer1}</w:ftr>`,
+    );
+  }
+  return zipSync(files);
+}
+
+describe("parseDocx — bookmark collection", () => {
+  it("collects <w:bookmarkStart w:name='...'/> declared in the body", () => {
+    const bytes = makeMinimalDocx({
+      body: '<w:p><w:bookmarkStart w:id="0" w:name="abc"/><w:r><w:t>hi</w:t></w:r></w:p>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("abc")).toBe(true);
+  });
+
+  it("collects bookmarks declared between paragraphs at body level", () => {
+    const bytes = makeMinimalDocx({
+      body: '<w:bookmarkStart w:id="0" w:name="top"/><w:p><w:r><w:t>x</w:t></w:r></w:p>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("top")).toBe(true);
+  });
+
+  it("collects bookmarks inside footnote bodies", () => {
+    const bytes = makeMinimalDocx({
+      body: "<w:p/>",
+      footnotes:
+        '<w:footnote w:id="1"><w:p><w:bookmarkStart w:id="0" w:name="fn-anchor"/></w:p></w:footnote>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("fn-anchor")).toBe(true);
+  });
+
+  it("collects bookmarks inside endnote bodies", () => {
+    const bytes = makeMinimalDocx({
+      body: "<w:p/>",
+      endnotes:
+        '<w:endnote w:id="1"><w:p><w:bookmarkStart w:id="0" w:name="en-anchor"/></w:p></w:endnote>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("en-anchor")).toBe(true);
+  });
+
+  it("collects bookmarks inside headers and footers", () => {
+    const bytes = makeMinimalDocx({
+      body: "<w:p/>",
+      header1: '<w:p><w:bookmarkStart w:id="0" w:name="hdr-anchor"/></w:p>',
+      footer1: '<w:p><w:bookmarkStart w:id="0" w:name="ftr-anchor"/></w:p>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("hdr-anchor")).toBe(true);
+    expect(parsed.bookmarks.has("ftr-anchor")).toBe(true);
+  });
+
+  it("unions bookmarks from body + footnotes + endnotes + headers + footers", () => {
+    const bytes = makeMinimalDocx({
+      body: '<w:bookmarkStart w:id="0" w:name="body-bk"/><w:p/>',
+      footnotes:
+        '<w:footnote w:id="1"><w:p><w:bookmarkStart w:id="0" w:name="fn-bk"/></w:p></w:footnote>',
+      endnotes:
+        '<w:endnote w:id="1"><w:p><w:bookmarkStart w:id="0" w:name="en-bk"/></w:p></w:endnote>',
+      header1: '<w:p><w:bookmarkStart w:id="0" w:name="hdr-bk"/></w:p>',
+      footer1: '<w:p><w:bookmarkStart w:id="0" w:name="ftr-bk"/></w:p>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks).toEqual(new Set(["body-bk", "fn-bk", "en-bk", "hdr-bk", "ftr-bk"]));
+  });
+
+  it("returns an empty set when no bookmarks are declared", () => {
+    const bytes = makeMinimalDocx({ body: "<w:p><w:r><w:t>plain</w:t></w:r></w:p>" });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.size).toBe(0);
+  });
+
+  it("supports single- and double-quoted name attributes", () => {
+    const bytes = makeMinimalDocx({
+      body: `<w:bookmarkStart w:id="0" w:name="dq"/><w:bookmarkStart w:id='1' w:name='sq'/>`,
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("dq")).toBe(true);
+    expect(parsed.bookmarks.has("sq")).toBe(true);
+  });
+
+  it("ignores bookmarkStart entries with no w:name attribute", () => {
+    const bytes = makeMinimalDocx({
+      body: '<w:bookmarkStart w:id="0"/><w:p/>',
+    });
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.size).toBe(0);
   });
 });

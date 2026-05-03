@@ -35,10 +35,13 @@
  *   - `rel` present but not `targetMode === "External"` → warn, no
  *     annotation. (Internal-relationship targets aren't PDF-jump targets
  *     by default; we route via `anchor` for that.)
- *   - `anchor` set but no rel and no anchor lookup mechanism in v1 — we
- *     emit a `Dest` annotation with the anchor name; consumers that want
- *     to jump within the PDF need the document's NamedDest table populated
- *     by the orchestrator (Task 10).
+ *   - `anchor` set but the named bookmark isn't declared anywhere in the
+ *     parsed document → skipped with warning (spec §10 / Phase 13 F2).
+ *     Run text was already drawn before annotation attempt, so the
+ *     fallback is plain text + warning.
+ *   - `anchor` present in `bookmarks` → emit a `Dest` annotation with the
+ *     anchor name; consumers that want to jump within the PDF need the
+ *     document's NamedDest table populated by the orchestrator (Task 10).
  */
 
 import type { RelationshipTarget } from "@/engines/docx-to-pdf/docx-parser/types";
@@ -59,15 +62,22 @@ export type AttachResult =
 /**
  * Attach a link annotation rectangle at `(xPt, baselineYPt)` of the given
  * width and height to `page`. Resolves `target` against `relationships`
- * and emits the appropriate annotation kind:
+ * (for external URLs) and `bookmarks` (for internal anchors), emitting
+ * the appropriate annotation kind:
  *   - rel resolves to External URL → URI action link
  *   - rel resolves to Internal target → skipped (we don't support
  *     internal-rel jumps in v1)
  *   - rel doesn't resolve → skipped
- *   - anchor only → Dest link (named destination)
- *   - neither resolves → skipped
+ *   - anchor present in `bookmarks` → Dest link (named destination)
+ *   - anchor missing from `bookmarks` → skipped with
+ *     `"anchor not found: <name>"` (spec §10 / Phase 13 F2)
+ *   - neither rel nor anchor → skipped
  *
  * Returns the result kind so the caller can surface warnings.
+ *
+ * `bookmarks` is the set of all bookmark names declared anywhere in the
+ * parsed document (body + footnotes + headers + footers). An empty set
+ * means "no anchors known" — every anchor lookup is a miss in that case.
  *
  * Rect math: PDF rect is `[llx, lly, urx, ury]` (lower-left + upper-right
  * in absolute page coords). Given a baseline at `baselineYPt` and a
@@ -83,6 +93,7 @@ export function attachLinkAnnotation(
   heightPt: Pt,
   target: LinkTarget,
   relationships: Map<string, RelationshipTarget>,
+  bookmarks: Set<string> = new Set(),
 ): AttachResult {
   if (widthPt <= 0 || heightPt <= 0) {
     return { kind: "skipped", reason: "zero-size rect" };
@@ -107,6 +118,9 @@ export function attachLinkAnnotation(
   }
 
   if (target.anchor !== undefined) {
+    if (!bookmarks.has(target.anchor)) {
+      return { kind: "skipped", reason: `anchor not found: ${target.anchor}` };
+    }
     writeDestAnnotation(page, rect, target.anchor);
     return { kind: "dest", anchor: target.anchor };
   }

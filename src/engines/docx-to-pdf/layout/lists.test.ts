@@ -69,6 +69,7 @@ function makeDeps(numbering: NumberingDef[] = []): LayoutDeps {
   return {
     numbering: map,
     relationships: new Map(),
+    bookmarks: new Set(),
     listState: createListState(),
     warnings: [],
   };

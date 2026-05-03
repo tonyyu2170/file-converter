@@ -53,6 +53,25 @@ export type LayoutDeps = {
   /** Map from rId to relationship target. Empty map is fine — hyperlinks
    *  whose rId can't resolve render as plain text + warning. */
   relationships: Map<string, RelationshipTarget>;
+  /**
+   * Set of bookmark names declared in the parsed document (body + footnotes
+   * + endnotes + headers + footers). Threaded through to
+   * `attachLinkAnnotation` so internal-anchor hyperlinks
+   * (`<w:hyperlink w:anchor="...">`) can be checked for an existing
+   * destination. A missing anchor produces a `{kind: "skipped", reason}`
+   * result and a warning in `deps.warnings` (spec §10).
+   *
+   * Empty set is the "no anchors known" baseline — any non-empty
+   * `target.anchor` then resolves as missing. Callers that don't care
+   * about anchor checking can pass `new Set()`.
+   *
+   * Non-optional on purpose: the layout-side check is a value test, not an
+   * "is the field present" test, so making the field optional would force
+   * every downstream consumer into an `?? new Set()` dance. The orchestrator
+   * (`layout/index.ts`) populates this from `parsed.bookmarks`; tests pass
+   * `new Set()` (or a populated literal) explicitly.
+   */
+  bookmarks: Set<string>;
   /** Mutable list-state counters — flows across calls so consecutive
    *  list paragraphs at the same `(numId, ilvl)` increment correctly. */
   listState: ListState;

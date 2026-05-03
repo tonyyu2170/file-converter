@@ -111,6 +111,7 @@ export async function layoutDocument(
   const deps: LayoutDeps = {
     numbering: parsed.numbering,
     relationships: parsed.relationships,
+    bookmarks: parsed.bookmarks,
     listState: { counters: new Map(), lastLevel: new Map() },
     warnings: [],
     embeddedImages,

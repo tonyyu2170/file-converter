@@ -56,6 +56,7 @@ function makeDeps(): LayoutDeps {
   return {
     numbering: new Map(),
     relationships: new Map(),
+    bookmarks: new Set(),
     listState: createListState(),
     warnings: [],
   };

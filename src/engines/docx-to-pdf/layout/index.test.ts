@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
@@ -243,6 +244,61 @@ describe("layoutDocument — warning dedupe", () => {
     const { warnings } = await layoutDocument(parsed, opts);
     const set = new Set(warnings);
     expect(set.size).toBe(warnings.length);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*   Hyperlink anchor existence (Phase 13 / F2 / spec §10)             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Assemble a minimal valid DOCX whose body contains a hyperlink to the
+ * supplied anchor name. When `declareBookmark` is true, a matching
+ * `<w:bookmarkStart>` is emitted in the body; when false, the anchor is
+ * dangling — exactly the spec §10 case under test.
+ */
+function makeAnchorTestDocx(anchor: string, declareBookmark: boolean): Uint8Array {
+  // See `docx-parser/index.test.ts:utf8encode` — re-wrapping the
+  // jsdom-realm Uint8Array into a Node-realm one avoids fflate's
+  // cross-realm `instanceof` check misclassifying the bytes as a
+  // sub-directory.
+  const utf8encode = (s: string): Uint8Array => {
+    const enc = new TextEncoder().encode(s);
+    return new Uint8Array(enc.buffer, enc.byteOffset, enc.byteLength);
+  };
+  const wDecl = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const bookmark = declareBookmark
+    ? `<w:bookmarkStart w:id="0" w:name="${anchor}"/><w:bookmarkEnd w:id="0"/>`
+    : "";
+  const body = `${bookmark}<w:p><w:hyperlink w:anchor="${anchor}"><w:r><w:t>jump</w:t></w:r></w:hyperlink></w:p>`;
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${wDecl}><w:body>${body}</w:body></w:document>`;
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+  return zipSync({
+    "[Content_Types].xml": utf8encode(contentTypes),
+    "word/document.xml": utf8encode(documentXml),
+  });
+}
+
+describe("layoutDocument — hyperlink anchor existence (F2)", () => {
+  it("emits 'anchor not found' warning when hyperlink target is undeclared", async () => {
+    const bytes = makeAnchorTestDocx("missing-anchor", false);
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.size).toBe(0);
+    const { warnings } = await layoutDocument(parsed, opts);
+    expect(warnings).toContain("anchor not found: missing-anchor");
+  });
+
+  it("does NOT emit the warning when the anchor IS declared in the body", async () => {
+    const bytes = makeAnchorTestDocx("real-anchor", true);
+    const parsed = parseDocx(bytes);
+    expect(parsed.bookmarks.has("real-anchor")).toBe(true);
+    const { warnings } = await layoutDocument(parsed, opts);
+    expect(warnings.some((w) => /anchor not found/.test(w))).toBe(false);
   });
 });
 

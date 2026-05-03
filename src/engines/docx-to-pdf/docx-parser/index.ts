@@ -195,7 +195,30 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
   const bodyResult = parseBodyXml(documentXml, styles);
   warnings.push(...bodyResult.warnings);
 
-  // 9. Assemble.
+  // 9. Bookmark name collection (Phase 13 / F2).
+  //
+  // Strategy: regex pass over each XML string. Bookmarks
+  // (`<w:bookmarkStart w:name="..."/>`) can appear at any depth — direct
+  // children of paragraphs, between paragraphs at body level, inside table
+  // cells, hyperlinks, footnotes/endnotes, headers/footers. Walking every
+  // possible nesting path through the existing parser is more invasive than
+  // a single targeted scan; well-formed XML check (`isWellFormedXml`) has
+  // already happened inside each parser above before its result was
+  // accepted, and the regex matches OOXML's strict-attribute syntax. We
+  // accept the rare cost of double-counting / quote-style mismatches in
+  // exchange for a simple, walker-untouched implementation.
+  const bookmarks = new Set<string>();
+  collectBookmarks(documentXml, bookmarks);
+  if (footnotesXml !== undefined) collectBookmarks(footnotesXml, bookmarks);
+  if (endnotesXml !== undefined) collectBookmarks(endnotesXml, bookmarks);
+  for (const path of Object.keys(entries)) {
+    if (/^word\/header\d+\.xml$/.test(path) || /^word\/footer\d+\.xml$/.test(path)) {
+      const xml = decodeEntry(path);
+      if (xml !== undefined) collectBookmarks(xml, bookmarks);
+    }
+  }
+
+  // 10. Assemble.
   return {
     sections: bodyResult.sections,
     styles,
@@ -207,8 +230,29 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     headers,
     footers,
     media,
+    bookmarks,
     warnings,
   };
+}
+
+/**
+ * Scans an OOXML XML string for `<w:bookmarkStart w:name="..."/>` declarations
+ * and adds each `name` value to `out`. Matches both single- and double-quoted
+ * attribute styles. The regex is a deliberately simple lexer — we don't
+ * attempt to validate that the bookmarkStart appears in a sensible position
+ * (the parser-level walks already gate on well-formed XML).
+ */
+function collectBookmarks(xml: string, out: Set<string>): void {
+  // `\s+` between element name and attributes; `[^>]*?` allows `w:id` or any
+  // other attribute to appear before/after `w:name`. Uses a lazy quantifier
+  // to avoid over-matching across multiple elements.
+  const pattern = /<w:bookmarkStart\b[^>]*?\bw:name\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*?\/?>/g;
+  let match: RegExpExecArray | null = pattern.exec(xml);
+  while (match !== null) {
+    const name = match[1] ?? match[2];
+    if (name !== undefined && name !== "") out.add(name);
+    match = pattern.exec(xml);
+  }
 }
 
 /* ------------------------------------------------------------------ */

@@ -42,6 +42,19 @@ export type ParsedDocx = {
   footers: Map<string, ParsedBlock[]>;
   /** zip-relative path → bytes + mime. Populated in Task 5. */
   media: Map<string, MediaAsset>;
+  /**
+   * Names of all `<w:bookmarkStart w:name="..."/>` declared in the body,
+   * footnotes, endnotes, headers, and footers. The layout engine consults
+   * this set when rendering an internal-anchor hyperlink
+   * (`<w:hyperlink w:anchor="..."/>`): if the anchor is missing from this
+   * set, the link annotation is skipped and a warning is emitted (spec §10).
+   *
+   * An empty set is the "no anchors known" baseline; callers must treat any
+   * non-empty `target.anchor` as missing in that case (defensive — empty
+   * means we never collected any, which is the same as "anchor not found"
+   * from the layout's perspective).
+   */
+  bookmarks: Set<string>;
   /** Skip-with-warning accumulator for unsupported features. Strings are
    * intended to be human-readable and concatenated by ResultList. */
   warnings: string[];

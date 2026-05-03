@@ -247,6 +247,8 @@ function measureCellContent(
     minYPt: -SCRATCH_HEIGHT_PT,
     fonts: parentCtx.fonts,
     ...(parentCtx.relationships !== undefined && { relationships: parentCtx.relationships }),
+    ...(parentCtx.bookmarks !== undefined && { bookmarks: parentCtx.bookmarks }),
+    ...(parentCtx.warnings !== undefined && { warnings: parentCtx.warnings }),
   };
   const startY = ctx.yPt;
   let pending: ParsedBlock[] = cell.blocks.slice();
@@ -318,6 +320,8 @@ function drawRowContent(
       ...(parentCtx.relationships !== undefined && {
         relationships: parentCtx.relationships,
       }),
+      ...(parentCtx.bookmarks !== undefined && { bookmarks: parentCtx.bookmarks }),
+      ...(parentCtx.warnings !== undefined && { warnings: parentCtx.warnings }),
     };
     const pending: ParsedBlock[] = cell.blocks.slice();
     let safety = 100;

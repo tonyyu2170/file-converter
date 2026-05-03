@@ -179,6 +179,8 @@ function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): Multi
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
   /** Per-page "any content drawn yet" flag — used to swallow leading
    *  forced breaks without emitting a blank page. Reset on every new
@@ -378,6 +380,16 @@ function passOneNaturalHeight(
   // and pass an embedded-image map through ColumnContext (per the
   // orchestrator notes in spec §3.7).
   const discardPage = makeDiscardPage();
+  // Pass 1 must NOT mutate the orchestrator's warnings / list-state. Use
+  // a scratch deps so any warnings or counter bumps emitted during
+  // measure don't leak into Pass 2.
+  const scratchDeps: LayoutDeps = {
+    numbering: deps.numbering,
+    relationships: deps.relationships,
+    bookmarks: deps.bookmarks,
+    listState: { counters: new Map(), lastLevel: new Map() },
+    warnings: [],
+  };
   const ctx: ColumnContext = {
     page: discardPage,
     pageGeometry,
@@ -387,17 +399,10 @@ function passOneNaturalHeight(
     minYPt: -SCRATCH_HEIGHT_PT,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: scratchDeps.warnings,
   };
   const startY = ctx.yPt;
-  // Pass 1 must NOT mutate the orchestrator's warnings / list-state. Use
-  // a scratch deps so any warnings or counter bumps emitted during
-  // measure don't leak into Pass 2.
-  const scratchDeps: LayoutDeps = {
-    numbering: deps.numbering,
-    relationships: deps.relationships,
-    listState: { counters: new Map(), lastLevel: new Map() },
-    warnings: [],
-  };
 
   const pending: ParsedBlock[] = blocks.slice();
   let safety = MAX_INNER_ITERATIONS;
@@ -511,6 +516,8 @@ function fillRealColumns(
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
 
   let safety = MAX_INNER_ITERATIONS;
@@ -573,6 +580,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }
@@ -595,6 +604,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }
@@ -634,6 +645,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }

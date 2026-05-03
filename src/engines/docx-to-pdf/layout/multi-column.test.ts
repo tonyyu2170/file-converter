@@ -68,6 +68,7 @@ function makeDeps(overrides: Partial<LayoutDeps> = {}): LayoutDeps {
   return {
     numbering: new Map(),
     relationships: new Map(),
+    bookmarks: new Set(),
     listState: createListState(),
     warnings: [],
     ...overrides,

@@ -106,6 +106,27 @@ export type ColumnContext = {
    * attachment even for hyperlink-flagged runs (text still draws plainly).
    */
   relationships?: Map<string, RelationshipTarget>;
+  /**
+   * Bookmark-name set used by `attachLinkAnnotation` to verify that an
+   * internal-anchor hyperlink target exists. Threaded through here (rather
+   * than as a `drawRunSpan` parameter) to mirror the existing
+   * `relationships` plumbing on this type. Optional so tests / non-link
+   * code paths can omit it; treated as an empty set when undefined,
+   * meaning every anchor lookup misses.
+   */
+  bookmarks?: Set<string>;
+  /**
+   * Run-level layout primitives (specifically `drawRunSpan`'s hyperlink
+   * resolution) push warnings here when an anchor doesn't exist or a
+   * relationship doesn't resolve. The orchestrator wires this to
+   * `LayoutDeps.warnings` via the `multi-column.ts` / `tables.ts` /
+   * `headers-footers.ts` / `footnotes.ts` callsites that build
+   * `ColumnContext`. Optional so existing tests don't have to supply it;
+   * when undefined, `drawRunSpan` silently drops the warning (the link
+   * still falls through to plain-text rendering, which is the user-visible
+   * fallback the warning was about).
+   */
+  warnings?: string[];
 };
 
 /** Return shape for "I drew this much height." Used by paragraph/list/
