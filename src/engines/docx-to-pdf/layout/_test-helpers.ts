@@ -42,15 +42,31 @@ export type MockPageCall =
     }
   | { op: "drawImage"; x: number; y: number; width: number; height: number };
 
-/** Mock pdf-lib `PDFPage` that records all draw calls into an array. */
+/**
+ * Recorded link-annotation entry on the mock page. Tests assert on this
+ * array. The `link` field captures the dictionary literal passed to
+ * `page.doc.context.obj(...)` so tests can inspect URI vs Dest links.
+ */
+export type MockAnnotation = {
+  rect: [number, number, number, number];
+  // biome-ignore lint/suspicious/noExplicitAny: mock captures arbitrary literal
+  dict: any;
+};
+
+/** Mock pdf-lib `PDFPage` that records all draw calls into an array.
+ *  Also exposes a partial `doc.context` and `node.addAnnot` so the
+ *  hyperlink module can use the real pdf-lib annotation pattern in tests. */
 export type MockPage = PDFPage & {
   __calls: MockPageCall[];
+  __annotations: MockAnnotation[];
 };
 
 export function makeMockPage(): MockPage {
   const calls: MockPageCall[] = [];
+  const annotations: MockAnnotation[] = [];
   const page = {
     __calls: calls,
+    __annotations: annotations,
     drawText(
       text: string,
       opts: { x: number; y: number; size: number; font: PDFFont; color?: unknown },
@@ -112,6 +128,65 @@ export function makeMockPage(): MockPage {
       return { width: 612, height: 792 };
     },
   } as unknown as MockPage;
+
+  // Partial `doc.context` + `node.addAnnot` shim wired so that calling
+  // `page.doc.context.register(page.doc.context.obj({...})); page.node.addAnnot(ref)`
+  // surfaces the dict literal in `page.__annotations`. The shim:
+  //   - `obj(literal)` wraps the literal in a tagged ref carrier and
+  //     stashes the literal on the carrier so `register` can read it.
+  //   - `register(carrier)` returns the same carrier, marking it registered
+  //     and pushing it onto a "pending" queue.
+  //   - `addAnnot(ref)` pops the pending queue (or accepts the carrier as
+  //     `ref`) and pushes its rect + dict into `__annotations`.
+  // Production code uses pdf-lib's real APIs; tests rely on the shim.
+  type ObjCarrier = {
+    __literal: { Rect?: [number, number, number, number]; [k: string]: unknown };
+  };
+  const pendingDicts: ObjCarrier[] = [];
+  const ctxShim = {
+    // biome-ignore lint/suspicious/noExplicitAny: shim accepts arbitrary literal
+    obj(literal: any): ObjCarrier {
+      return { __literal: literal };
+    },
+    register(carrier: ObjCarrier): ObjCarrier {
+      pendingDicts.push(carrier);
+      return carrier;
+    },
+  };
+  // Recursively unwrap nested `__literal` carriers produced by `obj`. This
+  // lets test assertions inspect the dict like a flat object: `A.S` rather
+  // than `A.__literal.S`. Production pdf-lib does the equivalent
+  // automatically because `obj` wraps each level into PDFDict.
+  // biome-ignore lint/suspicious/noExplicitAny: shim accepts arbitrary literal
+  function unwrap(value: any): any {
+    if (value && typeof value === "object" && "__literal" in value) {
+      return unwrap(value.__literal);
+    }
+    if (Array.isArray(value)) return value.map(unwrap);
+    if (value && typeof value === "object") {
+      // biome-ignore lint/suspicious/noExplicitAny: dict literal recursion
+      const out: Record<string, any> = {};
+      for (const k of Object.keys(value)) out[k] = unwrap(value[k]);
+      return out;
+    }
+    return value;
+  }
+  const nodeShim = {
+    addAnnot(ref: ObjCarrier): void {
+      // ref is the same carrier register() returned. Drain the matching
+      // entry from the pending queue (in practice the most recent one).
+      const idx = pendingDicts.indexOf(ref);
+      if (idx >= 0) pendingDicts.splice(idx, 1);
+      const lit = unwrap(ref.__literal ?? {});
+      const rect = (lit.Rect as [number, number, number, number] | undefined) ?? [0, 0, 0, 0];
+      annotations.push({ rect, dict: lit });
+    },
+  };
+  // Attach via Object.defineProperty since these are read-only on the
+  // real PDFPage. The cast lets us bypass the type system for the shim.
+  Object.defineProperty(page, "doc", { value: { context: ctxShim }, writable: false });
+  Object.defineProperty(page, "node", { value: nodeShim, writable: false });
+
   return page;
 }
 

@@ -26,6 +26,7 @@ import { pickFont } from "@/engines/docx-to-pdf/fonts/substitution-map";
 import type { BundledFontFamily } from "@/engines/docx-to-pdf/fonts/types";
 import { rgb } from "pdf-lib";
 import type { PDFFont } from "pdf-lib";
+import { attachLinkAnnotation } from "./hyperlinks";
 import type { ColumnContext, EmbeddedFonts, Pt } from "./types";
 
 /** Default body font size in pt. Mirrors Calibri 11pt — Word's typical
@@ -161,6 +162,23 @@ export function drawRunSpan(
   }
   if (run.strike) {
     drawDecorationLine(ctx, xPt, baselineYPt + strikeOffset(sizePt), advance, sizePt, color);
+  }
+
+  // Hyperlink annotation: attach a clickable rect over the drawn fragment
+  // when the run carries a hyperlink target AND the column context has a
+  // relationships map to resolve external URLs against. We do NOT change
+  // the fragment's color or underline here — those are styling choices the
+  // source DOCX already made. Per-fragment attachment yields one rect per
+  // visual line, matching reader expectations for wrapped links.
+  if (
+    (run.hyperlinkRel !== undefined || run.hyperlinkAnchor !== undefined) &&
+    ctx.relationships !== undefined
+  ) {
+    const heightPt = sizePt * LINE_HEIGHT_FACTOR;
+    const target: { rel?: string; anchor?: string } = {};
+    if (run.hyperlinkRel !== undefined) target.rel = run.hyperlinkRel;
+    if (run.hyperlinkAnchor !== undefined) target.anchor = run.hyperlinkAnchor;
+    attachLinkAnnotation(ctx.page, xPt, baselineYPt, advance, heightPt, target, ctx.relationships);
   }
 
   return advance;

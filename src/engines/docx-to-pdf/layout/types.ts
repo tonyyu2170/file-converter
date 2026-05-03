@@ -22,6 +22,7 @@
  * in Task 9 and reuses `ColumnGeometry` to seed alternate column boxes.
  */
 
+import type { RelationshipTarget } from "@/engines/docx-to-pdf/docx-parser/types";
 import type { PDFFont, PDFPage } from "pdf-lib";
 
 /** All PDF text in the engine is drawn at PostScript points (1/72 in). */
@@ -98,6 +99,13 @@ export type ColumnContext = {
    *  a page or column break. */
   minYPt: Pt;
   fonts: EmbeddedFonts;
+  /**
+   * Relationship map for hyperlink resolution. Optional so existing
+   * tests (and orchestrator code paths that don't care about hyperlinks)
+   * can omit it. When undefined, `drawRunSpan` will skip annotation
+   * attachment even for hyperlink-flagged runs (text still draws plainly).
+   */
+  relationships?: Map<string, RelationshipTarget>;
 };
 
 /** Return shape for "I drew this much height." Used by paragraph/list/
