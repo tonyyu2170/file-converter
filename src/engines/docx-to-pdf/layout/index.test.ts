@@ -195,6 +195,34 @@ describe("layoutDocument — image-doc.docx", () => {
     const imgSkips = warnings.filter((w) => w.startsWith("image skipped:"));
     expect(imgSkips).toHaveLength(0);
   });
+
+  it("a corrupt image rejects independently — other images still embed + warning surfaced (Phase 13 F7)", async () => {
+    // Phase 13 F7: `embedAllMedia` parallelizes pdf-lib registration. A
+    // single bad image must not kill the batch — pre-fix, the sequential
+    // try/catch handled this; the parallel `Promise.allSettled` path
+    // must preserve the same behavior.
+    const parsed = parseDocx(readFixture("image-doc.docx"));
+    // Inject a corrupt image whose PNG signature passes `sniffImageFormat`
+    // but whose body is invalid — pdf-lib's `embedPng` will reject. The
+    // PNG magic is 8 bytes: 89 50 4E 47 0D 0A 1A 0A. Append junk so
+    // `embedPng` parses past the header and chokes on the IHDR chunk.
+    const corruptBytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    ]);
+    parsed.media.set("word/media/imageCORRUPT.png", {
+      path: "word/media/imageCORRUPT.png",
+      mime: "image/png",
+      bytes: corruptBytes,
+    });
+    const { warnings, pdfBytes } = await layoutDocument(parsed, opts);
+    // The corrupt image surfaces a warning.
+    const imgSkips = warnings.filter((w) => w.startsWith("image skipped:"));
+    expect(imgSkips.length).toBeGreaterThanOrEqual(1);
+    expect(imgSkips.some((w) => w.includes("imageCORRUPT.png"))).toBe(true);
+    // Output PDF still valid (other images embedded fine).
+    const head = bytesToString(pdfBytes.slice(0, 5));
+    expect(head).toBe("%PDF-");
+  });
 });
 
 /* ------------------------------------------------------------------ */

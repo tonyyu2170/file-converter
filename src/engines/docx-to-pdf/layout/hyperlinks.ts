@@ -138,6 +138,18 @@ export function attachLinkAnnotation(
  *   - The rect extends slightly below the baseline (descent area) and up
  *     above the baseline by ~80% of the line-height (ascent + leading).
  *   - The 20%/80% split mirrors `paragraph.ts:drawLine` baseline math.
+ *
+ * Phase 13 F8 trade-off: the 20%/80% split here is a fraction of
+ * `lineHeight`, but real glyph cells use approximately 75% ascent and
+ * 20% descent of `fontSize` (NOT `lineHeight`). Since `lineHeight` is
+ * typically `fontSize * 1.2`, this approximation produces a click rect
+ * that's slightly more lenient than the glyph cell — i.e., the user can
+ * click a few points above the cap height or below the descender and
+ * still trigger the link. Acceptable v1 behavior. Tightening to
+ * `fontSize`-relative math (a tighter rect) is deferred — it would
+ * require auditing every caller's `heightPt` to be sure the rect doesn't
+ * collapse below the baseline for unusual font metrics, and the looser
+ * rect is the user-friendly direction to err in.
  */
 export function computeLinkRect(
   xPt: Pt,
@@ -145,6 +157,9 @@ export function computeLinkRect(
   widthPt: Pt,
   heightPt: Pt,
 ): [number, number, number, number] {
+  // descent + ascent must sum to `heightPt` so the rect's vertical span
+  // matches one line of `lineHeight`. The split is (descent 20% / ascent
+  // 80%) — see the function-doc trade-off note above.
   const descent = heightPt * 0.2;
   const ascent = heightPt * 0.8;
   const llx = xPt;
