@@ -95,4 +95,46 @@ describe("ResultList", () => {
     resolveZip({ filename: "out.zip", blob: new Blob([]) });
     await waitFor(() => expect(btn).not.toBeDisabled());
   });
+
+  describe("warnings", () => {
+    it("renders no warning notice when warnings is unset (existing engines)", () => {
+      const item = makeItem("a.pdf");
+      render(<ResultList items={[item]} />);
+      expect(screen.queryByTestId("output-warnings")).not.toBeInTheDocument();
+    });
+
+    it("renders no warning notice when warnings is an empty array", () => {
+      const item = { ...makeItem("a.pdf"), warnings: [] };
+      render(<ResultList items={[item]} />);
+      expect(screen.queryByTestId("output-warnings")).not.toBeInTheDocument();
+    });
+
+    it("renders a one-line notice with the joined warnings when present", () => {
+      const item = { ...makeItem("a.pdf"), warnings: ["equation skipped", "drawing skipped"] };
+      render(<ResultList items={[item]} />);
+      const notice = screen.getByTestId("output-warnings");
+      expect(notice).toBeInTheDocument();
+      expect(notice).toHaveTextContent("2 features unsupported");
+      expect(notice).toHaveTextContent("equation skipped");
+      expect(notice).toHaveTextContent("drawing skipped");
+    });
+
+    it("uses singular 'feature' for exactly one warning", () => {
+      const item = { ...makeItem("a.pdf"), warnings: ["RTL paragraph skipped"] };
+      render(<ResultList items={[item]} />);
+      expect(screen.getByTestId("output-warnings")).toHaveTextContent("1 feature unsupported");
+    });
+
+    it("truncates with ellipsis when more than 3 warnings", () => {
+      const item = {
+        ...makeItem("a.pdf"),
+        warnings: ["a", "b", "c", "d", "e"],
+      };
+      render(<ResultList items={[item]} />);
+      const notice = screen.getByTestId("output-warnings");
+      expect(notice).toHaveTextContent("5 features unsupported");
+      expect(notice).toHaveTextContent("a, b, c, …");
+      expect(notice).not.toHaveTextContent(/\bd\b/);
+    });
+  });
 });

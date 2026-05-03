@@ -6,6 +6,14 @@ export type OutputItem = {
   filename: string;
   mime: string;
   blob: Blob;
+  /**
+   * Engine-emitted notices about content the conversion could not fully
+   * preserve (e.g., docx-to-pdf's skip-with-warning categories: equations,
+   * drawings, RTL). Optional; existing engines that produce verbatim output
+   * leave this unset. Surfaced by ResultList as a one-line note below the
+   * filename.
+   */
+  warnings?: string[];
 };
 
 export type EngineMeta<TOptions> = {

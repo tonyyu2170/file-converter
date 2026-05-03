@@ -51,21 +51,30 @@ export function ResultList({ items, archiveBasename, archiveSuffix }: Props) {
         </li>
       )}
       {items.map((item) => (
-        <li
-          key={item.filename}
-          className="flex items-center justify-between px-3 py-2 text-[var(--text-sm)]"
-        >
-          <span className="truncate text-[var(--color-fg)]" title={item.filename}>
-            {item.filename}
-          </span>
-          <button
-            type="button"
-            aria-label={`download ${item.filename}`}
-            onClick={() => download(item.blob, item.filename)}
-            className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] hover:border-[var(--color-accent)]"
-          >
-            download
-          </button>
+        <li key={item.filename} className="flex flex-col gap-1 px-3 py-2 text-[var(--text-sm)]">
+          <div className="flex items-center justify-between">
+            <span className="truncate text-[var(--color-fg)]" title={item.filename}>
+              {item.filename}
+            </span>
+            <button
+              type="button"
+              aria-label={`download ${item.filename}`}
+              onClick={() => download(item.blob, item.filename)}
+              className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] hover:border-[var(--color-accent)]"
+            >
+              download
+            </button>
+          </div>
+          {item.warnings !== undefined && item.warnings.length > 0 && (
+            <span
+              data-testid="output-warnings"
+              className="text-[var(--text-xs)] text-[var(--color-fg-muted)]"
+            >
+              — {item.warnings.length} feature{item.warnings.length === 1 ? "" : "s"} unsupported:{" "}
+              {item.warnings.slice(0, 3).join(", ")}
+              {item.warnings.length > 3 ? ", …" : ""}
+            </span>
+          )}
         </li>
       ))}
     </ul>
