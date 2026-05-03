@@ -30,7 +30,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
-import { unzipSync, zipSync, strToU8 } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 const FIXTURES = join(REPO_ROOT, "tests", "fixtures");
@@ -60,11 +60,29 @@ async function simpleParagraphs() {
     sections: [
       {
         children: [
-          new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Hello, World")] }),
-          new Paragraph({ children: [new TextRun("This is a simple paragraph for the docx-to-pdf engine test fixture.")] }),
-          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Section heading")] }),
-          new Paragraph({ children: [new TextRun({ text: "Bold ", bold: true }), new TextRun("normal "), new TextRun({ text: "italic", italics: true })] }),
-          new Paragraph({ children: [new TextRun("Tony Yu — fixture identifier for searchable-text assertion.")] }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_1,
+            children: [new TextRun("Hello, World")],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun("This is a simple paragraph for the docx-to-pdf engine test fixture."),
+            ],
+          }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Section heading")],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: "Bold ", bold: true }),
+              new TextRun("normal "),
+              new TextRun({ text: "italic", italics: true }),
+            ],
+          }),
+          new Paragraph({
+            children: [new TextRun("Tony Yu — fixture identifier for searchable-text assertion.")],
+          }),
         ],
       },
     ],
@@ -76,11 +94,22 @@ async function simpleParagraphs() {
 async function multiPage() {
   const children = [];
   for (let i = 1; i <= 5; i++) {
-    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`Page ${i}`)] }));
+    children.push(
+      new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`Page ${i}`)] }),
+    );
     for (let j = 0; j < 25; j++) {
-      children.push(new Paragraph({ children: [new TextRun(`Line ${j + 1} of page ${i}. ${"Lorem ipsum dolor sit amet ".repeat(4)}`)] }));
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun(`Line ${j + 1} of page ${i}. ${"Lorem ipsum dolor sit amet ".repeat(4)}`),
+          ],
+        }),
+      );
     }
-    if (i < 5) children.push(new Paragraph({ children: [new TextRun({ text: "", break: 1 })], pageBreakBefore: false }));
+    if (i < 5)
+      children.push(
+        new Paragraph({ children: [new TextRun({ text: "", break: 1 })], pageBreakBefore: false }),
+      );
   }
   const doc = new Document({ sections: [{ children }] });
   await writeDocx("multi-page.docx", doc);
@@ -118,28 +147,40 @@ async function tableDoc() {
   const t1 = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
-      new TableRow({ children: [
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("Header A")] })] }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("Header B")] })] }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("Header C")] })] }),
-      ] }),
-      new TableRow({ children: [
-        // gridSpan: 2 — merges A and B columns
-        new TableCell({ columnSpan: 2, children: [new Paragraph({ children: [new TextRun("Spanned cell")] })] }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("Cell C2")] })] }),
-      ] }),
-      new TableRow({ children: [
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("A3")] })] }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("B3")] })] }),
-        new TableCell({ children: [new Paragraph({ children: [new TextRun("C3")] })] }),
-      ] }),
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("Header A")] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("Header B")] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("Header C")] })] }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          // gridSpan: 2 — merges A and B columns
+          new TableCell({
+            columnSpan: 2,
+            children: [new Paragraph({ children: [new TextRun("Spanned cell")] })],
+          }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("Cell C2")] })] }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("A3")] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("B3")] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun("C3")] })] }),
+        ],
+      }),
     ],
   });
   const doc = new Document({
     sections: [
       {
         children: [
-          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Table with column-span")] }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Table with column-span")],
+          }),
           t1,
           new Paragraph({ children: [new TextRun("After table.")] }),
         ],
@@ -151,11 +192,31 @@ async function tableDoc() {
 
 // 5. headed-footed.docx — section with header (page number) + footer.
 async function headedFooted() {
-  const header = new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun("Tony Yu — Phase 10 fixture")] })] });
-  const footer = new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: ["Page ", PageNumber.CURRENT, " of ", PageNumber.TOTAL_PAGES] })] })] });
+  const header = new Header({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: [new TextRun("Tony Yu — Phase 10 fixture")],
+      }),
+    ],
+  });
+  const footer = new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ children: ["Page ", PageNumber.CURRENT, " of ", PageNumber.TOTAL_PAGES] }),
+        ],
+      }),
+    ],
+  });
   const children = [];
   for (let i = 0; i < 60; i++) {
-    children.push(new Paragraph({ children: [new TextRun(`Body line ${i + 1}. ${"Lorem ipsum dolor ".repeat(3)}`)] }));
+    children.push(
+      new Paragraph({
+        children: [new TextRun(`Body line ${i + 1}. ${"Lorem ipsum dolor ".repeat(3)}`)],
+      }),
+    );
   }
   const doc = new Document({
     sections: [
@@ -173,16 +234,41 @@ async function headedFooted() {
 async function footnoted() {
   const doc = new Document({
     footnotes: {
-      1: { children: [new Paragraph({ children: [new TextRun("First footnote — reference at start.")] })] },
-      2: { children: [new Paragraph({ children: [new TextRun("Second footnote — middle of document.")] })] },
+      1: {
+        children: [
+          new Paragraph({ children: [new TextRun("First footnote — reference at start.")] }),
+        ],
+      },
+      2: {
+        children: [
+          new Paragraph({ children: [new TextRun("Second footnote — middle of document.")] }),
+        ],
+      },
       3: { children: [new Paragraph({ children: [new TextRun("Third footnote — end.")] })] },
     },
     sections: [
       {
         children: [
-          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Document with footnotes")] }),
-          new Paragraph({ children: [new TextRun("Body text with a marker"), new FootnoteReferenceRun(1), new TextRun(" continuing on.")] }),
-          new Paragraph({ children: [new TextRun("More body"), new FootnoteReferenceRun(2), new TextRun(" and final note"), new FootnoteReferenceRun(3), new TextRun(".")] }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Document with footnotes")],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun("Body text with a marker"),
+              new FootnoteReferenceRun(1),
+              new TextRun(" continuing on."),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun("More body"),
+              new FootnoteReferenceRun(2),
+              new TextRun(" and final note"),
+              new FootnoteReferenceRun(3),
+              new TextRun("."),
+            ],
+          }),
         ],
       },
     ],
@@ -195,29 +281,56 @@ async function nestedList() {
   const doc = new Document({
     numbering: {
       config: [
-        { reference: "bullet", levels: [
-          { level: 0, format: "bullet", text: "•", alignment: AlignmentType.START },
-          { level: 1, format: "bullet", text: "◦", alignment: AlignmentType.START },
-          { level: 2, format: "bullet", text: "▪", alignment: AlignmentType.START },
-        ] },
-        { reference: "decimal", levels: [
-          { level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START },
-          { level: 1, format: "lowerLetter", text: "%2.", alignment: AlignmentType.START },
-        ] },
+        {
+          reference: "bullet",
+          levels: [
+            { level: 0, format: "bullet", text: "•", alignment: AlignmentType.START },
+            { level: 1, format: "bullet", text: "◦", alignment: AlignmentType.START },
+            { level: 2, format: "bullet", text: "▪", alignment: AlignmentType.START },
+          ],
+        },
+        {
+          reference: "decimal",
+          levels: [
+            { level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START },
+            { level: 1, format: "lowerLetter", text: "%2.", alignment: AlignmentType.START },
+          ],
+        },
       ],
     },
     sections: [
       {
         children: [
           new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Bulleted")] }),
-          new Paragraph({ numbering: { reference: "bullet", level: 0 }, children: [new TextRun("Top item one")] }),
-          new Paragraph({ numbering: { reference: "bullet", level: 1 }, children: [new TextRun("Sub item one")] }),
-          new Paragraph({ numbering: { reference: "bullet", level: 2 }, children: [new TextRun("Sub-sub item")] }),
-          new Paragraph({ numbering: { reference: "bullet", level: 0 }, children: [new TextRun("Top item two")] }),
+          new Paragraph({
+            numbering: { reference: "bullet", level: 0 },
+            children: [new TextRun("Top item one")],
+          }),
+          new Paragraph({
+            numbering: { reference: "bullet", level: 1 },
+            children: [new TextRun("Sub item one")],
+          }),
+          new Paragraph({
+            numbering: { reference: "bullet", level: 2 },
+            children: [new TextRun("Sub-sub item")],
+          }),
+          new Paragraph({
+            numbering: { reference: "bullet", level: 0 },
+            children: [new TextRun("Top item two")],
+          }),
           new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Numbered")] }),
-          new Paragraph({ numbering: { reference: "decimal", level: 0 }, children: [new TextRun("First")] }),
-          new Paragraph({ numbering: { reference: "decimal", level: 1 }, children: [new TextRun("First-a")] }),
-          new Paragraph({ numbering: { reference: "decimal", level: 0 }, children: [new TextRun("Second")] }),
+          new Paragraph({
+            numbering: { reference: "decimal", level: 0 },
+            children: [new TextRun("First")],
+          }),
+          new Paragraph({
+            numbering: { reference: "decimal", level: 1 },
+            children: [new TextRun("First-a")],
+          }),
+          new Paragraph({
+            numbering: { reference: "decimal", level: 0 },
+            children: [new TextRun("Second")],
+          }),
         ],
       },
     ],
@@ -234,11 +347,22 @@ async function imageDoc() {
     sections: [
       {
         children: [
-          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Document with images")] }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Document with images")],
+          }),
           new Paragraph({ children: [new TextRun("Below is a PNG:")] }),
-          new Paragraph({ children: [new ImageRun({ data: png, transformation: { width: 80, height: 80 }, type: "png" })] }),
+          new Paragraph({
+            children: [
+              new ImageRun({ data: png, transformation: { width: 80, height: 80 }, type: "png" }),
+            ],
+          }),
           new Paragraph({ children: [new TextRun("Below is a JPEG:")] }),
-          new Paragraph({ children: [new ImageRun({ data: jpg, transformation: { width: 80, height: 80 }, type: "jpg" })] }),
+          new Paragraph({
+            children: [
+              new ImageRun({ data: jpg, transformation: { width: 80, height: 80 }, type: "jpg" }),
+            ],
+          }),
           new Paragraph({ children: [new TextRun("End.")] }),
         ],
       },
@@ -250,12 +374,19 @@ async function imageDoc() {
 // 9. equations-doc.docx — base doc + injected <m:oMath>.
 async function equationsDoc() {
   const base = new Document({
-    sections: [{ children: [
-      new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Document with equations")] }),
-      new Paragraph({ children: [new TextRun("The Pythagorean theorem:")] }),
-      new Paragraph({ children: [new TextRun("[EQUATION_PLACEHOLDER]")] }),
-      new Paragraph({ children: [new TextRun("End of document.")] }),
-    ] }],
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Document with equations")],
+          }),
+          new Paragraph({ children: [new TextRun("The Pythagorean theorem:")] }),
+          new Paragraph({ children: [new TextRun("[EQUATION_PLACEHOLDER]")] }),
+          new Paragraph({ children: [new TextRun("End of document.")] }),
+        ],
+      },
+    ],
   });
   const baseBuf = await Packer.toBuffer(base);
   const out = mutateDocumentXml(baseBuf, (xml) => {
@@ -270,11 +401,18 @@ async function equationsDoc() {
 // 10. drawings-doc.docx — base doc + injected <w:drawing> shape.
 async function drawingsDoc() {
   const base = new Document({
-    sections: [{ children: [
-      new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Document with shapes")] }),
-      new Paragraph({ children: [new TextRun("[DRAWING_PLACEHOLDER]")] }),
-      new Paragraph({ children: [new TextRun("End.")] }),
-    ] }],
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Document with shapes")],
+          }),
+          new Paragraph({ children: [new TextRun("[DRAWING_PLACEHOLDER]")] }),
+          new Paragraph({ children: [new TextRun("End.")] }),
+        ],
+      },
+    ],
   });
   const baseBuf = await Packer.toBuffer(base);
   const out = mutateDocumentXml(baseBuf, (xml) => {
@@ -290,16 +428,24 @@ async function drawingsDoc() {
 // 11. rtl-doc.docx — base doc + injected <w:bidi/> RTL paragraph.
 async function rtlDoc() {
   const base = new Document({
-    sections: [{ children: [
-      new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun("Document with RTL paragraph")] }),
-      new Paragraph({ children: [new TextRun("[RTL_PLACEHOLDER]")] }),
-      new Paragraph({ children: [new TextRun("Back to LTR.")] }),
-    ] }],
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun("Document with RTL paragraph")],
+          }),
+          new Paragraph({ children: [new TextRun("[RTL_PLACEHOLDER]")] }),
+          new Paragraph({ children: [new TextRun("Back to LTR.")] }),
+        ],
+      },
+    ],
   });
   const baseBuf = await Packer.toBuffer(base);
   const out = mutateDocumentXml(baseBuf, (xml) => {
     // Inject an RTL paragraph with Arabic text.
-    const rtl = `<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>مرحبا بالعالم</w:t></w:r></w:p>`;
+    const rtl =
+      "<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>مرحبا بالعالم</w:t></w:r></w:p>";
     return xml.replace(/<w:p>[^<]*<w:r><w:t>\[RTL_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/, rtl);
   });
   await writeFile(join(FIXTURES, "rtl-doc.docx"), out);
@@ -321,7 +467,7 @@ async function encryptedDocx() {
 </Types>`;
   const zip = zipSync({
     "[Content_Types].xml": strToU8(contentTypes),
-    "EncryptedPackage": new Uint8Array([0x00, 0x01, 0x02, 0x03]), // dummy bytes
+    EncryptedPackage: new Uint8Array([0x00, 0x01, 0x02, 0x03]), // dummy bytes
   });
   await writeFile(join(FIXTURES, "encrypted.docx"), zip);
   process.stdout.write(`  encrypted.docx (${(zip.length / 1024).toFixed(1)} KB) [synthetic]\n`);
