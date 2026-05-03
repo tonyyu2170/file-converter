@@ -25,6 +25,9 @@ type WorkingLine = {
 };
 
 function modeFontSize(items: WorkingItem[]): number {
+  // Sort ascending so smaller sizes are inserted into `counts` first; Map
+  // preserves insertion order, and the strict `>` comparison below means
+  // ties resolve to the smaller value — matches cluster-font-sizes.ts.
   const sorted = [...items].sort((a, b) => a.fontSize - b.fontSize);
   const counts = new Map<number, number>();
   for (const it of sorted) counts.set(it.fontSize, (counts.get(it.fontSize) ?? 0) + 1);
@@ -40,6 +43,8 @@ function modeFontSize(items: WorkingItem[]): number {
   return best;
 }
 
+// Strict majority — ties (e.g., 1-of-2 items bold) resolve to false.
+// Don't promote a line to bold/italic on weak evidence.
 function majority(items: WorkingItem[], pick: (it: WorkingItem) => boolean): boolean {
   if (items.length === 0) return false;
   let trueCount = 0;
