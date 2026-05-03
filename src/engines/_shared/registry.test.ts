@@ -45,4 +45,14 @@ describe("registry", () => {
     expect(e.id).toBe("pdf-to-md");
     expect(e.cardinality).toBe("single");
   });
+
+  it("loadEngine returns the docx-to-pdf engine module", async () => {
+    const e = await loadEngine("docx-to-pdf");
+    expect(e.id).toBe("docx-to-pdf");
+    expect(e.cardinality).toBe("single");
+  });
+
+  it("listEngineIds includes docx-to-pdf", () => {
+    expect(listEngineIds()).toContain("docx-to-pdf");
+  });
 });
