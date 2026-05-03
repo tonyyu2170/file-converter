@@ -8,9 +8,10 @@ const TOOLS: ToolEntry[] = [
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
   { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
+  { id: "docx-to-pdf", href: "/tools/docx-to-pdf", label: "docx→pdf", group: "DOCS" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS"] as const;
+const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS"] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {
