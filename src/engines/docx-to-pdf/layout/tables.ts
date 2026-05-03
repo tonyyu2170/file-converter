@@ -61,6 +61,7 @@ import { rgb } from "pdf-lib";
 // without polluting production code with a DI seam.
 import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
+import { cloneListState } from "./block-dispatch";
 import { makeDiscardPage } from "./discard-page";
 import type { ColumnContext, ColumnGeometry, Pt } from "./types";
 import { wouldOverflow } from "./y-cursor";
@@ -280,13 +281,23 @@ function measureCellContent(
     ...(parentCtx.bookmarks !== undefined && { bookmarks: parentCtx.bookmarks }),
     ...(parentCtx.warnings !== undefined && { warnings: parentCtx.warnings }),
   };
+  // Phase 13 F5: clone listState for the measure pass. A list paragraph
+  // inside a cell would otherwise bump the global counter twice (once
+  // here in measure, once during the real draw), pathological for cells
+  // containing lists. Other fields (warnings, bookmarks, embeddedImages,
+  // numbering, relationships) intentionally stay shared via the real
+  // `deps` reference — those side effects ARE real and should propagate.
+  const measureDeps: LayoutDeps = {
+    ...deps,
+    listState: cloneListState(deps.listState),
+  };
   const startY = ctx.yPt;
   let pending: ParsedBlock[] = cell.blocks.slice();
   let safety = 100;
   while (pending.length > 0 && safety > 0) {
     const block = pending.shift();
     if (block === undefined) break;
-    const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, deps);
+    const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, measureDeps);
     if (result.remainder !== undefined) {
       pending = [result.remainder, ...pending];
     }

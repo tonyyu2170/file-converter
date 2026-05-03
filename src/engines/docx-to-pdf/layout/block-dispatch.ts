@@ -125,6 +125,29 @@ export type LayoutBlockResult = {
   remainder?: ParsedBlock;
 };
 
+/**
+ * Deep-clone a `ListState` so a measure-pass `layoutBlock` invocation
+ * can advance counters without leaking them into the subsequent draw
+ * pass (Phase 13 F5 — "lists in cells double-bump"). Both nested maps
+ * are cloned: `counters` is `Map<numId, Map<ilvl, n>>`, `lastLevel` is
+ * `Map<numId, ilvl>`. Tables' `measureCellContent` calls this once per
+ * cell to build a scratch `LayoutDeps` whose `listState` is independent
+ * of the orchestrator's running state; counter advances inside the
+ * measure pass are discarded along with the scratch deps.
+ *
+ * Other `LayoutDeps` fields (warnings, bookmarks, embeddedImages, …)
+ * intentionally stay shared — those side effects discovered during
+ * measure (e.g., a missing-anchor warning) are real and should reach
+ * the orchestrator's accumulators.
+ */
+export function cloneListState(state: ListState): ListState {
+  const counters = new Map<string, Map<number, number>>();
+  for (const [numId, perLevel] of state.counters) {
+    counters.set(numId, new Map(perLevel));
+  }
+  return { counters, lastLevel: new Map(state.lastLevel) };
+}
+
 /** Lay out a single block. Dispatches by `block.kind` and (for paragraphs)
  *  whether the paragraph carries a `numPr` list reference. */
 export function layoutBlock(

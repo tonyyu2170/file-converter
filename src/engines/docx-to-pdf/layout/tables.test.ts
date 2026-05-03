@@ -1,4 +1,5 @@
 import type {
+  NumberingDef,
   Paragraph,
   ParsedBlock,
   Run,
@@ -300,6 +301,56 @@ describe("layoutTable — defaults", () => {
       .map((c) => (c.op === "drawText" ? c.text : ""));
     expect(texts).toContain("p1");
     expect(texts).toContain("nested");
+  });
+});
+
+/* ---------- ListState measure-pass isolation (Phase 13 F5) ---------- */
+
+describe("layoutTable — list paragraphs in cells (counter isolation)", () => {
+  it("does not double-bump list counters in cells (measure-pass clones listState)", async () => {
+    // Build a numbering def that exists for numId="1" ilvl=0 so
+    // bumpCounter actually advances (lists.ts gates bumping on a
+    // resolvable level — without a def it short-circuits to default
+    // bullet without touching state).
+    const numbering: Map<string, NumberingDef> = new Map([
+      [
+        "1",
+        {
+          numId: "1",
+          levels: new Map([[0, { ilvl: 0, format: "decimal", text: "%1." }]]),
+        },
+      ],
+    ]);
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps: LayoutDeps = {
+      numbering,
+      relationships: new Map(),
+      bookmarks: new Set(),
+      listState: createListState(),
+      warnings: [],
+    };
+    // Two list paragraphs at numId="1", ilvl=0 inside a single cell.
+    const listPara1: Paragraph = {
+      kind: "paragraph",
+      alignment: "left",
+      runs: [makeRun("First")],
+      numPr: { numId: "1", ilvl: 0 },
+    };
+    const listPara2: Paragraph = {
+      kind: "paragraph",
+      alignment: "left",
+      runs: [makeRun("Second")],
+      numPr: { numId: "1", ilvl: 0 },
+    };
+    const t = makeTable([row([cell([listPara1, listPara2])])], [200]);
+    layoutTable(t, ctx, pdf, deps);
+    // Post-table state: counter at (numId="1", ilvl=0) should be 2 (one
+    // bump per paragraph, real-draw pass only). Pre-fix, the measure
+    // pass's bumps leaked into the same listState so the counter ended
+    // at 4 (2 measure + 2 draw).
+    const counter = deps.listState.counters.get("1")?.get(0);
+    expect(counter).toBe(2);
   });
 });
 
