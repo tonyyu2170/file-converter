@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Line, PdfToMdOptions } from "./to-markdown";
+import type { PdfToMdOptions } from "./options";
+import type { Line } from "./to-markdown";
 import { toMarkdown } from "./to-markdown";
 
 const line = (text: string, fontSize: number, y: number, bold = false, italic = false): Line => ({

@@ -1,6 +1,7 @@
 import { clusterFontSizes } from "./cluster-font-sizes";
 import { detectListMarker } from "./detect-list-marker";
 import { formatLine } from "./format-line";
+import type { PdfToMdOptions } from "./options";
 
 export type Line = {
   text: string;
@@ -11,12 +12,6 @@ export type Line = {
 };
 
 export type Page = Line[];
-
-// Locally declared until Task 3 introduces options.ts; Task 3 will reconcile
-// by importing PdfToMdOptions from "./options" and removing this declaration.
-export type PdfToMdOptions = {
-  pageBreaks: "horizontal-rule" | "none";
-};
 
 // 1.8 = 1.5 × line-height-factor (spec D5: line-height ≈ fontSize × 1.2,
 // gap > 1.5 × line-height → paragraph break). Multiplied against
