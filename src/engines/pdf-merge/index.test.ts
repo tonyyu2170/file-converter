@@ -100,6 +100,20 @@ describe("pdf-merge engine metadata", () => {
     expect(ready).toBe(false);
   });
 
+  it("estimateOutputBytes returns null when fewer than 2 files", () => {
+    expect(engine.estimateOutputBytes?.([], engine.defaultOptions)).toBe(null);
+    const a = new File([new Uint8Array(100)], "a.pdf", { type: "application/pdf" });
+    expect(engine.estimateOutputBytes?.([a], engine.defaultOptions)).toBe(null);
+  });
+
+  it("estimateOutputBytes returns the sum of input sizes for 2+ files", () => {
+    const a = new File([new Uint8Array(100)], "a.pdf", { type: "application/pdf" });
+    const b = new File([new Uint8Array(250)], "b.pdf", { type: "application/pdf" });
+    const c = new File([new Uint8Array(750)], "c.pdf", { type: "application/pdf" });
+    expect(engine.estimateOutputBytes?.([a, b], engine.defaultOptions)).toBe(350);
+    expect(engine.estimateOutputBytes?.([a, b, c], engine.defaultOptions)).toBe(1100);
+  });
+
   it("isReadyToConvert returns true when all rows are valid", () => {
     const ready = engine.isReadyToConvert?.({
       rows: [

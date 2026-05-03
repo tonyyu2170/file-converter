@@ -18,6 +18,12 @@ const engine: MultiInputEngine<PdfMergeOptions, OutputItem> = {
     if (opts.rows.length < 2) return false;
     return opts.rows.every((r) => r.pageCount !== undefined && !r.encrypted && !r.rangeError);
   },
+  estimateOutputBytes(files) {
+    if (files.length < 2) return null;
+    // pdf-lib usually shaves a few percent off via font/object dedup, so the
+    // sum of input sizes is a tight upper bound — close enough to be honest.
+    return files.reduce((sum, f) => sum + f.size, 0);
+  },
   validate(files) {
     if (files.length === 0) return { ok: false, reason: "Drop at least one PDF" };
     if (files.length === 1) return { ok: false, reason: "Need 2+ PDFs to merge" };
