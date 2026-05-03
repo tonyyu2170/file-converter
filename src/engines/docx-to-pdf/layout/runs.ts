@@ -196,7 +196,13 @@ export function drawRunSpan(
       ctx.bookmarks ?? new Set<string>(),
     );
     if (result.kind === "skipped" && ctx.warnings !== undefined) {
-      ctx.warnings.push(result.reason);
+      // Dedupe: a missing anchor referenced from N runs (or seen via the
+      // tables.ts measure-then-draw two-pass) would push N identical
+      // strings without this guard. Bounded `includes` scan is fine —
+      // warnings arrays are small.
+      if (!ctx.warnings.includes(result.reason)) {
+        ctx.warnings.push(result.reason);
+      }
     }
   }
 

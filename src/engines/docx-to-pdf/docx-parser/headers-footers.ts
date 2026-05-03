@@ -88,7 +88,7 @@ function parseHeaderOrFooter(
     return { value: [], warnings };
   }
 
-  const ctx: BlockWalkContext = { warnings, styles };
+  const ctx: BlockWalkContext = { warnings, styles, resolvedStyleCache: new Map() };
   const blocks = parseBlocks(getOrderedChildren(rootEntry), ctx);
   return { value: blocks, warnings };
 }

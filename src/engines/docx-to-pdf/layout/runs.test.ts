@@ -221,6 +221,50 @@ describe("drawRunSpan", () => {
     drawRunSpan(ctx, run, "click", 100, 200);
     expect(ctx.warnings).toEqual([]);
   });
+
+  it("dedupes the anchor-not-found warning across repeated references", () => {
+    // 50 references to the same missing anchor (or a tables.ts measure-pass
+    // followed by draw-pass, which calls drawRunSpan twice for cells)
+    // would push 50 identical strings without dedupe.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    for (let i = 0; i < 5; i++) {
+      drawRunSpan(ctx, run, "click", 100, 200);
+    }
+    expect(ctx.warnings).toEqual(["anchor not found: missing-target"]);
+  });
+
+  it("dedupes per-anchor — different missing anchors each get one warning", () => {
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "a", hyperlinkAnchor: "one" }),
+      "a",
+      100,
+      200,
+    );
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "b", hyperlinkAnchor: "two" }),
+      "b",
+      100,
+      200,
+    );
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "a", hyperlinkAnchor: "one" }),
+      "a",
+      100,
+      200,
+    );
+    expect(ctx.warnings).toEqual(["anchor not found: one", "anchor not found: two"]);
+  });
 });
 
 describe("decorationThickness", () => {

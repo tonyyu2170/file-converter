@@ -89,7 +89,7 @@ export function parseFootnotesXml(
   }
 
   const out = new Map<string, ParsedBlock[]>();
-  const ctx: BlockWalkContext = { warnings, styles };
+  const ctx: BlockWalkContext = { warnings, styles, resolvedStyleCache: new Map() };
 
   for (const item of findOrderedChildren(rootEntry, itemTag)) {
     const id = getOrderedAttr(item, "w:id");

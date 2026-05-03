@@ -78,6 +78,14 @@ import {
 export type BlockWalkContext = {
   warnings: string[];
   styles: Map<string, Style>;
+  /**
+   * Per-walk cache for `resolveStyle` results, keyed by paragraph styleId.
+   * The chain walk + cycle-warning emission happens once per styleId rather
+   * than once per paragraph — so a 100-paragraph document of `Heading1`
+   * paragraphs with a malformed `basedOn` cycle no longer emits 100
+   * identical cycle warnings.
+   */
+  resolvedStyleCache: Map<string, StyleRunProps>;
 };
 
 export type ParseBodyResult = {
@@ -130,7 +138,7 @@ export function parseBodyXml(xml: string, styles: Map<string, Style> = new Map()
     };
   }
 
-  const ctx: BlockWalkContext = { warnings, styles };
+  const ctx: BlockWalkContext = { warnings, styles, resolvedStyleCache: new Map() };
   const sections = walkBodySections(getOrderedChildren(bodyEntry), ctx);
   return { sections, warnings };
 }
@@ -296,16 +304,23 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
   const numPr = readNumPr(pPr);
 
   // Resolve the paragraph's style chain (pStyle → basedOn → ... → docDefaults)
-  // ONCE per paragraph; the resulting `runProps` are merged underneath each
-  // run's explicit rPr values inside `buildRun`. `resolveStyle` returns
-  // empty props for an unknown styleId or an empty styles map, so the
-  // call is safe even when the parent caller didn't supply a styles map.
-  // Cycle-detection warnings are surfaced once here, not per-run.
+  // — cached per-styleId on `ctx.resolvedStyleCache`. The chain walk runs
+  // once per unique styleId across the body walk; subsequent paragraphs of
+  // the same style hit the cache. Cycle warnings are emitted at most once
+  // per styleId. `resolveStyle` returns empty props for an unknown styleId
+  // or an empty styles map, so the call is safe even when the parent caller
+  // didn't supply a styles map.
   let styleRunProps: StyleRunProps | undefined;
   if (styleId !== undefined) {
-    const resolved = resolveStyle(ctx.styles, styleId);
-    ctx.warnings.push(...resolved.warnings);
-    styleRunProps = resolved.runProps;
+    const cached = ctx.resolvedStyleCache.get(styleId);
+    if (cached !== undefined) {
+      styleRunProps = cached;
+    } else {
+      const resolved = resolveStyle(ctx.styles, styleId);
+      ctx.warnings.push(...resolved.warnings);
+      styleRunProps = resolved.runProps;
+      ctx.resolvedStyleCache.set(styleId, resolved.runProps);
+    }
   }
 
   // Walk run-level children in order.
