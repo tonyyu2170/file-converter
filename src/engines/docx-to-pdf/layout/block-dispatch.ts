@@ -35,7 +35,7 @@ import type {
   ParsedBlock,
   RelationshipTarget,
 } from "@/engines/docx-to-pdf/docx-parser/types";
-import type { PDFDocument } from "pdf-lib";
+import type { PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { layoutListItem } from "./lists";
 import type { ListState } from "./lists";
 import { layoutParagraph } from "./paragraph";
@@ -62,6 +62,42 @@ export type LayoutDeps = {
    *  calls return and merges it into `ParsedDocx.warnings`. Layout
    *  modules append; consumers never mutate it back. */
   warnings: string[];
+  /**
+   * Pre-embedded images keyed by zip-relative media path
+   * (e.g. `word/media/image1.png`). The orchestrator (Task 10) embeds
+   * every `parsed.media` asset upfront; layout primitives look up the
+   * `PDFImage` here when they encounter an `inlineImage` run.
+   *
+   * Optional so existing tests and code paths that don't care about
+   * inline images can omit the map. When undefined, paragraph/runs
+   * skip the image silently (preserving the Task 7 behavior).
+   */
+  embeddedImages?: Map<string, PDFImage>;
+  /**
+   * Resolves a zip-relative media path to a path key for `embeddedImages`
+   * via the `relationships` map. Optional — defaults to a no-op. The
+   * orchestrator wires this so paragraph-level runs can resolve
+   * `Run.inlineImage.rel` (an rId) to the embedded image. The runtime
+   * lookup performs `relationships.get(rel) → target → "word/" + target`
+   * (target is relative to `word/`).
+   */
+  resolveImagePath?: (rel: string) => string | undefined;
+  /**
+   * Footnote-marker hook. Called by `paragraph.ts` when it encounters a
+   * run carrying `Run.footnoteRef` or `Run.endnoteRef`. The orchestrator
+   * (Task 10) attaches this so it can:
+   *   1. Assign a marker label ("1", "2", "i", "ii", …).
+   *   2. Track which page the marker landed on (for post-walk flush).
+   *
+   * Returns the marker label to be drawn as a superscript span in place
+   * of the original run's text. Optional — when undefined the run is
+   * rendered as the parser-emitted text (typically empty for
+   * markers-only runs).
+   *
+   * `kind` distinguishes footnote refs from endnote refs so the
+   * accumulator can route them to the right bucket.
+   */
+  onFootnoteRef?: (kind: "footnote" | "endnote", noteId: string, page: PDFPage) => string;
 };
 
 export type LayoutBlockResult = {
@@ -90,7 +126,7 @@ export function layoutBlock(
       const result = layoutListItem(block, ctx, pdfDoc, deps);
       return resultFromList(result);
     }
-    const result = layoutParagraph(block, ctx, pdfDoc);
+    const result = layoutParagraph(block, ctx, pdfDoc, deps);
     return resultFromParagraph(result);
   }
 

@@ -34,6 +34,8 @@
 
 import type { Paragraph, Run } from "@/engines/docx-to-pdf/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
+import type { LayoutDeps } from "./block-dispatch";
+import { drawInlineImage, fitImageToColumn } from "./images";
 import { LINE_HEIGHT_FACTOR, drawRunSpan, measureFragment, runFontSizePt } from "./runs";
 import type { ColumnContext, Pt } from "./types";
 import { pageBreak, wouldOverflow } from "./y-cursor";
@@ -58,11 +60,26 @@ export type LayoutParagraphResult = {
 /**
  * Lay a paragraph onto the current column, advancing `ctx.yPt`. Returns
  * the height consumed plus a remainder paragraph if the column ran out.
+ *
+ * `deps` is optional so the test surface used pre-Task 10 (which calls
+ * `layoutParagraph(p, ctx, pdfDoc)` without deps) keeps working. When
+ * present, the orchestrator's `onFootnoteRef` and `embeddedImages` hooks
+ * are honored:
+ *   - `Run.footnoteRef` / `Run.endnoteRef`: emit a superscript label by
+ *     calling `deps.onFootnoteRef`. The label replaces the run's text
+ *     for layout purposes (the original `Run.text` is typically empty
+ *     anyway — the marker is the visible content).
+ *   - `Run.inlineImage`: resolve via `deps.resolveImagePath` +
+ *     `deps.embeddedImages`, draw at column-x with shrink-to-fit, advance
+ *     y-cursor by the image's drawn height. When the image can't be
+ *     resolved (no map / missing rel), fall through to the Task-7 silent-
+ *     skip behavior.
  */
 export function layoutParagraph(
   p: Paragraph,
   ctx: ColumnContext,
   pdfDoc: PDFDocument,
+  deps?: LayoutDeps,
 ): LayoutParagraphResult {
   const startYPt = ctx.yPt;
   const heading = headingProps(p.styleId);
@@ -116,6 +133,7 @@ export function layoutParagraph(
         sizeOverride,
         boldOverride,
         p.alignment,
+        deps,
       );
       if (outcome.kind === "overflow") {
         // The break has already been honored on this call; the remainder
@@ -131,7 +149,25 @@ export function layoutParagraph(
           synth,
         );
       }
+      if (outcome.kind === "image-block") {
+        // (Unreachable — inline images don't carry break flags in v1.)
+        currentLine = newLine();
+        continue;
+      }
       currentLine = outcome.line;
+      continue;
+    }
+
+    // Inline-image runs are drawn as a standalone block: flush the
+    // current line first (so any "before image" text is on its own
+    // line above the image), then draw, then continue on a fresh line.
+    if (run.inlineImage !== undefined) {
+      const flush = flushAndAdvance(ctx, currentLine, p.alignment);
+      if (flush === "overflow") {
+        return overflowAt(p, runIdx, run.text, currentLine, ctx, startYPt);
+      }
+      currentLine = newLine();
+      drawInlineImageRun(run, ctx, deps);
       continue;
     }
 
@@ -143,6 +179,7 @@ export function layoutParagraph(
       sizeOverride,
       boldOverride,
       p.alignment,
+      deps,
     );
     if (outcome.kind === "overflow") {
       return makeOverflowFromTail(
@@ -153,6 +190,11 @@ export function layoutParagraph(
         ctx,
         startYPt,
       );
+    }
+    if (outcome.kind === "image-block") {
+      // (Unreachable — `inlineImage` is short-circuited above. Defensive.)
+      currentLine = newLine();
+      continue;
     }
     currentLine = outcome.line;
   }
@@ -210,12 +252,15 @@ type RunOutcome =
       tailText: string;
       /** The line buffer that couldn't be flushed. */
       unflushedLine: LineBuf;
-    };
+    }
+  | { kind: "image-block" };
 
 /**
  * Layout a single run into the current line buffer; may produce multiple
  * lines via word-wrap or `\n` forced breaks. Returns the in-progress
- * line buffer on success, or an overflow record on column underflow.
+ * line buffer on success, an overflow record on column underflow, or
+ * an `image-block` indication when the run carried an inline image
+ * (image was drawn as a standalone block; caller starts a fresh line).
  */
 function layoutRunIntoLine(
   run: Run,
@@ -225,20 +270,34 @@ function layoutRunIntoLine(
   sizeOverride: Pt | undefined,
   boldOverride: boolean | undefined,
   alignment: Paragraph["alignment"],
+  deps?: LayoutDeps,
 ): RunOutcome {
-  // Inline-image runs are out of scope for Task 7. TODO(task-10): wire
-  // image embedding through the orchestrator and call drawInlineImage.
+  // Inline-image runs are short-circuited by the caller (the paragraph-
+  // level loop) which flushes the in-flight line BEFORE invoking us.
+  // This branch is defensive only; if a caller forgets to flush it'll
+  // still draw the image (line gets discarded — same prior behavior).
   if (run.inlineImage !== undefined) {
-    return { kind: "ok", line: initialLine };
+    drawInlineImageRun(run, ctx, deps);
+    return { kind: "image-block" };
   }
 
-  const overrides = buildOverrides(run, sizeOverride, boldOverride);
+  // Footnote / endnote marker substitution. The run's text is replaced
+  // by the orchestrator-supplied label via deps.onFootnoteRef. Drawing
+  // continues through the normal text path with a smaller size to give
+  // the marker a superscript-ish appearance.
+  const markerOverride = resolveMarkerOverrides(run, sizeOverride, boldOverride, deps, ctx.page);
+
+  const overrides = markerOverride?.overrides ?? buildOverrides(run, sizeOverride, boldOverride);
   const heightPt = (overrides.sizePt ?? runFontSizePt(run)) * LINE_HEIGHT_FACTOR;
   const colW = ctx.column.widthPt;
 
   let line = initialLine;
   let i = 0;
-  const text = run.text;
+  // Use the marker label as the text source when this run carried a
+  // footnote/endnote ref AND the orchestrator returned a label. The
+  // parser typically emits empty text for marker-only runs, so this
+  // substitution is what makes the marker visible.
+  const text = markerOverride !== null ? markerOverride.text : run.text;
 
   while (i < text.length) {
     const ch = text[i];
@@ -564,4 +623,89 @@ function overflowAt(
   startYPt: Pt,
 ): LayoutParagraphResult {
   return makeOverflowFromTail(p, currentRunIdx, remainingText, unflushedLine, ctx, startYPt);
+}
+
+/* ---------- Inline image (Task 10) ---------- */
+
+/**
+ * Resolve a `Run.inlineImage` to a `PDFImage` via the orchestrator's
+ * `embeddedImages` + `resolveImagePath` hooks and draw it as a
+ * standalone block. Advances `ctx.yPt` by the drawn image height. When
+ * the image isn't resolvable (no deps, missing rel, missing entry),
+ * skips silently — the parser already accumulated any "missing image"
+ * warning in `ParsedDocx.warnings` so we don't double-report here.
+ *
+ * Doesn't perform an overflow check itself: the column may legitimately
+ * be smaller than the image's natural height. `fitImageToColumn`
+ * shrinks for width; vertical overflow is left to the multi-column /
+ * single-column page-break loop above us.
+ */
+function drawInlineImageRun(run: Run, ctx: ColumnContext, deps: LayoutDeps | undefined): void {
+  if (run.inlineImage === undefined) return;
+  if (deps?.embeddedImages === undefined) return;
+  const resolve = deps.resolveImagePath;
+  if (resolve === undefined) return;
+  const path = resolve(run.inlineImage.rel);
+  if (path === undefined) return;
+  const img = deps.embeddedImages.get(path);
+  if (img === undefined) return;
+
+  const fit = fitImageToColumn(run.inlineImage.widthPt, run.inlineImage.heightPt, ctx);
+  if (fit.widthPt <= 0 || fit.heightPt <= 0) return;
+
+  drawInlineImage(ctx, img, run, ctx.column.xPt, ctx.yPt);
+  ctx.yPt -= fit.heightPt;
+}
+
+/* ---------- Footnote / endnote markers (Task 10) ---------- */
+
+/**
+ * Footnote/endnote marker substitution. When the run carries a
+ * `footnoteRef` or `endnoteRef` AND `deps.onFootnoteRef` is wired,
+ * compute:
+ *   - `text`: the marker label string ("1", "2", "i", …) returned by
+ *     the orchestrator's hook.
+ *   - `overrides`: render the marker at ~70% of the run's resolved
+ *     font size (a poor-man's superscript — pdf-lib has no baseline-
+ *     shift; reducing size keeps the marker visually distinct without
+ *     baseline gymnastics that would mis-align with surrounding text).
+ *
+ * Returns `null` when no marker is in play (no ref, or no hook), so
+ * the caller falls back to the run's own text.
+ */
+function resolveMarkerOverrides(
+  run: Run,
+  sizeOverride: Pt | undefined,
+  boldOverride: boolean | undefined,
+  deps: LayoutDeps | undefined,
+  page: ColumnContext["page"],
+): { text: string; overrides: { bold?: boolean; italic?: boolean; sizePt?: Pt } } | null {
+  if (deps?.onFootnoteRef === undefined) return null;
+  let kind: "footnote" | "endnote" | null = null;
+  let noteId: string | null = null;
+  if (run.footnoteRef !== undefined) {
+    kind = "footnote";
+    noteId = run.footnoteRef;
+  } else if (run.endnoteRef !== undefined) {
+    kind = "endnote";
+    noteId = run.endnoteRef;
+  }
+  if (kind === null || noteId === null) return null;
+
+  const label = deps.onFootnoteRef(kind, noteId, page);
+
+  // Build overrides from scratch so we don't accidentally inherit
+  // sizeOverride twice. Run-level explicit sizes still take priority
+  // (a heading-styled footnote ref keeps its heading size baseline,
+  // then we shrink to ~70% for the marker).
+  const baseSizePt =
+    run.fontSizePt ??
+    sizeOverride ??
+    11; /* DEFAULT_FONT_SIZE_PT, hardcoded to avoid cyclic import */
+  const markerSizePt = baseSizePt * 0.7;
+  const overrides: { bold?: boolean; italic?: boolean; sizePt?: Pt } = {
+    sizePt: markerSizePt,
+  };
+  if (boldOverride === true) overrides.bold = true;
+  return { text: label, overrides };
 }

@@ -1,0 +1,362 @@
+/**
+ * Layout orchestrator — `layoutDocument(parsed)`.
+ *
+ * Drives the full ParsedDocx → PDF-bytes pipeline:
+ *
+ *   1. Create a fresh `PDFDocument`, register fontkit, embed all 10
+ *      bundled font slots (Inter ×4, Lora ×4, JetBrains Mono ×2).
+ *   2. Pre-embed every PNG/JPEG asset in `parsed.media` as a `PDFImage`
+ *      keyed by zip-relative path. Failures (corrupt bytes, unsupported
+ *      format) accumulate as `image skipped: …` warnings.
+ *   3. Build the orchestrator-scoped `LayoutDeps` with:
+ *      - `numbering`, `relationships` from the parser.
+ *      - Fresh `listState` and `warnings` accumulators.
+ *      - `embeddedImages` map + `resolveImagePath` callback (rId → path).
+ *      - `onFootnoteRef` callback bound to a `FootnoteAccumulator`.
+ *   4. For each section:
+ *      - Pre-walk the section's blocks to collect footnote refs.
+ *      - Estimate section-wide footnote-area reservation (a single
+ *        `Pt` value passed through `MultiColumnInput`).
+ *      - Snapshot `pdfDoc.getPageCount()` before, call `layoutSection`,
+ *        diff after to obtain the page refs added.
+ *      - Post-walk those page refs: render header/footer per page +
+ *        flush any registered footnotes.
+ *   5. After all sections: render endnote pages (if any).
+ *   6. Save → `Uint8Array`. Dedupe warnings; merge with parser warnings.
+ *
+ * Async surface: `layoutDocument` is the only `async` in the layout
+ * tree. Async work is font fetching, fontkit embedding, and image
+ * embedding — all I/O / pdf-lib internals. Every helper called during
+ * the section walk is sync.
+ *
+ * Test injection:
+ *   `layoutDocument(parsed, { loadFont })` lets tests substitute the
+ *   default `loadFontBytes` (which calls `fetch("/fonts/...")`) with
+ *   an fs-backed reader. The worker (Task 12) calls without overrides.
+ */
+
+import { loadFontBytes as defaultLoadFontBytes } from "@/lib/font-loader";
+import fontkit from "@pdf-lib/fontkit";
+import type { PDFDocument as PDFDocumentType, PDFImage, PDFPage } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
+import type { ParsedDocx, RelationshipTarget } from "../docx-parser/types";
+import type { BundledFontFamily, FontWeight } from "../fonts/types";
+import type { LayoutDeps } from "./block-dispatch";
+import {
+  collectFootnoteRefsInBlocks,
+  estimateSectionFootnoteHeight,
+  flushFootnoteAreaToPage,
+  newFootnoteAccumulator,
+  registerMarker,
+  renderEndnotePages,
+} from "./footnotes";
+import { renderFooterForPage, renderHeaderForPage } from "./headers-footers";
+import { embedInlineImage, sniffImageFormat } from "./images";
+import { layoutSection } from "./multi-column";
+import type { EmbeddedFonts, PageGeometry } from "./types";
+import { dedupe, imageSkippedWarning } from "./warnings";
+
+/* ------------------------------------------------------------------ */
+/*   Public API                                                       */
+/* ------------------------------------------------------------------ */
+
+export type LayoutDocumentResult = {
+  pdfBytes: Uint8Array;
+  warnings: string[];
+};
+
+/** Async font loader injection signature — matches `loadFontBytes`. */
+export type LoadFontFn = (
+  family: BundledFontFamily,
+  weight: FontWeight,
+  italic: boolean,
+) => Promise<ArrayBuffer>;
+
+export type LayoutDocumentOptions = {
+  /**
+   * Async font loader. Defaults to `loadFontBytes` from
+   * `src/lib/font-loader.ts` which fetches `/fonts/<filename>.ttf` from
+   * the same origin. Tests override with an fs-backed reader.
+   */
+  loadFont?: LoadFontFn;
+};
+
+/**
+ * Top-level orchestrator. Parses Docx → PDF bytes.
+ *
+ * Throws when font loading fails (without fonts the engine can't run);
+ * surfaces parser-detected feature gaps and runtime image-embed
+ * failures via the returned `warnings` array.
+ */
+export async function layoutDocument(
+  parsed: ParsedDocx,
+  options: LayoutDocumentOptions = {},
+): Promise<LayoutDocumentResult> {
+  const loadFont = options.loadFont ?? defaultLoadFontBytes;
+
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
+
+  const fonts = await embedAllBundledFonts(pdfDoc, loadFont);
+
+  const warnings: string[] = [];
+  const { embeddedImages, imageWarnings } = await embedAllMedia(pdfDoc, parsed);
+  warnings.push(...imageWarnings);
+
+  const acc = newFootnoteAccumulator();
+  const resolveImagePath = makeImagePathResolver(parsed.relationships);
+  const onFootnoteRef = (kind: "footnote" | "endnote", noteId: string, page: PDFPage): string =>
+    registerMarker(acc, kind, noteId, page);
+
+  const deps: LayoutDeps = {
+    numbering: parsed.numbering,
+    relationships: parsed.relationships,
+    listState: { counters: new Map(), lastLevel: new Map() },
+    warnings: [],
+    embeddedImages,
+    resolveImagePath,
+    onFootnoteRef,
+  };
+
+  // Section walk.
+  for (const section of parsed.sections) {
+    const pageGeometry: PageGeometry = {
+      widthPt: section.pageSize.widthPt,
+      heightPt: section.pageSize.heightPt,
+      marginTopPt: section.pageMargins.top,
+      marginRightPt: section.pageMargins.right,
+      marginBottomPt: section.pageMargins.bottom,
+      marginLeftPt: section.pageMargins.left,
+    };
+
+    // Pre-walk: collect footnote refs and estimate reserved height.
+    const sectionFootnoteIds = collectFootnoteRefsInBlocks(section.blocks);
+    const bodyColumnWidth =
+      pageGeometry.widthPt - pageGeometry.marginLeftPt - pageGeometry.marginRightPt;
+    const reservedRaw = estimateSectionFootnoteHeight(
+      sectionFootnoteIds,
+      parsed,
+      fonts,
+      bodyColumnWidth,
+      pdfDoc,
+    );
+    // Cap reserved height at half the body height so a section with
+    // pathologically heavy footnotes doesn't completely starve the body.
+    const bodyHeight =
+      pageGeometry.heightPt - pageGeometry.marginTopPt - pageGeometry.marginBottomPt;
+    const footnoteReservedHeightPt = Math.min(reservedRaw, bodyHeight * 0.5);
+    if (reservedRaw > bodyHeight * 0.5) {
+      deps.warnings.push(
+        "footnote area exceeds 50% of page body — content may overlap with footnotes",
+      );
+    }
+
+    const beforeCount = pdfDoc.getPageCount();
+    const result = layoutSection(
+      {
+        blocks: section.blocks,
+        columnCount: Math.max(1, section.columns.count),
+        columnGutterPt: section.columns.spaceBetween,
+        pageGeometry,
+        fonts,
+        deps,
+        footnoteReservedHeightPt,
+      },
+      pdfDoc,
+    );
+    const afterCount = pdfDoc.getPageCount();
+
+    // Post-walk: render header/footer + flush footnotes per page.
+    const allPages = pdfDoc.getPages();
+    const sectionPages = allPages.slice(beforeCount, afterCount);
+    const sectionPageCount = sectionPages.length;
+    for (let i = 0; i < sectionPages.length; i++) {
+      const page = sectionPages[i];
+      if (page === undefined) continue;
+      const pageNumber = i + 1; // 1-indexed within the section
+      renderHeaderForPage(
+        page,
+        pageNumber,
+        sectionPageCount,
+        section,
+        parsed,
+        pageGeometry,
+        fonts,
+        deps,
+        pdfDoc,
+      );
+      renderFooterForPage(
+        page,
+        pageNumber,
+        sectionPageCount,
+        section,
+        parsed,
+        pageGeometry,
+        fonts,
+        deps,
+        pdfDoc,
+      );
+      flushFootnoteAreaToPage(page, acc, parsed, pageGeometry, fonts, deps, pdfDoc);
+    }
+
+    // Suppress `result.endingCtx` — the orchestrator doesn't reuse it
+    // (each section starts fresh on a new page per OOXML semantics).
+    void result;
+  }
+
+  // Final endnote pages.
+  if (parsed.sections.length > 0) {
+    const lastSection = parsed.sections[parsed.sections.length - 1];
+    if (lastSection !== undefined) {
+      const endnotePageGeometry: PageGeometry = {
+        widthPt: lastSection.pageSize.widthPt,
+        heightPt: lastSection.pageSize.heightPt,
+        marginTopPt: lastSection.pageMargins.top,
+        marginRightPt: lastSection.pageMargins.right,
+        marginBottomPt: lastSection.pageMargins.bottom,
+        marginLeftPt: lastSection.pageMargins.left,
+      };
+      renderEndnotePages(pdfDoc, acc, parsed, endnotePageGeometry, fonts, deps);
+    }
+  }
+
+  // Empty-document defense: pdf-lib refuses to save a doc with zero
+  // pages. A DOCX with zero sections (or all-empty sections) hits this.
+  if (pdfDoc.getPageCount() === 0) {
+    const fallbackGeometry: PageGeometry =
+      parsed.sections[0] !== undefined
+        ? {
+            widthPt: parsed.sections[0].pageSize.widthPt,
+            heightPt: parsed.sections[0].pageSize.heightPt,
+            marginTopPt: parsed.sections[0].pageMargins.top,
+            marginRightPt: parsed.sections[0].pageMargins.right,
+            marginBottomPt: parsed.sections[0].pageMargins.bottom,
+            marginLeftPt: parsed.sections[0].pageMargins.left,
+          }
+        : {
+            widthPt: 612,
+            heightPt: 792,
+            marginTopPt: 72,
+            marginRightPt: 72,
+            marginBottomPt: 72,
+            marginLeftPt: 72,
+          };
+    pdfDoc.addPage([fallbackGeometry.widthPt, fallbackGeometry.heightPt]);
+  }
+
+  const pdfBytes = await pdfDoc.save();
+
+  // Merge parser warnings + layout warnings, dedupe.
+  const allWarnings = dedupe([...parsed.warnings, ...deps.warnings, ...warnings]);
+
+  return { pdfBytes, warnings: allWarnings };
+}
+
+/* ------------------------------------------------------------------ */
+/*   Font embedding                                                   */
+/* ------------------------------------------------------------------ */
+
+async function embedAllBundledFonts(
+  pdfDoc: PDFDocumentType,
+  loadFont: LoadFontFn,
+): Promise<EmbeddedFonts> {
+  const embed = async (family: BundledFontFamily, weight: FontWeight, italic: boolean) => {
+    const bytes = await loadFont(family, weight, italic);
+    return pdfDoc.embedFont(bytes, { subset: true });
+  };
+
+  // Load all bytes in parallel — they're independent. Embedding itself
+  // is per-font and pdf-lib serializes the registration internally.
+  const [
+    interRegular,
+    interBold,
+    interItalic,
+    interBoldItalic,
+    loraRegular,
+    loraBold,
+    loraItalic,
+    loraBoldItalic,
+    jetRegular,
+    jetBold,
+  ] = await Promise.all([
+    embed("inter", 400, false),
+    embed("inter", 700, false),
+    embed("inter", 400, true),
+    embed("inter", 700, true),
+    embed("lora", 400, false),
+    embed("lora", 700, false),
+    embed("lora", 400, true),
+    embed("lora", 700, true),
+    embed("jetbrains-mono", 400, false),
+    embed("jetbrains-mono", 700, false),
+  ]);
+
+  return {
+    inter: {
+      regular: interRegular,
+      bold: interBold,
+      italic: interItalic,
+      boldItalic: interBoldItalic,
+    },
+    lora: {
+      regular: loraRegular,
+      bold: loraBold,
+      italic: loraItalic,
+      boldItalic: loraBoldItalic,
+    },
+    jetbrainsMono: {
+      regular: jetRegular,
+      bold: jetBold,
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*   Image embedding                                                  */
+/* ------------------------------------------------------------------ */
+
+async function embedAllMedia(
+  pdfDoc: PDFDocumentType,
+  parsed: ParsedDocx,
+): Promise<{ embeddedImages: Map<string, PDFImage>; imageWarnings: string[] }> {
+  const out = new Map<string, PDFImage>();
+  const warnings: string[] = [];
+  for (const [path, asset] of parsed.media) {
+    const fmt = sniffImageFormat(asset.bytes);
+    if (fmt === "unknown") {
+      warnings.push(imageSkippedWarning(path, "unknown format"));
+      continue;
+    }
+    try {
+      const img = await embedInlineImage(asset, pdfDoc);
+      out.set(path, img);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "embed failed";
+      warnings.push(imageSkippedWarning(path, reason));
+    }
+  }
+  return { embeddedImages: out, imageWarnings: warnings };
+}
+
+/**
+ * Build a function that resolves a relationship rId (e.g., "rId5") to
+ * the zip-relative media path used as the key in `embeddedImages`.
+ *
+ * `relationships` stores targets relative to `word/` (e.g.,
+ * `media/image1.png`); the parser indexed media under the full path
+ * `word/media/image1.png`. We prepend `word/` here to bridge.
+ *
+ * Returns `undefined` for unresolvable rIds so callers can skip cleanly.
+ */
+function makeImagePathResolver(
+  relationships: Map<string, RelationshipTarget>,
+): (rel: string) => string | undefined {
+  return (rel: string) => {
+    const target = relationships.get(rel);
+    if (target === undefined) return undefined;
+    if (target.type !== "image") return undefined;
+    const t = target.target;
+    if (t.startsWith("word/")) return t;
+    return `word/${t.replace(/^\/+/, "")}`;
+  };
+}

@@ -107,6 +107,17 @@ export type MultiColumnInput = {
   pageGeometry: PageGeometry;
   fonts: EmbeddedFonts;
   deps: LayoutDeps;
+  /**
+   * Pre-reserved height (pt) at the bottom of every page in this section
+   * for the footnote area. The orchestrator (Task 10) computes this
+   * estimate ahead of time and passes it through; the layout engine
+   * adjusts each column's `minYPt` accordingly so body content stops
+   * before the reserved band.
+   *
+   * Optional / defaults to 0 (no reservation). Pre-Task-10 callers omit
+   * this; Task-10's orchestrator always supplies it.
+   */
+  footnoteReservedHeightPt?: Pt;
 };
 
 export type MultiColumnResult = {
@@ -147,7 +158,10 @@ export function layoutSection(input: MultiColumnInput, pdfDoc: PDFDocument): Mul
  */
 function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColumnResult {
   const { pageGeometry, fonts, deps } = input;
-  const { maxYPt, minYPt } = bodyYBounds(pageGeometry);
+  const reserved = Math.max(0, input.footnoteReservedHeightPt ?? 0);
+  const bounds = bodyYBounds(pageGeometry);
+  const maxYPt = bounds.maxYPt;
+  const minYPt = bounds.minYPt + reserved;
   const column: ColumnGeometry = {
     xPt: pageGeometry.marginLeftPt,
     widthPt: pageGeometry.widthPt - pageGeometry.marginLeftPt - pageGeometry.marginRightPt,
@@ -239,7 +253,10 @@ function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): Multi
 
 function layoutBalanced(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColumnResult {
   const { pageGeometry, columnCount, columnGutterPt } = input;
-  const { maxYPt, minYPt } = bodyYBounds(pageGeometry);
+  const reserved = Math.max(0, input.footnoteReservedHeightPt ?? 0);
+  const bounds = bodyYBounds(pageGeometry);
+  const maxYPt = bounds.maxYPt;
+  const minYPt = bounds.minYPt + reserved;
   const bodyHeight = maxYPt - minYPt;
 
   const columns = computeColumnGeometries(pageGeometry, columnCount, columnGutterPt);
