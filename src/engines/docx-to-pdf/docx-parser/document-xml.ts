@@ -24,7 +24,10 @@
  * - `<m:oMath>` / `<m:oMathPara>` (Word equations / OMML) → "equation skipped".
  * - Paragraph `<w:bidi/>` or any run with `<w:rtl/>` → "RTL paragraph skipped".
  * - `<w:drawing>` whose graphic content is *not* an inline image (no
- *   `<a:blip>` under `<wp:inline>`) → "drawing skipped".
+ *   `<a:blip>` under `<wp:inline>`) → silently dropped from the run flow,
+ *   with a single "drawing skipped" warning per paragraph. Paragraphs
+ *   that consist entirely of such shapes (no text runs survive) become
+ *   a "drawing" skip-with-warning block.
  * - `<w:object>` (OLE) and `<w:fldChar>` (complex field codes) → silently
  *   dropped (visible text from preceding/following runs is preserved).
  * - `<w:ins>` content kept; `<w:del>` content dropped (track changes).
@@ -255,17 +258,16 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
 
   // Non-image drawing detection: <w:drawing> whose graphic content has no
   // <a:blip>. Distinguishes inline images (kept) from DrawingML shapes /
-  // SmartArt (skipped). If *any* drawing in the paragraph is a shape, the
-  // whole paragraph is treated as a drawing skip — the shape is the most
-  // visually significant element of the paragraph and partial rendering
-  // would be misleading.
+  // SmartArt (skipped). When a paragraph mixes a shape with text runs, the
+  // shape is dropped silently from the run flow (see `parseRun`) and we
+  // emit a single paragraph-level warning here so layout can surface it.
+  // A paragraph that contains *only* shapes (no text runs survive the walk
+  // below) still collapses to a skip-with-warning block — there is nothing
+  // to preserve.
   const drawings = findAllDescendants(pNode, "w:drawing");
-  if (drawings.length > 0) {
-    const hasShape = drawings.some((d) => extractInlineImage(d) === undefined);
-    if (hasShape) {
-      ctx.warnings.push("drawing skipped");
-      return { kind: "skip-with-warning", reason: "drawing" };
-    }
+  const hasShape = drawings.length > 0 && drawings.some((d) => extractInlineImage(d) === undefined);
+  if (hasShape) {
+    ctx.warnings.push("drawing skipped");
   }
 
   // Paragraph properties.
@@ -281,7 +283,7 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
   // We walk all children of <w:p> except w:pPr, accepting both <w:r> and
   // <w:hyperlink> wrappers. Track-changes wrappers (<w:ins>, <w:del>) are
   // walked transparently — <w:ins> content is kept, <w:del> is dropped.
-  walkParagraphChildren(getOrderedChildren(pNode), ctx, runs, undefined, false, () => {
+  walkParagraphChildren(getOrderedChildren(pNode), ctx, runs, undefined, undefined, false, () => {
     rtlSeenInRun = true;
   });
 
@@ -289,6 +291,13 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
   if (rtlSeenInRun) {
     ctx.warnings.push("RTL paragraph skipped");
     return { kind: "skip-with-warning", reason: "RTL paragraph" };
+  }
+
+  // Drawing-only paragraph (shape present + no text runs survived) → still
+  // a skip block. The warning above is the only one we emit; do not push a
+  // second.
+  if (hasShape && runs.length === 0) {
+    return { kind: "skip-with-warning", reason: "drawing" };
   }
 
   const paragraph: Paragraph = {
@@ -306,6 +315,9 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
  * hyperlink wrapper inside one), pushing extracted runs into `runs`.
  *
  * - `hyperlinkRel` is set when we're recursing inside a `<w:hyperlink r:id>`.
+ * - `hyperlinkAnchor` is set when we're recursing inside a
+ *   `<w:hyperlink w:anchor>` with no `r:id`. Mutually exclusive with
+ *   `hyperlinkRel` — an outer-walker context never carries both.
  * - `inDelete` is true when we're recursing inside a `<w:del>`; runs are
  *   dropped entirely.
  * - `onRtl` is invoked when a run carries `<w:rtl/>` — caller decides whether
@@ -316,6 +328,7 @@ function walkParagraphChildren(
   ctx: BlockWalkContext,
   runs: Run[],
   hyperlinkRel: string | undefined,
+  hyperlinkAnchor: string | undefined,
   inDelete: boolean,
   onRtl: () => void,
 ): void {
@@ -325,42 +338,108 @@ function walkParagraphChildren(
 
     if (tag === "w:r") {
       if (inDelete) continue;
-      const run = parseRun(child, hyperlinkRel, onRtl);
-      if (run !== undefined) runs.push(run);
+      parseRun(child, hyperlinkRel, hyperlinkAnchor, onRtl, runs);
       continue;
     }
 
     if (tag === "w:hyperlink") {
+      // Resolve which target this hyperlink propagates. `r:id` (external
+      // relationship) wins over `w:anchor` (internal bookmark) when both
+      // are present, with a warning. A hyperlink with neither attribute
+      // is malformed but seen in practice; we walk through it as plain
+      // text and emit one warning. Nested hyperlinks reset the target —
+      // we never mix outer and inner hyperlink contexts.
       const rid = getOrderedAttr(child, "r:id");
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, rid, inDelete, onRtl);
+      const anchor = getOrderedAttr(child, "w:anchor");
+      let innerRel: string | undefined;
+      let innerAnchor: string | undefined;
+      if (rid !== undefined && anchor !== undefined) {
+        ctx.warnings.push("hyperlink has both r:id and w:anchor; using r:id");
+        innerRel = rid;
+      } else if (rid !== undefined) {
+        innerRel = rid;
+      } else if (anchor !== undefined) {
+        innerAnchor = anchor;
+      } else {
+        ctx.warnings.push("hyperlink missing r:id and w:anchor; treating as plain text");
+      }
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        innerRel,
+        innerAnchor,
+        inDelete,
+        onRtl,
+      );
       continue;
     }
 
     if (tag === "w:ins") {
       // Track-changes insert — keep content as accepted.
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, hyperlinkRel, inDelete, onRtl);
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        hyperlinkRel,
+        hyperlinkAnchor,
+        inDelete,
+        onRtl,
+      );
       continue;
     }
 
     if (tag === "w:del") {
       // Track-changes delete — drop content (rendered with rejections applied).
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, hyperlinkRel, true, onRtl);
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        hyperlinkRel,
+        hyperlinkAnchor,
+        true,
+        onRtl,
+      );
       continue;
     }
 
     if (tag === "w:moveTo") {
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, hyperlinkRel, inDelete, onRtl);
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        hyperlinkRel,
+        hyperlinkAnchor,
+        inDelete,
+        onRtl,
+      );
       continue;
     }
     if (tag === "w:moveFrom") {
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, hyperlinkRel, true, onRtl);
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        hyperlinkRel,
+        hyperlinkAnchor,
+        true,
+        onRtl,
+      );
       continue;
     }
 
     // <w:smartTag>, <w:fldSimple>, <w:bookmarkStart>, etc. — walk into them
     // transparently so their contained <w:r>s still appear.
     if (tag === "w:smartTag" || tag === "w:fldSimple") {
-      walkParagraphChildren(getOrderedChildren(child), ctx, runs, hyperlinkRel, inDelete, onRtl);
+      walkParagraphChildren(
+        getOrderedChildren(child),
+        ctx,
+        runs,
+        hyperlinkRel,
+        hyperlinkAnchor,
+        inDelete,
+        onRtl,
+      );
     }
 
     // Everything else (bookmarks, comment refs, proofErr, etc.) is silently
@@ -372,107 +451,168 @@ function walkParagraphChildren(
 /*   Run                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * In-progress accumulator for a single emitted Run. A `<w:r>` element produces
+ * one or more Runs depending on whether it contains forced page/column breaks
+ * (`<w:br w:type="page|column"/>`); each break flushes the current chunk and
+ * starts a new one carrying `pageBreakBefore` / `columnBreakBefore`. Soft
+ * line breaks (`<w:br/>` with no type or `w:type="textWrapping"`) embed
+ * `\n` in `text` instead of splitting.
+ */
+type RunChunk = {
+  text: string;
+  inlineImage: Run["inlineImage"] | undefined;
+  footnoteRef: string | undefined;
+  endnoteRef: string | undefined;
+  pageBreakBefore: boolean;
+  columnBreakBefore: boolean;
+};
+
+function emptyChunk(): RunChunk {
+  return {
+    text: "",
+    inlineImage: undefined,
+    footnoteRef: undefined,
+    endnoteRef: undefined,
+    pageBreakBefore: false,
+    columnBreakBefore: false,
+  };
+}
+
 function parseRun(
   rNode: unknown,
   hyperlinkRel: string | undefined,
+  hyperlinkAnchor: string | undefined,
   onRtl: () => void,
-): Run | undefined {
+  runs: Run[],
+): void {
   const rPr = findOrderedChild(rNode, "w:rPr");
 
   // RTL run detection.
   if (rPr !== undefined && findOrderedChild(rPr, "w:rtl") !== undefined) {
     onRtl();
-    return undefined;
+    return;
   }
 
   const props = extractRunProps(rPr);
 
-  // Iterate run children in document order; concatenate text and detect
-  // inline images / drawings / footnote refs.
-  let text = "";
-  let inlineImage: Run["inlineImage"] | undefined;
-  let footnoteRef: string | undefined;
-  let endnoteRef: string | undefined;
+  // Iterate run children in document order. We accumulate into `chunk`;
+  // forced breaks (`<w:br w:type="page|column"/>`) flush the current chunk
+  // as a Run and seed a fresh one with the corresponding break flag.
+  let chunk = emptyChunk();
+  const flush = (): void => {
+    const built = buildRun(chunk, props, hyperlinkRel, hyperlinkAnchor);
+    if (built !== undefined) runs.push(built);
+  };
 
   for (const child of getOrderedChildren(rNode)) {
     const tag = getTagName(child);
     if (tag === "w:rPr") continue;
 
     if (tag === "w:t") {
-      text += extractTextNode(child);
+      chunk.text += extractTextNode(child);
       continue;
     }
     if (tag === "w:tab") {
-      text += "\t";
+      chunk.text += "\t";
       continue;
     }
     if (tag === "w:br") {
-      // <w:br w:type="page"/> / "column" — emit newline marker; layout decides
-      // page-break semantics from the surrounding paragraph context. For v1
-      // we collapse all break types to "\n"; future enhancement carries type.
-      text += "\n";
+      // Discriminate by `w:type`:
+      //   "page"          → forced page break; flush + start new chunk
+      //                     with pageBreakBefore.
+      //   "column"        → forced column break; flush + start new chunk
+      //                     with columnBreakBefore.
+      //   absent / "textWrapping" → soft line break, embed "\n" in text.
+      const breakType = getOrderedAttr(child, "w:type");
+      if (breakType === "page" || breakType === "column") {
+        flush();
+        chunk = emptyChunk();
+        if (breakType === "page") chunk.pageBreakBefore = true;
+        else chunk.columnBreakBefore = true;
+      } else {
+        chunk.text += "\n";
+      }
       continue;
     }
     if (tag === "w:noBreakHyphen") {
-      text += "‑"; // non-breaking hyphen
+      chunk.text += "‑"; // non-breaking hyphen
       continue;
     }
     if (tag === "w:softHyphen") {
-      text += "­"; // soft hyphen
+      chunk.text += "­"; // soft hyphen
       continue;
     }
     if (tag === "w:sym") {
       // <w:sym w:font="..." w:char="HEX"/> — special character; convert hex
-      // → glyph if possible. Defaults to "?" when unparseable.
+      // → glyph if possible. Defaults to silently dropped when unparseable.
       const charHex = getOrderedAttr(child, "w:char");
       if (charHex !== undefined) {
         const cp = Number.parseInt(charHex, 16);
         if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10ffff) {
-          text += String.fromCodePoint(cp);
+          chunk.text += String.fromCodePoint(cp);
         }
       }
       continue;
     }
 
     if (tag === "w:drawing") {
-      // Non-image drawings are detected at the paragraph level (which
-      // converts the whole paragraph into a skip-with-warning); here we
-      // only extract the inline image, if any. A shape-only drawing
-      // returns `undefined` and is silently dropped from the run, but
-      // the paragraph-level scan above will already have replaced the
-      // paragraph with a skip placeholder before we reach this branch.
+      // Non-image drawings (DrawingML shapes / SmartArt) are silently
+      // dropped here; the paragraph-level pre-scan in `parseParagraph`
+      // emits a single warning per paragraph and decides whether the
+      // paragraph survives or collapses to a skip block.
       const img = extractInlineImage(child);
-      if (img !== undefined) inlineImage = img;
+      if (img !== undefined) chunk.inlineImage = img;
       continue;
     }
 
     if (tag === "w:footnoteReference") {
       const id = getOrderedAttr(child, "w:id");
-      if (id !== undefined) footnoteRef = id;
+      if (id !== undefined) chunk.footnoteRef = id;
       continue;
     }
     if (tag === "w:endnoteReference") {
       const id = getOrderedAttr(child, "w:id");
-      if (id !== undefined) endnoteRef = id;
+      if (id !== undefined) chunk.endnoteRef = id;
     }
 
     // <w:object> (OLE), <w:fldChar> (complex fields), <w:pict> (legacy VML
     // drawing), <w:ruby>, etc. — silently dropped per spec §1.4.
   }
 
-  // If the run carries no content and no reference, drop it.
+  flush();
+}
+
+/**
+ * Materializes a `RunChunk` as a `Run` if it carries any content (text,
+ * inline image, footnote/endnote ref) OR a forced-break flag. Returns
+ * `undefined` for a wholly empty chunk so trailing nothing-after-flush
+ * iterations don't push junk runs.
+ *
+ * A run carrying ONLY a `pageBreakBefore` / `columnBreakBefore` flag (no
+ * text, no image, no ref) is preserved on purpose — layout consumes it
+ * as a pure break trigger without drawing anything.
+ */
+function buildRun(
+  chunk: RunChunk,
+  props: ExtractedRunProps,
+  hyperlinkRel: string | undefined,
+  hyperlinkAnchor: string | undefined,
+): Run | undefined {
   if (
-    text === "" &&
-    inlineImage === undefined &&
-    footnoteRef === undefined &&
-    endnoteRef === undefined
+    chunk.text === "" &&
+    chunk.inlineImage === undefined &&
+    chunk.footnoteRef === undefined &&
+    chunk.endnoteRef === undefined &&
+    !chunk.pageBreakBefore &&
+    !chunk.columnBreakBefore
   ) {
     return undefined;
   }
 
-  const run: Run = {
+  return {
     kind: "run",
-    text,
+    text: chunk.text,
     bold: props.bold ?? false,
     italic: props.italic ?? false,
     underline: props.underline ?? false,
@@ -481,11 +621,13 @@ function parseRun(
     ...(props.fontSizePt !== undefined ? { fontSizePt: props.fontSizePt } : {}),
     ...(props.colorHex !== undefined ? { colorHex: props.colorHex } : {}),
     ...(hyperlinkRel !== undefined ? { hyperlinkRel } : {}),
-    ...(inlineImage !== undefined ? { inlineImage } : {}),
-    ...(footnoteRef !== undefined ? { footnoteRef } : {}),
-    ...(endnoteRef !== undefined ? { endnoteRef } : {}),
+    ...(hyperlinkAnchor !== undefined ? { hyperlinkAnchor } : {}),
+    ...(chunk.inlineImage !== undefined ? { inlineImage: chunk.inlineImage } : {}),
+    ...(chunk.footnoteRef !== undefined ? { footnoteRef: chunk.footnoteRef } : {}),
+    ...(chunk.endnoteRef !== undefined ? { endnoteRef: chunk.endnoteRef } : {}),
+    ...(chunk.pageBreakBefore ? { pageBreakBefore: true } : {}),
+    ...(chunk.columnBreakBefore ? { columnBreakBefore: true } : {}),
   };
-  return run;
 }
 
 /* ------------------------------------------------------------------ */

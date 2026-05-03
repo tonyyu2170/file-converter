@@ -106,7 +106,10 @@ export type Paragraph = {
 export type Run = {
   kind: "run";
   /** Joined `<w:t>` content for the run. Multiple `<w:t>` siblings are
-   * concatenated; `<w:tab/>` becomes `\t`; `<w:br/>` becomes `\n`. */
+   * concatenated; `<w:tab/>` becomes `\t`; soft `<w:br/>` (no type or
+   * `w:type="textWrapping"`) becomes `\n`. Forced breaks
+   * (`<w:br w:type="page|column"/>`) split the run instead — see
+   * `pageBreakBefore` / `columnBreakBefore` on the next emitted run. */
   text: string;
   bold: boolean;
   italic: boolean;
@@ -121,14 +124,27 @@ export type Run = {
   /** 6-digit uppercase hex without leading `#`. Absent when `<w:color>` is
    * `"auto"` or missing. */
   colorHex?: string;
-  /** Relationship id for an external/internal hyperlink. */
+  /** Relationship id for an external hyperlink (`<w:hyperlink r:id="...">`). */
   hyperlinkRel?: string;
+  /** Internal-anchor target for a hyperlink (`<w:hyperlink w:anchor="...">`).
+   * When both `r:id` and `w:anchor` are present, `hyperlinkRel` wins and a
+   * warning is emitted; runs inside an anchor-only hyperlink carry this
+   * field instead of `hyperlinkRel`. */
+  hyperlinkAnchor?: string;
   /** Inline image reference; relationship id resolves into `media` map. */
   inlineImage?: { rel: string; widthPt: number; heightPt: number };
   /** Footnote reference id (looks up `ParsedDocx.footnotes`). */
   footnoteRef?: string;
   /** Endnote reference id (looks up `ParsedDocx.endnotes`). */
   endnoteRef?: string;
+  /** Set when this run was emitted because the preceding `<w:br>` carried
+   * `w:type="page"`. Layout (Tasks 7-9) honors this as a forced page break.
+   * Soft line breaks (no type / `textWrapping`) remain as `\n` in `text`. */
+  pageBreakBefore?: boolean;
+  /** Set when this run was emitted because the preceding `<w:br>` carried
+   * `w:type="column"`. Layout honors this as a forced column break in
+   * multi-column sections. */
+  columnBreakBefore?: boolean;
 };
 
 export type Table = {

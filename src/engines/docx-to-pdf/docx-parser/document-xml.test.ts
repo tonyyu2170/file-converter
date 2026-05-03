@@ -207,10 +207,21 @@ describe("parseBodyXml — runs", () => {
     expect(para.runs[0]?.text).toBe("a\tb");
   });
 
-  it('emits "\\n" for <w:br/>', () => {
+  it('emits "\\n" for soft <w:br/> (no type)', () => {
     const xml = doc(p(r(t("line1"), "<w:br/>", t("line2"))));
     const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    // Soft break stays embedded; the run is not split.
+    expect(para.runs).toHaveLength(1);
     expect(para.runs[0]?.text).toBe("line1\nline2");
+    expect(para.runs[0]?.pageBreakBefore).toBeUndefined();
+    expect(para.runs[0]?.columnBreakBefore).toBeUndefined();
+  });
+
+  it('emits "\\n" for <w:br w:type="textWrapping"/> (same as no type)', () => {
+    const xml = doc(p(r(t("a"), '<w:br w:type="textWrapping"/>', t("b"))));
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(1);
+    expect(para.runs[0]?.text).toBe("a\nb");
   });
 
   it("preserves run order with multiple runs", () => {
@@ -256,6 +267,37 @@ describe("parseBodyXml — hyperlinks", () => {
     expect(para.runs[0]?.hyperlinkRel).toBeUndefined();
     expect(para.runs[1]?.hyperlinkRel).toBe("rId1");
     expect(para.runs[2]?.hyperlinkRel).toBeUndefined();
+  });
+
+  it('propagates internal anchor when only <w:hyperlink w:anchor="..."> is present', () => {
+    const xml = doc(p(`<w:hyperlink w:anchor="bookmarkA">${r(t("jump"))}</w:hyperlink>`));
+    const result = parseBodyXml(xml);
+    const para = result.sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(1);
+    expect(para.runs[0]?.hyperlinkAnchor).toBe("bookmarkA");
+    expect(para.runs[0]?.hyperlinkRel).toBeUndefined();
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("prefers r:id and warns when both r:id and w:anchor are present", () => {
+    const xml = doc(
+      p(`<w:hyperlink r:id="rId9" w:anchor="bookmarkB">${r(t("both"))}</w:hyperlink>`),
+    );
+    const result = parseBodyXml(xml);
+    const para = result.sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.hyperlinkRel).toBe("rId9");
+    expect(para.runs[0]?.hyperlinkAnchor).toBeUndefined();
+    expect(result.warnings.some((w) => /both/i.test(w) && /r:id/i.test(w))).toBe(true);
+  });
+
+  it("emits a warning and propagates neither when hyperlink has neither attribute", () => {
+    const xml = doc(p(`<w:hyperlink>${r(t("orphan"))}</w:hyperlink>`));
+    const result = parseBodyXml(xml);
+    const para = result.sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.text).toBe("orphan");
+    expect(para.runs[0]?.hyperlinkRel).toBeUndefined();
+    expect(para.runs[0]?.hyperlinkAnchor).toBeUndefined();
+    expect(result.warnings.some((w) => /hyperlink/i.test(w))).toBe(true);
   });
 });
 
@@ -489,5 +531,117 @@ describe("parseBodyXml — track changes", () => {
     );
     const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
     expect(para.runs.map((rn) => rn.text)).toEqual(["kept ", " after"]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*   Forced breaks — <w:br w:type="page|column"/>                     */
+/* ------------------------------------------------------------------ */
+
+describe("parseBodyXml — forced breaks", () => {
+  it('splits a run at <w:br w:type="page"/> with pageBreakBefore on the next run', () => {
+    const xml = doc(p(r(t("foo"), '<w:br w:type="page"/>', t("bar"))));
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(2);
+    expect(para.runs[0]?.text).toBe("foo");
+    expect(para.runs[0]?.pageBreakBefore).toBeUndefined();
+    expect(para.runs[1]?.text).toBe("bar");
+    expect(para.runs[1]?.pageBreakBefore).toBe(true);
+    expect(para.runs[1]?.columnBreakBefore).toBeUndefined();
+  });
+
+  it('splits a run at <w:br w:type="column"/> with columnBreakBefore on the next run', () => {
+    const xml = doc(p(r(t("L"), '<w:br w:type="column"/>', t("R"))));
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(2);
+    expect(para.runs[0]?.text).toBe("L");
+    expect(para.runs[1]?.text).toBe("R");
+    expect(para.runs[1]?.columnBreakBefore).toBe(true);
+    expect(para.runs[1]?.pageBreakBefore).toBeUndefined();
+  });
+
+  it("propagates run formatting to both halves of a split run", () => {
+    const xml = doc(
+      p(r("<w:rPr><w:b/></w:rPr>", t("bold-1"), '<w:br w:type="page"/>', t("bold-2"))),
+    );
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(2);
+    expect(para.runs[0]?.bold).toBe(true);
+    expect(para.runs[1]?.bold).toBe(true);
+    expect(para.runs[1]?.pageBreakBefore).toBe(true);
+  });
+
+  it("preserves an empty break-only run from a leading forced break", () => {
+    // <w:r><w:br w:type="page"/><w:t>after</w:t></w:r>
+    const xml = doc(p(r('<w:br w:type="page"/>', t("after"))));
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(1);
+    // Pre-break chunk is empty + carries no flag → dropped. Post-break run
+    // carries pageBreakBefore.
+    expect(para.runs[0]?.text).toBe("after");
+    expect(para.runs[0]?.pageBreakBefore).toBe(true);
+  });
+
+  it("emits empty break-only runs for consecutive forced page breaks", () => {
+    // <w:r><w:t>x</w:t><w:br w:type="page"/><w:br w:type="page"/><w:t>y</w:t></w:r>
+    const xml = doc(p(r(t("x"), '<w:br w:type="page"/>', '<w:br w:type="page"/>', t("y"))));
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    // Three runs: "x" / empty pageBreakBefore / "y" pageBreakBefore.
+    expect(para.runs).toHaveLength(3);
+    expect(para.runs[0]?.text).toBe("x");
+    expect(para.runs[0]?.pageBreakBefore).toBeUndefined();
+    expect(para.runs[1]?.text).toBe("");
+    expect(para.runs[1]?.pageBreakBefore).toBe(true);
+    expect(para.runs[2]?.text).toBe("y");
+    expect(para.runs[2]?.pageBreakBefore).toBe(true);
+  });
+
+  it("propagates hyperlinkRel to all halves of a run split inside <w:hyperlink>", () => {
+    const xml = doc(
+      p(`<w:hyperlink r:id="rId4">${r(t("a"), '<w:br w:type="page"/>', t("b"))}</w:hyperlink>`),
+    );
+    const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs).toHaveLength(2);
+    expect(para.runs[0]?.hyperlinkRel).toBe("rId4");
+    expect(para.runs[1]?.hyperlinkRel).toBe("rId4");
+    expect(para.runs[1]?.pageBreakBefore).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*   Drawings — paragraphs that mix shapes with text                  */
+/* ------------------------------------------------------------------ */
+
+describe("parseBodyXml — shape drawings preserve sibling text", () => {
+  // Standard non-image drawing fragment (no <a:blip>) used across these tests.
+  const SHAPE_DRAWING = `<w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingShape"></a:graphicData></a:graphic></wp:inline></w:drawing>`;
+
+  it("keeps surrounding text when a paragraph mixes a shape with text runs", () => {
+    const xml = doc(p(r(t("Figure 1: caption")), r(SHAPE_DRAWING)));
+    const result = parseBodyXml(xml);
+    const block = result.sections[0]?.blocks[0] as Paragraph;
+    expect(block.kind).toBe("paragraph");
+    expect(block.runs).toHaveLength(1);
+    expect(block.runs[0]?.text).toBe("Figure 1: caption");
+    expect(result.warnings.filter((w) => /drawing/i.test(w))).toHaveLength(1);
+  });
+
+  it("dedupes the warning across multiple shapes in the same paragraph", () => {
+    const xml = doc(p(r(t("caption")), r(SHAPE_DRAWING), r(SHAPE_DRAWING)));
+    const result = parseBodyXml(xml);
+    const block = result.sections[0]?.blocks[0] as Paragraph;
+    expect(block.kind).toBe("paragraph");
+    expect(block.runs[0]?.text).toBe("caption");
+    expect(result.warnings.filter((w) => /drawing/i.test(w))).toHaveLength(1);
+  });
+
+  it("still emits skip-with-warning when a paragraph has only a shape (no text)", () => {
+    const xml = doc(p(r(SHAPE_DRAWING)));
+    const result = parseBodyXml(xml);
+    expect(result.sections[0]?.blocks[0]).toEqual({
+      kind: "skip-with-warning",
+      reason: "drawing",
+    });
+    expect(result.warnings.filter((w) => /drawing/i.test(w))).toHaveLength(1);
   });
 });
