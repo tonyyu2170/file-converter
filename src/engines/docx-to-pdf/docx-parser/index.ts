@@ -130,11 +130,13 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     warnings.push(...r.warnings);
   }
 
-  // 5. Footnotes / endnotes.
+  // 5. Footnotes / endnotes. Pass `styles` so paragraph runs inside
+  // footnote/endnote bodies inherit run-level props from their `pStyle`
+  // chain (matches body behavior).
   let footnotes: Map<string, ParsedBlock[]> = new Map();
   const footnotesXml = decodeEntry("word/footnotes.xml");
   if (footnotesXml !== undefined) {
-    const r = parseFootnotesXml(footnotesXml, "footnote");
+    const r = parseFootnotesXml(footnotesXml, "footnote", styles);
     footnotes = r.value;
     warnings.push(...r.warnings);
   }
@@ -142,14 +144,15 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
   let endnotes: Map<string, ParsedBlock[]> = new Map();
   const endnotesXml = decodeEntry("word/endnotes.xml");
   if (endnotesXml !== undefined) {
-    const r = parseFootnotesXml(endnotesXml, "endnote");
+    const r = parseFootnotesXml(endnotesXml, "endnote", styles);
     endnotes = r.value;
     warnings.push(...r.warnings);
   }
 
   // 6. Headers / footers — one per file. Key by the relationship-target-style
   // path (e.g., "header1.xml") so the layout engine can resolve via
-  // section.headerRefs[X] → relationships → target.
+  // section.headerRefs[X] → relationships → target. `styles` is threaded so
+  // header/footer paragraphs honor `pStyle` inheritance.
   const headers: ParsedDocx["headers"] = new Map();
   const footers: ParsedDocx["footers"] = new Map();
   for (const path of Object.keys(entries)) {
@@ -157,7 +160,7 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     if (headerMatch !== null && headerMatch[1] !== undefined) {
       const xml = decodeEntry(path);
       if (xml === undefined) continue;
-      const r = parseHeaderXml(xml);
+      const r = parseHeaderXml(xml, styles);
       headers.set(`${headerMatch[1]}.xml`, r.value);
       warnings.push(...r.warnings);
       continue;
@@ -166,7 +169,7 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     if (footerMatch !== null && footerMatch[1] !== undefined) {
       const xml = decodeEntry(path);
       if (xml === undefined) continue;
-      const r = parseFooterXml(xml);
+      const r = parseFooterXml(xml, styles);
       footers.set(`${footerMatch[1]}.xml`, r.value);
       warnings.push(...r.warnings);
     }
@@ -186,8 +189,10 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     media.set(path, { path, mime, bytes: buf });
   }
 
-  // 8. Body parse.
-  const bodyResult = parseBodyXml(documentXml);
+  // 8. Body parse. Pass `styles` so paragraph runs merge their pStyle's
+  // resolved runProps underneath their explicit rPr (Heading1 → bold via
+  // inheritance; explicit `<w:b w:val="0"/>` still wins).
+  const bodyResult = parseBodyXml(documentXml, styles);
   warnings.push(...bodyResult.warnings);
 
   // 9. Assemble.

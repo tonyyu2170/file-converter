@@ -212,14 +212,32 @@ describe("layoutParagraph — heading scale", () => {
     expect(c.size).toBe(expectedSize);
   });
 
-  it("heading forces bold via overrides.bold = true", async () => {
+  it("heading paragraph with bold:true run draws using the bold weight", async () => {
+    // Bold flows from Run.bold (parser-merged from style) — layout no
+    // longer force-bolds. A Heading1 paragraph whose run carries
+    // bold:true draws bold. Sanity check that the parser-side merge
+    // path arrives at the right Run shape.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const p = makePara([makeRun({ text: "Title", bold: true })], { styleId: "Heading1" });
+    layoutParagraph(p, ctx, pdf);
+    const c = firstDrawText(ctx.page as MockPage);
+    const f = c.font as unknown as { __label: string };
+    expect(f.__label).toBe("inter-bold");
+  });
+
+  it("heading paragraph with bold:false run draws using the regular weight", async () => {
+    // Regression: pre-F1, layout force-bolded all heading runs even when
+    // the run carried explicit bold:false (the OOXML pattern
+    // `<w:b w:val="0"/>` to suppress an inherited heading bold). Now
+    // layout reports what the run says — non-bold stays non-bold.
     const ctx = makeColumnContext({ yPt: 700 });
     const pdf = await freshDoc();
     const p = makePara([makeRun({ text: "Title", bold: false })], { styleId: "Heading1" });
     layoutParagraph(p, ctx, pdf);
     const c = firstDrawText(ctx.page as MockPage);
     const f = c.font as unknown as { __label: string };
-    expect(f.__label).toBe("inter-bold");
+    expect(f.__label).toBe("inter-regular");
   });
 
   it("explicit run.fontSizePt overrides the heading default size", async () => {

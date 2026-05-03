@@ -4,7 +4,10 @@
  *
  * Pipeline per call:
  *
- *   1. Resolve heading scale (size + force-bold) from `p.styleId`.
+ *   1. Resolve heading scale (size only) from `p.styleId`. Bold is no
+ *      longer overridden at layout time — it flows naturally from each
+ *      run's resolved `bold` flag, which the parser merges out of the
+ *      paragraph's `pStyle` chain.
  *   2. Walk runs left-to-right. For each run:
  *        a. If `pageBreakBefore` is set, advance the cursor via
  *           `pageBreak(...)` and continue laying out the rest of the
@@ -84,7 +87,6 @@ export function layoutParagraph(
   const startYPt = ctx.yPt;
   const heading = headingProps(p.styleId);
   const sizeOverride = heading?.sizePt;
-  const boldOverride = heading?.forceBold;
 
   // Apply space-before for headings.
   if (heading !== null) {
@@ -131,7 +133,6 @@ export function layoutParagraph(
         currentLine,
         ctx,
         sizeOverride,
-        boldOverride,
         p.alignment,
         deps,
       );
@@ -177,7 +178,6 @@ export function layoutParagraph(
       currentLine,
       ctx,
       sizeOverride,
-      boldOverride,
       p.alignment,
       deps,
     );
@@ -268,7 +268,6 @@ function layoutRunIntoLine(
   initialLine: LineBuf,
   ctx: ColumnContext,
   sizeOverride: Pt | undefined,
-  boldOverride: boolean | undefined,
   alignment: Paragraph["alignment"],
   deps?: LayoutDeps,
 ): RunOutcome {
@@ -285,9 +284,9 @@ function layoutRunIntoLine(
   // by the orchestrator-supplied label via deps.onFootnoteRef. Drawing
   // continues through the normal text path with a smaller size to give
   // the marker a superscript-ish appearance.
-  const markerOverride = resolveMarkerOverrides(run, sizeOverride, boldOverride, deps, ctx.page);
+  const markerOverride = resolveMarkerOverrides(run, sizeOverride, deps, ctx.page);
 
-  const overrides = markerOverride?.overrides ?? buildOverrides(run, sizeOverride, boldOverride);
+  const overrides = markerOverride?.overrides ?? buildOverrides(run, sizeOverride);
   const heightPt = (overrides.sizePt ?? runFontSizePt(run)) * LINE_HEIGHT_FACTOR;
   const colW = ctx.column.widthPt;
 
@@ -492,14 +491,22 @@ function takeFittingPrefix(
 
 /* ---------- Heading scale ---------- */
 
-function headingProps(styleId: string | undefined): { sizePt: Pt; forceBold: boolean } | null {
+/**
+ * Heading paragraphs get a default font size override (24/20/16/14/13/12 pt
+ * for Heading1-6) applied to runs that don't carry an explicit `fontSizePt`.
+ * Bold is no longer forced here — the parser merges the resolved style's
+ * `runProps.bold` into each `Run.bold` at parse time, so a Heading1 run
+ * with no explicit `<w:b/>` already arrives bold (via the Heading1 style),
+ * and a run carrying `<w:b w:val="0"/>` arrives non-bold (run-level wins).
+ */
+function headingProps(styleId: string | undefined): { sizePt: Pt } | null {
   if (styleId === undefined) return null;
   const m = /^Heading([1-6])$/.exec(styleId);
   if (m === null) return null;
   const level = Number.parseInt(m[1] ?? "1", 10);
   const idx = Math.min(Math.max(level - 1, 0), HEADING_SIZES_PT.length - 1);
   const sizePt = HEADING_SIZES_PT[idx] ?? 12;
-  return { sizePt, forceBold: true };
+  return { sizePt };
 }
 
 /* ---------- Overrides ---------- */
@@ -507,7 +514,6 @@ function headingProps(styleId: string | undefined): { sizePt: Pt; forceBold: boo
 function buildOverrides(
   run: Run,
   sizeOverride: Pt | undefined,
-  boldOverride: boolean | undefined,
 ): { bold?: boolean; italic?: boolean; sizePt?: Pt } {
   const result: { bold?: boolean; italic?: boolean; sizePt?: Pt } = {};
   // Heading size override applies only when the run carries no explicit
@@ -515,11 +521,6 @@ function buildOverrides(
   // runProps.fontSizePt").
   if (sizeOverride !== undefined && run.fontSizePt === undefined) {
     result.sizePt = sizeOverride;
-  }
-  // Heading bold override forces bold on heading runs (advisor: heading
-  // forces bold; explicit non-bold runs in headings are rare).
-  if (boldOverride === true) {
-    result.bold = true;
   }
   return result;
 }
@@ -676,7 +677,6 @@ function drawInlineImageRun(run: Run, ctx: ColumnContext, deps: LayoutDeps | und
 function resolveMarkerOverrides(
   run: Run,
   sizeOverride: Pt | undefined,
-  boldOverride: boolean | undefined,
   deps: LayoutDeps | undefined,
   page: ColumnContext["page"],
 ): { text: string; overrides: { bold?: boolean; italic?: boolean; sizePt?: Pt } } | null {
@@ -697,7 +697,9 @@ function resolveMarkerOverrides(
   // Build overrides from scratch so we don't accidentally inherit
   // sizeOverride twice. Run-level explicit sizes still take priority
   // (a heading-styled footnote ref keeps its heading size baseline,
-  // then we shrink to ~70% for the marker).
+  // then we shrink to ~70% for the marker). Bold flows from the run
+  // itself now (parser-merged from style), not from a layout-level
+  // override.
   const baseSizePt =
     run.fontSizePt ??
     sizeOverride ??
@@ -706,6 +708,5 @@ function resolveMarkerOverrides(
   const overrides: { bold?: boolean; italic?: boolean; sizePt?: Pt } = {
     sizePt: markerSizePt,
   };
-  if (boldOverride === true) overrides.bold = true;
   return { text: label, overrides };
 }

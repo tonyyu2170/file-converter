@@ -28,7 +28,7 @@
  */
 
 import { type BlockWalkContext, parseBlocks } from "./document-xml";
-import type { ParsedBlock } from "./types";
+import type { ParsedBlock, Style } from "./types";
 import {
   createOrderedXmlParser,
   findOrderedChildren,
@@ -48,10 +48,16 @@ export type ParseFootnotesResult = {
  * `word/footnotes.xml` (root `<w:footnotes>`, item `<w:footnote>`) or
  * `"endnote"` for `word/endnotes.xml` (root `<w:endnotes>`, item
  * `<w:endnote>`). Defaults to `"footnote"`.
+ *
+ * `styles` is the parsed `word/styles.xml` map; threaded down so paragraph
+ * runs inside footnotes inherit run-level props from their `pStyle` chain.
+ * Defaults to an empty map for callers that don't have style data
+ * available — `resolveStyle` handles an empty map cleanly.
  */
 export function parseFootnotesXml(
   xml: string,
   kind: "footnote" | "endnote" = "footnote",
+  styles: Map<string, Style> = new Map(),
 ): ParseFootnotesResult {
   const warnings: string[] = [];
   const empty = new Map<string, ParsedBlock[]>();
@@ -83,7 +89,7 @@ export function parseFootnotesXml(
   }
 
   const out = new Map<string, ParsedBlock[]>();
-  const ctx: BlockWalkContext = { warnings };
+  const ctx: BlockWalkContext = { warnings, styles };
 
   for (const item of findOrderedChildren(rootEntry, itemTag)) {
     const id = getOrderedAttr(item, "w:id");
