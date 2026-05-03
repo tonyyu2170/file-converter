@@ -61,6 +61,7 @@ import { rgb } from "pdf-lib";
 // without polluting production code with a DI seam.
 import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
+import { makeDiscardPage } from "./discard-page";
 import type { ColumnContext, ColumnGeometry, Pt } from "./types";
 import { wouldOverflow } from "./y-cursor";
 
@@ -233,12 +234,10 @@ function measureCellContent(
   deps: LayoutDeps,
 ): Pt {
   const interiorWidth = Math.max(1, cellWidthPt - 2 * CELL_PADDING_PT);
-  const scratchPage = parentCtx.page; // safe: measure-only doesn't draw
-  // Build a measure context. We DO end up issuing draw calls into
-  // scratchPage's mock during measure passes (because layoutBlock draws
-  // immediately). To avoid double-drawing, we measure into a discard
-  // page synthesized below.
-  const discardPage = makeDiscardPage(scratchPage);
+  // We DO end up issuing draw calls during measure passes (because
+  // layoutBlock draws immediately). To avoid double-drawing, we measure
+  // into a no-op discard page (see `./discard-page.ts`).
+  const discardPage = makeDiscardPage();
   const ctx: ColumnContext = {
     page: discardPage,
     pageGeometry: parentCtx.pageGeometry,
@@ -262,54 +261,6 @@ function measureCellContent(
     safety -= 1;
   }
   return startY - ctx.yPt;
-}
-
-/**
- * Build a stand-in page whose draw methods are no-ops, so the measure
- * pass can call `layoutBlock` (which always draws) without polluting the
- * real page. Layout primitives (paragraph, runs) only call `drawText`,
- * `drawLine`, `drawRectangle`, `drawImage` on the page; the no-op shim
- * silently absorbs them.
- *
- * We also wire a no-op `doc.context` + `node.addAnnot` so any hyperlink
- * runs that would normally attach annotations during the measure pass
- * register against this discard page only — the real draw pass on the
- * real page is the single source of truth for annotations. Without this,
- * cells containing hyperlink runs would register two annotations per
- * link (once during measure, once during draw).
- *
- * NOTE: list paragraphs in cells will still bump their counter twice
- * (once in measure, once in draw) — that's a known limitation of the
- * measure-then-draw model and only affects the v1.1+ "list inside cell"
- * fixture. None of v1's fixtures hit this path.
- *
- * Similarly, no layout primitive currently emits warnings during
- * `layoutBlock`, so the measure pass doesn't double-push to
- * `deps.warnings`. If a future primitive starts emitting warnings
- * during layout (not just during parse), `LayoutDeps` will need a
- * discard-mode flag the measure pass can set to skip warning pushes.
- */
-function makeDiscardPage(_realPage: ColumnContext["page"]): ColumnContext["page"] {
-  const noopContext = {
-    obj<T>(literal: T): T {
-      return literal;
-    },
-    register<T>(_obj: T): { __discard: true } {
-      return { __discard: true };
-    },
-  };
-  const shim = {
-    drawText() {},
-    drawLine() {},
-    drawRectangle() {},
-    drawImage() {},
-    getSize() {
-      return { width: 612, height: 792 };
-    },
-    doc: { context: noopContext },
-    node: { addAnnot(_ref: unknown) {} },
-  };
-  return shim as unknown as ColumnContext["page"];
 }
 
 /**

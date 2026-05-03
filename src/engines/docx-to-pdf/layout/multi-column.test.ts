@@ -21,13 +21,14 @@ import type {
   TableRow,
 } from "@/engines/docx-to-pdf/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   LETTER_PORTRAIT,
   type MockPage,
   makeMockEmbeddedFonts,
   makeMockPdfDoc,
 } from "./_test-helpers";
+import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
 import { createListState } from "./lists";
 import { layoutSection } from "./multi-column";
@@ -622,5 +623,106 @@ describe("layoutSection — tables in multi-column", () => {
       .map((c) => (c.op === "drawText" ? c.text : ""));
     expect(texts).toContain("r0");
     expect(texts).toContain("r1");
+  });
+});
+
+/* ================================================================== */
+/* Lazy addPage — no blank page on overflow-on-first-block             */
+/* ================================================================== */
+
+describe("layoutSection — lazy addPage (no blank pages)", () => {
+  it("oversized atomic block produces exactly one page (no leading blank)", async () => {
+    // Smoke regression: an oversized atomic block (one line at 100pt
+    // font ⇒ 120pt height) far exceeds the 2-column balanceTarget but
+    // draws fully with no remainder. Pre-fix this still produced one
+    // page (the addPage was eager but immediately drawn into). The test
+    // pins the no-blank-page guarantee for atomic-overshoot inputs.
+    const pdf = makeMockPdfDoc();
+    const huge = makePara([makeRun("X", { fontSizePt: 100 })]);
+    const result = layoutSection(baseInput([huge], 2), pdf as unknown as PDFDocument);
+    expect(result.pagesAdded).toBe(1);
+    expect(pdf.__pages.length).toBe(1);
+  });
+});
+
+/* ================================================================== */
+/* Safety-loop exhaustion warning + no infinite blank pages            */
+/* ================================================================== */
+
+describe("layoutSection — safety guard pushes warning on exhaustion", () => {
+  it("infinite-remainder block in multi-column flow trips the safety guard and warns", async () => {
+    // Mock layoutBlock to always return the SAME block as remainder with
+    // zero drawn height — an unbounded loop in the absence of safety
+    // guards. Pre-Fix 4 the safety counter `break`-ed silently; now it
+    // pushes a structured warning so the orchestrator can surface
+    // "output may be truncated" to the user.
+    //
+    // NOTE: the lazy-addPage refactor (Fix 3) does NOT eliminate page
+    // accumulation in this scenario — `pdfDoc.addPage` fires on the
+    // first layoutBlock attempt per page (before drawnHeight is known),
+    // so each outer iteration still adds one (effectively-blank) page
+    // until the outer safety counter trips. Bounding *that* requires a
+    // different fix (e.g., `pdfDoc.removePage(idx)` after drawnHeight=0,
+    // or measure-then-draw split). The Fix 4 warning is what surfaces
+    // the truncation regardless of the page-count behavior.
+    const pdf = makeMockPdfDoc();
+    const deps = makeDeps();
+    const block = singleLinePara("infinite");
+    const real = blockDispatch.layoutBlock;
+    const spy = vi.spyOn(blockDispatch, "layoutBlock").mockImplementation((b, _c, _p, _d) => {
+      // Every call returns the same block as remainder — never makes
+      // progress. Real implementation is unused for this fixture.
+      void real;
+      return { drawnHeight: 0, remainder: b };
+    });
+
+    try {
+      layoutSection(baseInput([block], 2, { deps }), pdf as unknown as PDFDocument);
+      expect(deps.warnings.some((w) => w.includes("safety guard tripped"))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("infinite-remainder block in single-column flow trips the safety guard and warns", async () => {
+    const pdf = makeMockPdfDoc();
+    const deps = makeDeps();
+    const block = singleLinePara("infinite");
+    const real = blockDispatch.layoutBlock;
+    const spy = vi.spyOn(blockDispatch, "layoutBlock").mockImplementation((b, _c, _p, _d) => {
+      void real;
+      return { drawnHeight: 0, remainder: b };
+    });
+
+    try {
+      layoutSection(baseInput([block], 1, { deps }), pdf as unknown as PDFDocument);
+      expect(deps.warnings.some((w) => w.includes("safety guard tripped"))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("legitimately splittable block list spanning multiple pages does NOT trip the no-progress detector", async () => {
+    // Regression: the multi-column outer-loop detector compares overflow
+    // length AND head reference to the prior pending. A legitimately
+    // splittable workload that produces a NEW pending head per outer
+    // iteration must pass through cleanly without false-alarming.
+    //
+    // We use a long block list (200 single-line paragraphs ⇒ ~2640pt
+    // of natural fill, vs 1296pt of capacity per 2-column page) so the
+    // outer loop iterates ≥ 2 times. Each iteration's overflow head is
+    // a different paragraph object than the previous iteration's input
+    // head — head-reference inequality means the no-progress detector
+    // ignores the legitimate progress.
+    const pdf = makeMockPdfDoc();
+    const deps = makeDeps();
+    const blocks: ParsedBlock[] = [];
+    for (let i = 0; i < 200; i++) blocks.push(singleLinePara(`p${i}`));
+    const result = layoutSection(baseInput(blocks, 2, { deps }), pdf as unknown as PDFDocument);
+    // Multi-page result means the per-page overflow path was used.
+    expect(result.pagesAdded).toBeGreaterThanOrEqual(2);
+    // No safety-guard warning should have been pushed — the work was
+    // legitimate progress, not a no-progress spinner.
+    expect(deps.warnings.some((w) => w.includes("safety guard tripped"))).toBe(false);
   });
 });

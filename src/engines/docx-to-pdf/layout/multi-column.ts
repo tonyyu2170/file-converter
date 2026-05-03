@@ -63,6 +63,7 @@ import type { ParsedBlock, Run } from "@/engines/docx-to-pdf/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
 import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
+import { makeDiscardPage } from "./discard-page";
 import type { ColumnContext, ColumnGeometry, EmbeddedFonts, PageGeometry, Pt } from "./types";
 import { bodyYBounds } from "./y-cursor";
 
@@ -82,6 +83,20 @@ const SCRATCH_HEIGHT_PT: Pt = 1_000_000;
  *  splits never trip it. */
 const MAX_INNER_ITERATIONS = 10_000;
 
+/** Structured warning pushed to `deps.warnings` when any of the per-loop
+ *  safety counters exhaust. Surfaced through the orchestrator into
+ *  `ParsedDocx.warnings` so the ResultList can communicate possible
+ *  truncation to the user. */
+const SAFETY_TRIPPED_WARNING =
+  "multi-column: layout safety guard tripped (block iteration > MAX); output may be truncated";
+
+// TODO(task-10): Pass 1 reuses the real pdfDoc — its discard-page shim
+// absorbs draw calls but NOT pdfDoc.embedPng/embedJpg. When inline-image
+// runs are wired through layoutBlock at Task 10, every image in a
+// multi-column section will embed twice. Switch Pass 1 to a separate
+// PDFDocument.create() *or* pre-embed images at the orchestrator level
+// and pass an embedded-image map through ColumnContext (per the
+// orchestrator notes in spec §3.7).
 export type MultiColumnInput = {
   /** The section's body blocks. The function consumes these top-down. */
   blocks: ParsedBlock[];
@@ -186,6 +201,22 @@ function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): Multi
     const drawnHeight = yBefore - ctx.yPt;
     if (drawnHeight > 1e-6) anyContentOnThisPage = true;
     if (result.remainder !== undefined) {
+      // No-progress detector: same-block remainder with zero drawn
+      // height on a fresh page means a retry won't help (the column is
+      // already as tall as it'll ever be). Page-breaking and retrying
+      // would loop forever (until the safety counter trips after
+      // MAX_INNER_ITERATIONS pages), accumulating effectively-blank
+      // pages along the way. Surface a truncation warning and bail.
+      //
+      // The `yBefore === maxYPt` clause is load-bearing: legitimate
+      // primitives may return `remainder: p` when they ran out of room
+      // for a sub-element (e.g., heading space-before) MID-page; in
+      // those cases a fresh-page retry succeeds, so we must NOT
+      // false-alarm. Only fire when we were already at top-of-page.
+      if (result.remainder === block && drawnHeight <= 1e-6 && yBefore === maxYPt) {
+        deps.warnings.push(SAFETY_TRIPPED_WARNING);
+        break;
+      }
       // Block didn't finish — page-break, push remainder, retry.
       page = pdfDoc.addPage([pageGeometry.widthPt, pageGeometry.heightPt]);
       pagesAdded += 1;
@@ -194,6 +225,9 @@ function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): Multi
       anyContentOnThisPage = false;
       pending.unshift(result.remainder);
     }
+  }
+  if (safety <= 0 && pending.length > 0) {
+    deps.warnings.push(SAFETY_TRIPPED_WARNING);
   }
 
   return { pagesAdded, endingCtx: ctx };
@@ -240,13 +274,12 @@ function layoutBalanced(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColu
     const rawTarget = naturalHeight / columnCount;
     const balanceTarget = Math.min(Math.max(rawTarget, 1), bodyHeight);
 
-    // Pass 2: real fill across N columns. Overflow into the next page
-    // becomes the next iteration's `pending`.
-    const page = pdfDoc.addPage([pageGeometry.widthPt, pageGeometry.heightPt]);
-    pagesAdded += 1;
+    // Pass 2: real fill across N columns. The page is added lazily
+    // inside `fillRealColumns` on the first successful content draw —
+    // an overflow-on-first-block path therefore leaves no blank pages
+    // in the PDF. Overflow becomes the next iteration's `pending`.
     const passResult = fillRealColumns(
       pending,
-      page,
       columns,
       pageGeometry,
       maxYPt,
@@ -257,14 +290,43 @@ function layoutBalanced(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColu
       pdfDoc,
     );
 
+    pagesAdded += passResult.pagesAddedHere;
+    const pendingBefore = pending;
     pending = passResult.overflow;
-    lastCtx = passResult.endingCtx;
+    if (passResult.endingCtx !== undefined) {
+      lastCtx = passResult.endingCtx;
+    }
 
     if (passResult.unbalancedByDesign) {
       input.deps.warnings.push(
         "multi-column section unbalanced-by-design (block exceeds balance target with no clean break)",
       );
     }
+
+    // No-progress detector: if `fillRealColumns` returned an overflow
+    // whose head is the SAME object reference as the input head AND the
+    // overflow length didn't shrink, the per-page draw made zero
+    // progress (e.g., a layout primitive that always returns
+    // `remainder === block` with zero drawn height). Continuing would
+    // accumulate one effectively-blank page per outer iteration until
+    // the outer safety counter trips at MAX_INNER_ITERATIONS. Break
+    // here and surface a structured truncation warning instead.
+    //
+    // Reference equality on the head is load-bearing: a legitimate
+    // splittable block that produces a `remainder` for the next page
+    // returns a NEW object (e.g., paragraph slice from `index` onward),
+    // so the head reference differs and we don't false-alarm.
+    if (
+      pending.length >= pendingBefore.length &&
+      pending.length > 0 &&
+      pending[0] === pendingBefore[0]
+    ) {
+      input.deps.warnings.push(SAFETY_TRIPPED_WARNING);
+      break;
+    }
+  }
+  if (safety <= 0 && pending.length > 0) {
+    input.deps.warnings.push(SAFETY_TRIPPED_WARNING);
   }
 
   return { pagesAdded, ...(lastCtx !== undefined && { endingCtx: lastCtx }) };
@@ -291,6 +353,13 @@ function passOneNaturalHeight(
   deps: LayoutDeps,
   pdfDoc: PDFDocument,
 ): Pt {
+  // TODO(task-10): Pass 1 reuses the real pdfDoc — its discard-page shim
+  // absorbs draw calls but NOT pdfDoc.embedPng/embedJpg. When inline-image
+  // runs are wired through layoutBlock at Task 10, every image in a
+  // multi-column section will embed twice. Switch Pass 1 to a separate
+  // PDFDocument.create() *or* pre-embed images at the orchestrator level
+  // and pass an embedded-image map through ColumnContext (per the
+  // orchestrator notes in spec §3.7).
   const discardPage = makeDiscardPage();
   const ctx: ColumnContext = {
     page: discardPage,
@@ -335,6 +404,13 @@ function passOneNaturalHeight(
       pending.unshift(result.remainder);
     }
   }
+  if (safety <= 0 && pending.length > 0) {
+    // Push to the REAL deps.warnings — scratchDeps.warnings is discarded
+    // along with Pass 1's other scratch state, but a safety trip means
+    // the natural-fill measurement is incomplete and the user-visible
+    // output may be truncated.
+    deps.warnings.push(SAFETY_TRIPPED_WARNING);
+  }
   return startY - ctx.yPt;
 }
 
@@ -346,17 +422,24 @@ type PassTwoResult = {
   /** Blocks that didn't fit on this page; feed back to the per-page loop. */
   overflow: ParsedBlock[];
   /** Final column context (last column we wrote to). Used by the
-   *  orchestrator to know where the section ended. */
-  endingCtx: ColumnContext;
+   *  orchestrator to know where the section ended. Undefined when no
+   *  page was added (e.g., the input collapsed to leading-break-only on
+   *  an already-fresh page and produced no real content). */
+  endingCtx: ColumnContext | undefined;
   /** True when at least one block on this page hit the
    *  unbalanced-by-design fallback (single un-splittable block taller
    *  than the balance target with no remainder produced). */
   unbalancedByDesign: boolean;
+  /** Pages added to `pdfDoc` during this call. 0 when the lazy add never
+   *  fired (overflow on first block, or only-leading-break input). The
+   *  outer `layoutBalanced` loop accumulates this into the final
+   *  `pagesAdded` so the section's page count reflects only pages that
+   *  carry content. */
+  pagesAddedHere: number;
 };
 
 function fillRealColumns(
   blocks: ParsedBlock[],
-  page: ColumnContext["page"],
   columns: ColumnGeometry[],
   pageGeometry: PageGeometry,
   maxYPt: Pt,
@@ -378,14 +461,32 @@ function fillRealColumns(
    *  of a fresh page is a no-op so we don't emit a spurious blank page). */
   let anyContentOnThisPage = false;
 
+  // Lazy-page tracking. `pdfDoc.addPage` is deferred until the first
+  // `layoutBlock` call so an overflow-on-first-block path does not leave
+  // a blank page in the PDF. The placeholder page is never drawn into
+  // (it satisfies typing for `ColumnContext.page` until the real page
+  // exists; once `ensurePageAdded` fires, all subsequent draws hit the
+  // real page).
+  const placeholderPage = makeDiscardPage();
+  let realPage: ColumnContext["page"] | undefined;
+  let pagesAddedHere = 0;
+  const ensurePageAdded = (): void => {
+    if (realPage === undefined) {
+      realPage = pdfDoc.addPage([pageGeometry.widthPt, pageGeometry.heightPt]);
+      pagesAddedHere = 1;
+      ctx.page = realPage;
+    }
+  };
+
   // Build the first column's context up-front so we can return it as
-  // `endingCtx` even if the very first block overflows.
+  // `endingCtx` even if the very first block overflows. `page` is the
+  // placeholder until `ensurePageAdded` swaps in the real page.
   const firstColGeo = columns[0];
   if (firstColGeo === undefined) {
     throw new Error("multi-column: empty column geometries");
   }
   let ctx: ColumnContext = {
-    page,
+    page: placeholderPage,
     pageGeometry,
     column: firstColGeo,
     yPt: columnStartY,
@@ -416,7 +517,12 @@ function fillRealColumns(
       // the page-break flag on the block so the next page doesn't loop
       // forever.
       const restWithoutFlag = [stripFirstRunBreaks(block), ...pending.slice(1)];
-      return { overflow: restWithoutFlag, endingCtx: ctx, unbalancedByDesign };
+      return {
+        overflow: restWithoutFlag,
+        endingCtx: realPage !== undefined ? ctx : undefined,
+        unbalancedByDesign,
+        pagesAddedHere,
+      };
     }
     if (breakKind === "column") {
       const stripped = stripFirstRunBreaks(block);
@@ -430,14 +536,19 @@ function fillRealColumns(
       // treat as a page break (overflow to next page).
       if (columnIdx >= columns.length - 1) {
         const restWithoutFlag = [stripped, ...pending.slice(1)];
-        return { overflow: restWithoutFlag, endingCtx: ctx, unbalancedByDesign };
+        return {
+          overflow: restWithoutFlag,
+          endingCtx: realPage !== undefined ? ctx : undefined,
+          unbalancedByDesign,
+          pagesAddedHere,
+        };
       }
       pending[0] = stripped;
       columnIdx += 1;
       const nextCol = columns[columnIdx];
       if (nextCol === undefined) break;
       ctx = {
-        page,
+        page: realPage ?? placeholderPage,
         pageGeometry,
         column: nextCol,
         yPt: columnStartY,
@@ -459,7 +570,7 @@ function fillRealColumns(
       const nextCol = columns[columnIdx];
       if (nextCol === undefined) break;
       ctx = {
-        page,
+        page: realPage ?? placeholderPage,
         pageGeometry,
         column: nextCol,
         yPt: columnStartY,
@@ -470,6 +581,9 @@ function fillRealColumns(
       };
       continue;
     }
+
+    // About to draw — materialize the page if we haven't yet.
+    ensurePageAdded();
 
     const yBefore = ctx.yPt;
     const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, deps);
@@ -484,13 +598,18 @@ function fillRealColumns(
       if (columnIdx >= columns.length - 1) {
         // Last column on this page is full; remainder + rest spill to
         // next page.
-        return { overflow: pending.slice(), endingCtx: ctx, unbalancedByDesign };
+        return {
+          overflow: pending.slice(),
+          endingCtx: ctx,
+          unbalancedByDesign,
+          pagesAddedHere,
+        };
       }
       columnIdx += 1;
       const nextCol = columns[columnIdx];
       if (nextCol === undefined) break;
       ctx = {
-        page,
+        page: realPage ?? placeholderPage,
         pageGeometry,
         column: nextCol,
         yPt: columnStartY,
@@ -515,8 +634,16 @@ function fillRealColumns(
     }
     pending.shift();
   }
+  if (safety <= 0 && pending.length > 0) {
+    deps.warnings.push(SAFETY_TRIPPED_WARNING);
+  }
 
-  return { overflow: pending, endingCtx: ctx, unbalancedByDesign };
+  return {
+    overflow: pending,
+    endingCtx: realPage !== undefined ? ctx : undefined,
+    unbalancedByDesign,
+    pagesAddedHere,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -574,38 +701,4 @@ function stripFirstRunBreaks(block: ParsedBlock): ParsedBlock {
   const { pageBreakBefore: _pb, columnBreakBefore: _cb, ...rest } = firstRun;
   const newRuns: Run[] = [rest, ...block.runs.slice(1)];
   return { ...block, runs: newRuns };
-}
-
-/**
- * Build a no-op page shim that absorbs draw + annotation calls without
- * polluting any real PDF content. Mirrors `tables.ts`'s `makeDiscardPage`
- * — keep the two implementations in sync.
- *
- * The shim must absorb `drawText` / `drawLine` / `drawRectangle` /
- * `drawImage` (the layout primitives' draw vocabulary) and the pdf-lib
- * annotation API surface (`doc.context.obj`, `doc.context.register`,
- * `node.addAnnot`) so hyperlink runs encountered during the measure pass
- * don't double-register.
- */
-function makeDiscardPage(): ColumnContext["page"] {
-  const noopContext = {
-    obj<T>(literal: T): T {
-      return literal;
-    },
-    register<T>(_obj: T): { __discard: true } {
-      return { __discard: true };
-    },
-  };
-  const shim = {
-    drawText() {},
-    drawLine() {},
-    drawRectangle() {},
-    drawImage() {},
-    getSize() {
-      return { width: 612, height: 792 };
-    },
-    doc: { context: noopContext },
-    node: { addAnnot(_ref: unknown) {} },
-  };
-  return shim as unknown as ColumnContext["page"];
 }
