@@ -56,6 +56,12 @@ export type LayoutDeps = {
   /** Mutable list-state counters — flows across calls so consecutive
    *  list paragraphs at the same `(numId, ilvl)` increment correctly. */
   listState: ListState;
+  /** Mutable accumulator for non-fatal layout warnings (e.g., a table
+   *  cell whose content overflowed its measured row height and was
+   *  clipped). The orchestrator (Task 10) reads this after `layoutBlock`
+   *  calls return and merges it into `ParsedDocx.warnings`. Layout
+   *  modules append; consumers never mutate it back. */
+  warnings: string[];
 };
 
 export type LayoutBlockResult = {

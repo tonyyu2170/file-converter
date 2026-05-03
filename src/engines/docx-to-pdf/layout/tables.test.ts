@@ -7,8 +7,9 @@ import type {
   TableRow,
 } from "@/engines/docx-to-pdf/docx-parser/types";
 import { PDFDocument } from "pdf-lib";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type MockPage, makeColumnContext } from "./_test-helpers";
+import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
 import { createListState } from "./lists";
 import { layoutTable } from "./tables";
@@ -56,6 +57,7 @@ function makeDeps(): LayoutDeps {
     numbering: new Map(),
     relationships: new Map(),
     listState: createListState(),
+    warnings: [],
   };
 }
 
@@ -66,7 +68,7 @@ async function freshDoc(): Promise<PDFDocument> {
 /* ---------- Simple grid ---------- */
 
 describe("layoutTable — rectangular grid", () => {
-  it("draws a 2x2 table with borders around each cell", async () => {
+  it("draws a 2x2 table with deduped grid borders (no double strokes)", async () => {
     const ctx = makeColumnContext({ yPt: 700 });
     const pdf = await freshDoc();
     const t = makeTable(
@@ -77,9 +79,16 @@ describe("layoutTable — rectangular grid", () => {
     expect(result.remainder).toBeUndefined();
     expect(result.drawnHeight).toBeGreaterThan(0);
     const lineCalls = (ctx.page as MockPage).__calls.filter((c) => c.op === "drawLine");
-    // 2 rows × 4 borders/cell × 2 cells/row = 16 borders. (Adjacent
-    // cells double-up at shared edges; we don't dedupe in v1.)
-    expect(lineCalls.length).toBeGreaterThanOrEqual(16);
+    // Deduped border model:
+    //   horizontals: outer top (1) + internal row-1 boundary
+    //     segmented per non-continue cell (2 segments) + outer bottom
+    //     (1) = 4
+    //   verticals: outer left (1) + outer right (1) + internal column
+    //     boundary segmented per row (2 segments, no gridSpan crosses)
+    //     = 4
+    // Total: 8. Earlier per-cell model emitted 16 with shared edges
+    // double-stroked.
+    expect(lineCalls.length).toBe(8);
   });
 
   it("draws cell text content", async () => {
@@ -166,9 +175,15 @@ describe("layoutTable — vMerge", () => {
     );
     layoutTable(t, ctx, pdf, makeDeps());
     const lines = (ctx.page as MockPage).__calls.filter((c) => c.op === "drawLine");
-    // Each cell normally has 4 borders. The continue cell should have 3
-    // (top suppressed). So total: 4 + 3 = 7.
-    expect(lines.length).toBe(7);
+    // Deduped border model with vMerge suppression:
+    //   - outer top + outer bottom = 2 horizontals
+    //   - internal horizontal at row 1: row 1's only cell is "continue"
+    //     → suppressed (0 segments)
+    //   - outer left + outer right = 2 verticals
+    //   - no internal vertical (single column)
+    // Total: 4. Earlier per-cell model emitted 7 (start cell's 4 +
+    // continue cell's 3 with top suppressed).
+    expect(lines.length).toBe(4);
   });
 });
 
@@ -284,5 +299,60 @@ describe("layoutTable — defaults", () => {
       .map((c) => (c.op === "drawText" ? c.text : ""));
     expect(texts).toContain("p1");
     expect(texts).toContain("nested");
+  });
+});
+
+/* ---------- Cell-clip warning ---------- */
+
+describe("layoutTable — cell content clipping", () => {
+  it("does not warn when content fits the cell", async () => {
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps();
+    const t = makeTable([row([cell([para("fits")])])], [200]);
+    layoutTable(t, ctx, pdf, deps);
+    expect(deps.warnings).toEqual([]);
+  });
+
+  it("emits a structured warning when a cell block returns a remainder", async () => {
+    // measure & draw use the same primitives, so natural content can't
+    // produce a draw-pass remainder. Spy on layoutBlock to inject a
+    // one-shot remainder during the DRAW pass — measure runs first via
+    // the discard page, draw runs second on the real page. The shared
+    // counter ensures we discriminate "first draw call" without
+    // touching the measure pass at all.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps();
+    const t = makeTable([row([cell([para("Top")]), cell([para("Right")])])], [200, 200]);
+
+    const real = blockDispatch.layoutBlock;
+    let drawCallsSeen = 0;
+    const spy = vi.spyOn(blockDispatch, "layoutBlock").mockImplementation((block, c, p, d) => {
+      // Measure pass uses a discard page (page.__calls absent on the
+      // shim object). Real draw pass runs against ctx.page (a MockPage
+      // with __calls). Discriminate by presence of __calls.
+      const isDraw = "__calls" in (c.page as object);
+      if (isDraw) {
+        drawCallsSeen += 1;
+        if (drawCallsSeen === 1) {
+          // First draw-pass cell: synthesize a remainder so the
+          // table layer's clip-warning code runs.
+          return { drawnHeight: 0, remainder: block };
+        }
+      }
+      return real(block, c, p, d);
+    });
+
+    try {
+      layoutTable(t, ctx, pdf, deps);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(deps.warnings.length).toBe(1);
+    expect(deps.warnings[0]).toContain("table cell content clipped");
+    expect(deps.warnings[0]).toMatch(/row 0/);
+    expect(deps.warnings[0]).toMatch(/col 0/);
   });
 });

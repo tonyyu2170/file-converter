@@ -70,6 +70,7 @@ function makeDeps(numbering: NumberingDef[] = []): LayoutDeps {
     numbering: map,
     relationships: new Map(),
     listState: createListState(),
+    warnings: [],
   };
 }
 
@@ -402,5 +403,34 @@ describe("layoutListItem — defensive paths", () => {
     const deps = makeDeps([bulletDef("1")]);
     const result = layoutListItem(makeListPara("X", "1", 0), ctx, pdf, deps);
     expect(result.remainder).toBeDefined();
+  });
+
+  it("does not bump counter when level definition is missing", async () => {
+    // numId is registered but ilvl=5 has no level definition. The
+    // default-bullet fallback renders, but ListState counters MUST NOT
+    // advance for the phantom level — silently bumping would corrupt
+    // any later paragraph that references a sibling level under the
+    // same numId, or any downstream tooling reading ListState.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const incomplete: NumberingDef = { numId: "1", levels: new Map() };
+    const deps = makeDeps([incomplete]);
+    layoutListItem(makeListPara("Phantom", "1", 5), ctx, pdf, deps);
+    // No counters should be tracked for numId "1" at all — bumpCounter
+    // was never called, so neither the counters Map nor the lastLevel
+    // Map gained an entry for it.
+    expect(deps.listState.counters.get("1")).toBeUndefined();
+    expect(deps.listState.lastLevel.get("1")).toBeUndefined();
+  });
+
+  it("does not bump counter when numId is unknown", async () => {
+    // numId entirely missing from the numbering map. Default-bullet
+    // fallback renders; counters stay untouched.
+    const ctx = makeColumnContext({ yPt: 700 });
+    const pdf = await freshDoc();
+    const deps = makeDeps(); // empty numbering map
+    layoutListItem(makeListPara("Lonely", "missing", 0), ctx, pdf, deps);
+    expect(deps.listState.counters.size).toBe(0);
+    expect(deps.listState.lastLevel.size).toBe(0);
   });
 });

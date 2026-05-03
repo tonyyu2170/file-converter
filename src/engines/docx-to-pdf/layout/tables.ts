@@ -40,8 +40,11 @@
  *     into a deep "scratch" column with effectively-infinite height.
  *     Block remainders inside a cell are treated as cell content that
  *     "continues" within the same cell box (we just measure total height
- *     and the row gets sized to fit). If the cell content's height blows
- *     past one page, we clip — TODO surface this as a warning.
+ *     and the row gets sized to fit). If a cell's draw-pass nonetheless
+ *     produces a remainder (rare — measure and draw use the same
+ *     primitives, so the only escape hatch is content blowing past one
+ *     page), the remainder is clipped and a warning is pushed to
+ *     `deps.warnings` so the orchestrator can surface it to the user.
  */
 
 import type {
@@ -52,7 +55,11 @@ import type {
 } from "@/engines/docx-to-pdf/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
 import { rgb } from "pdf-lib";
-import { layoutBlock } from "./block-dispatch";
+// Namespace import so tests can `vi.spyOn(blockDispatch, "layoutBlock")`.
+// ESM import-bindings are read-only when imported by name, so the named
+// form would prevent test-time interception of the dispatch boundary
+// without polluting production code with a DI seam.
+import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
 import type { ColumnContext, ColumnGeometry, Pt } from "./types";
 import { wouldOverflow } from "./y-cursor";
@@ -89,20 +96,13 @@ export function layoutTable(
   // distribute the column width equally across the row's cell count.
   const colWidths = resolveColumnWidths(table, ctx);
 
-  // Active vMerge tracker: per column slot, the "start" cell that's
-  // currently extending. We need this to compute the merged cell's full
-  // height when the merge ends. v1 keeps it simple: track active starts
-  // by column index; track each start's accumulated height.
-  type ActiveMerge = {
-    startRow: number;
-    startCol: number;
-    startCell: TableCell;
-    /** Height accumulated across all rows it's consumed so far. */
-    accumulatedHeightPt: number;
-    /** Width across the merged span. */
-    spanWidthPt: number;
-  };
-  const activeMerges = new Map<number, ActiveMerge>();
+  // Track each rendered row so the post-loop border pass can draw one
+  // hairline per row/column boundary instead of four per cell. Earlier
+  // versions kept an `activeMerges` Map here and drew borders inline,
+  // which double-stroked every shared edge; v1.1's vMerge bottom-border
+  // polish (TODO) will use these same row records.
+  const renderedRows: { row: TableRow; topY: Pt; heightPt: Pt }[] = [];
+  let remainder: Table | undefined;
 
   for (let r = 0; r < table.rows.length; r++) {
     const row = table.rows[r];
@@ -112,30 +112,32 @@ export function layoutTable(
     const rowMeasure = measureRow(row, colWidths, ctx, pdfDoc, deps);
 
     // Atomic-row pagination: if this row doesn't fit AND we've already
-    // drawn at least one row, return remainder.
+    // drawn at least one row, stop and emit a remainder. Borders for
+    // the rows we DID render still need to be drawn (below).
     if (wouldOverflow(ctx, rowMeasure.heightPt) && r > 0) {
-      const remainingRows = table.rows.slice(r);
-      return {
-        drawnHeight: startYPt - ctx.yPt,
-        remainder: { kind: "table", rows: remainingRows, columnWidthsPt: colWidths },
-      };
+      remainder = { kind: "table", rows: table.rows.slice(r), columnWidthsPt: colWidths };
+      break;
     }
 
-    // Draw the row's cell content (each cell into its sub-column).
-    drawRowContent(row, r, colWidths, rowMeasure.heightPt, ctx, pdfDoc, deps, activeMerges);
+    const rowTopY = ctx.yPt;
 
-    // Draw cell borders for this row (after content). vMerge "continue"
-    // cells suppress their top border so the merged cell reads as one
-    // tall box.
-    drawRowBorders(row, colWidths, rowMeasure.heightPt, ctx);
+    // Draw the row's cell content (each cell into its sub-column).
+    drawRowContent(row, r, colWidths, rowMeasure.heightPt, ctx, pdfDoc, deps);
 
     // Advance y-cursor past this row's height.
     ctx.yPt -= rowMeasure.heightPt;
 
-    // Update active vMerges that didn't terminate this row.
-    advanceActiveMerges(row, activeMerges, rowMeasure.heightPt, colWidths);
+    renderedRows.push({ row, topY: rowTopY, heightPt: rowMeasure.heightPt });
   }
 
+  // Borders, drawn once across the whole table (one hairline per row
+  // boundary, one per column boundary). vMerge "continue" cells suppress
+  // their top boundary so the merged cell reads as one tall box.
+  drawTableBorders(renderedRows, colWidths, ctx);
+
+  if (remainder !== undefined) {
+    return { drawnHeight: startYPt - ctx.yPt, remainder };
+  }
   return { drawnHeight: startYPt - ctx.yPt };
 }
 
@@ -253,7 +255,7 @@ function measureCellContent(
   while (pending.length > 0 && safety > 0) {
     const block = pending.shift();
     if (block === undefined) break;
-    const result = layoutBlock(block, ctx, pdfDoc, deps);
+    const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, deps);
     if (result.remainder !== undefined) {
       pending = [result.remainder, ...pending];
     }
@@ -280,6 +282,12 @@ function measureCellContent(
  * (once in measure, once in draw) — that's a known limitation of the
  * measure-then-draw model and only affects the v1.1+ "list inside cell"
  * fixture. None of v1's fixtures hit this path.
+ *
+ * Similarly, no layout primitive currently emits warnings during
+ * `layoutBlock`, so the measure pass doesn't double-push to
+ * `deps.warnings`. If a future primitive starts emitting warnings
+ * during layout (not just during parse), `LayoutDeps` will need a
+ * discard-mode flag the measure pass can set to skip warning pushes.
  */
 function makeDiscardPage(_realPage: ColumnContext["page"]): ColumnContext["page"] {
   const noopContext = {
@@ -307,8 +315,14 @@ function makeDiscardPage(_realPage: ColumnContext["page"]): ColumnContext["page"
 /**
  * Draw a row's cells (each into its own sub-column). Real draw — uses
  * the parent ctx's page. Each cell's content is anchored at the row's
- * top inset, with the row sized to `rowHeightPt`. Tracks vMerge
- * activations.
+ * top inset, with the row sized to `rowHeightPt`.
+ *
+ * vMerge "continue" cells consume their column slot but draw no content
+ * (the "start" cell upstream already drew). v1's vMerge support stops
+ * there: the start cell only spans the visual height of its own row,
+ * and the continue cells get suppressed top borders so the merged box
+ * reads cleanly. Properly extending the start cell's height across
+ * its merge run is a v1.1 polish.
  */
 function drawRowContent(
   row: TableRow,
@@ -318,16 +332,6 @@ function drawRowContent(
   parentCtx: ColumnContext,
   pdfDoc: PDFDocument,
   deps: LayoutDeps,
-  activeMerges: Map<
-    number,
-    {
-      startRow: number;
-      startCol: number;
-      startCell: TableCell;
-      accumulatedHeightPt: number;
-      spanWidthPt: number;
-    }
-  >,
 ): void {
   let colIdx = 0;
   const rowTopY = parentCtx.yPt;
@@ -342,17 +346,6 @@ function drawRowContent(
       // Don't draw content; the start cell handled it. Just consume the slot.
       colIdx += span;
       continue;
-    }
-
-    if (cell.vMerge === "start") {
-      // Track this start so subsequent "continue" rows can extend it.
-      activeMerges.set(colIdx, {
-        startRow: rowIdx,
-        startCol: colIdx,
-        startCell: cell,
-        accumulatedHeightPt: rowHeightPt,
-        spanWidthPt: cellWidthPt,
-      });
     }
 
     // Synthesize a per-cell column context.
@@ -380,10 +373,13 @@ function drawRowContent(
     while (pending.length > 0 && safety > 0) {
       const block = pending.shift();
       if (block === undefined) break;
-      const result = layoutBlock(block, cellCtx, pdfDoc, deps);
+      const result = blockDispatch.layoutBlock(block, cellCtx, pdfDoc, deps);
       if (result.remainder !== undefined) {
-        // Cell content overflowed its measured height. v1 stops here —
-        // TODO(v1.1) surface this as a "cell content clipped" warning.
+        // Cell content overflowed its measured height. The remainder
+        // is silently discarded (v1 doesn't reflow into adjacent rows
+        // or page-break inside a cell). Surface a structured warning so
+        // the orchestrator can merge it into ParsedDocx.warnings.
+        deps.warnings.push(`table cell content clipped (row ${rowIdx}, col ${colIdx})`);
         break;
       }
       safety -= 1;
@@ -404,100 +400,131 @@ function sliceLeftOffset(colWidths: number[], idx: number): number {
 }
 
 /**
- * Draw the borders for a row's cells. Hairline rectangles, 0.5pt black,
- * top edge suppressed for vMerge "continue" cells.
+ * Draw the table's borders as a deduped grid: one hairline per row
+ * boundary (horizontal) and one per column boundary (vertical), instead
+ * of four borders per cell. This eliminates the double-stroking that
+ * used to happen at every shared edge of the per-cell border pass.
+ *
+ * Boundary rules:
+ *
+ *   - Outer top, bottom, left, right edges always draw across the full
+ *     extent of rendered rows / total grid width.
+ *   - Internal horizontal between row r-1 and r: walk row r's cells and
+ *     emit one segment per cell whose `vMerge !== "continue"`. A
+ *     "continue" cell suppresses its top boundary so the merged cell
+ *     reads as one tall box.
+ *   - Internal vertical at column boundary c: per row, skip the segment
+ *     if a cell at that row spans across c (i.e., a `gridSpan > 1` cell
+ *     consumed both sides of the boundary — we don't draw a vertical
+ *     line through the middle of a colspan cell).
+ *
+ * Coordinates:
+ *
+ *   - All horizontal boundaries lie at the topY of some row (or the
+ *     bottom of the last row).
+ *   - All vertical boundaries lie at `column.xPt + cumulative-col-width`.
  */
-function drawRowBorders(
-  row: TableRow,
+function drawTableBorders(
+  renderedRows: { row: TableRow; topY: Pt; heightPt: Pt }[],
   colWidths: number[],
-  rowHeightPt: Pt,
   parentCtx: ColumnContext,
 ): void {
+  if (renderedRows.length === 0) return;
+
+  const tableLeftX = parentCtx.column.xPt;
+  const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  const tableRightX = tableLeftX + totalWidth;
+  const firstRow = renderedRows[0];
+  if (firstRow === undefined) return;
+  const tableTopY = firstRow.topY;
+  const lastRow = renderedRows[renderedRows.length - 1];
+  if (lastRow === undefined) return;
+  const tableBottomY = lastRow.topY - lastRow.heightPt;
+
+  // Horizontal boundaries.
+  // Top edge of the table: always full-width.
+  drawHairline(parentCtx, tableLeftX, tableTopY, tableRightX, tableTopY);
+
+  // Internal horizontal boundaries between rows: one per row r >= 1,
+  // segmented by columns and suppressed for vMerge="continue" cells.
+  for (let r = 1; r < renderedRows.length; r++) {
+    const entry = renderedRows[r];
+    if (entry === undefined) continue;
+    drawHorizontalRowBoundary(parentCtx, entry.row, colWidths, tableLeftX, entry.topY);
+  }
+
+  // Bottom edge of the table: always full-width.
+  drawHairline(parentCtx, tableLeftX, tableBottomY, tableRightX, tableBottomY);
+
+  // Vertical boundaries.
+  // Outer left + right edges: span the entire rendered table height.
+  drawHairline(parentCtx, tableLeftX, tableTopY, tableLeftX, tableBottomY);
+  drawHairline(parentCtx, tableRightX, tableTopY, tableRightX, tableBottomY);
+
+  // Internal vertical boundaries: for each column boundary c
+  // (1..colWidths.length-1), draw one segment per rendered row UNLESS
+  // a cell in that row spans across the boundary (gridSpan covers it).
+  let xCursor = tableLeftX;
+  for (let c = 0; c < colWidths.length - 1; c++) {
+    const w = colWidths[c];
+    if (w === undefined) continue;
+    xCursor += w;
+    const boundaryColIdx = c + 1; // 1-based column-boundary index
+    for (const entry of renderedRows) {
+      if (rowSpansColumnBoundary(entry.row, boundaryColIdx)) continue;
+      drawHairline(parentCtx, xCursor, entry.topY, xCursor, entry.topY - entry.heightPt);
+    }
+  }
+}
+
+/** Draw the horizontal boundary above row `row` whose top sits at
+ *  `rowTopY`. Segmented by columns; segments under a "continue" cell
+ *  are suppressed (the merged start cell extends through them). */
+function drawHorizontalRowBoundary(
+  parentCtx: ColumnContext,
+  row: TableRow,
+  colWidths: number[],
+  tableLeftX: Pt,
+  rowTopY: Pt,
+): void {
   let colIdx = 0;
-  const rowTopY = parentCtx.yPt;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) continue;
     const span = Math.max(1, cell.gridSpan);
-    const cellWidthPt = sliceWidth(colWidths, colIdx, span);
-    const cellLeftX = parentCtx.column.xPt + sliceLeftOffset(colWidths, colIdx);
-    const cellBottomY = rowTopY - rowHeightPt;
-    const isContinue = cell.vMerge === "continue";
-
-    // Bottom border (always for "none" and "start"; suppressed only when
-    // a downstream "continue" exists — but that's handled by the next
-    // row's top-border suppression. The bottom of a "start" cell is
-    // visually fine because a "continue" cell below has its own bottom).
-    parentCtx.page.drawLine({
-      start: { x: cellLeftX, y: cellBottomY },
-      end: { x: cellLeftX + cellWidthPt, y: cellBottomY },
-      thickness: BORDER_THICKNESS_PT,
-      color: rgb(0, 0, 0),
-    });
-
-    // Top border — suppressed for "continue" cells (the merged cell
-    // reads as one tall box).
-    if (!isContinue) {
-      parentCtx.page.drawLine({
-        start: { x: cellLeftX, y: rowTopY },
-        end: { x: cellLeftX + cellWidthPt, y: rowTopY },
-        thickness: BORDER_THICKNESS_PT,
-        color: rgb(0, 0, 0),
-      });
+    const segWidth = sliceWidth(colWidths, colIdx, span);
+    if (cell.vMerge !== "continue") {
+      const segLeftX = tableLeftX + sliceLeftOffset(colWidths, colIdx);
+      drawHairline(parentCtx, segLeftX, rowTopY, segLeftX + segWidth, rowTopY);
     }
-
-    // Left border.
-    parentCtx.page.drawLine({
-      start: { x: cellLeftX, y: rowTopY },
-      end: { x: cellLeftX, y: cellBottomY },
-      thickness: BORDER_THICKNESS_PT,
-      color: rgb(0, 0, 0),
-    });
-
-    // Right border.
-    parentCtx.page.drawLine({
-      start: { x: cellLeftX + cellWidthPt, y: rowTopY },
-      end: { x: cellLeftX + cellWidthPt, y: cellBottomY },
-      thickness: BORDER_THICKNESS_PT,
-      color: rgb(0, 0, 0),
-    });
-
     colIdx += span;
   }
 }
 
-/** Update active vMerge entries' accumulated height after this row drew. */
-function advanceActiveMerges(
-  row: TableRow,
-  activeMerges: Map<
-    number,
-    {
-      startRow: number;
-      startCol: number;
-      startCell: TableCell;
-      accumulatedHeightPt: number;
-      spanWidthPt: number;
-    }
-  >,
-  rowHeightPt: Pt,
-  _colWidths: number[],
-): void {
-  // Walk this row's cells; for each "continue" cell, bump the
-  // corresponding active merge's accumulated height. For each "none" /
-  // "start" cell at a column slot, terminate any active merge at that
-  // slot (it ended).
+/** True iff some cell in `row` spans across the column boundary at
+ *  `boundaryColIdx` (i.e., its gridSpan covers both sides). */
+function rowSpansColumnBoundary(row: TableRow, boundaryColIdx: number): boolean {
   let colIdx = 0;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) continue;
     const span = Math.max(1, cell.gridSpan);
-    if (cell.vMerge === "continue") {
-      const m = activeMerges.get(colIdx);
-      if (m !== undefined) m.accumulatedHeightPt += rowHeightPt;
-    } else if (cell.vMerge === "none") {
-      activeMerges.delete(colIdx);
-    }
-    // For "start", we just inserted it in drawRowContent — don't touch.
+    // Cell occupies columns [colIdx, colIdx + span). The boundary at
+    // boundaryColIdx sits between columns boundaryColIdx-1 and
+    // boundaryColIdx. The cell crosses the boundary iff
+    // colIdx < boundaryColIdx < colIdx + span.
+    if (colIdx < boundaryColIdx && boundaryColIdx < colIdx + span) return true;
     colIdx += span;
   }
+  return false;
+}
+
+/** Single hairline-stroke helper. */
+function drawHairline(parentCtx: ColumnContext, x1: Pt, y1: Pt, x2: Pt, y2: Pt): void {
+  parentCtx.page.drawLine({
+    start: { x: x1, y: y1 },
+    end: { x: x2, y: y2 },
+    thickness: BORDER_THICKNESS_PT,
+    color: rgb(0, 0, 0),
+  });
 }

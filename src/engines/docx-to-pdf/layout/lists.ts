@@ -108,10 +108,17 @@ export function layoutListItem(
   const def = deps.numbering.get(numId);
   const level = def?.levels.get(ilvl);
 
-  // 1. Bump counter (and reset deeper levels). Counter is 1-based.
-  const counterValue = bumpCounter(deps.listState, numId, ilvl);
+  // 1. Bump counter only when the level is resolvable. A missing
+  //    numbering def or missing level definition takes the default-bullet
+  //    fallback path WITHOUT advancing counters — bumping for phantom
+  //    levels would silently corrupt `ListState` for any downstream
+  //    consumer that later reads it (or for a future paragraph that
+  //    references a sibling level under the same numId). Counter is
+  //    1-based once incremented.
+  const counterValue = level !== undefined ? bumpCounter(deps.listState, numId, ilvl) : 0;
 
-  // 2. Compute marker text.
+  // 2. Compute marker text. When `level` is undefined, computeMarkerText
+  //    short-circuits to the default bullet and ignores `counterValue`.
   const markerText = computeMarkerText(level, deps.listState, numId, ilvl, counterValue);
 
   // 3. Compute the shifted column geometry (indent right by ilvl + 1 levels).
@@ -137,11 +144,12 @@ export function layoutListItem(
   );
 
   // If we couldn't even fit the marker line, the whole paragraph is the
-  // remainder. The caller will break and re-invoke us; the counter has
-  // already been bumped, so we DON'T re-bump on the resume — that means
-  // re-bumping is undesirable, but the caller can't tell us "this is a
-  // resume". For v1 we accept the cost of an extra bump on the rare
-  // overflow-before-first-line case, and TODO a future fix.
+  // remainder. The caller will break and re-invoke us. When the level
+  // was resolvable, the counter has already been bumped — and the
+  // resumed call will bump it again. The caller can't tell us "this is
+  // a resume", so v1 accepts the extra bump on the rare
+  // overflow-before-first-line case. TODO: track this with a sentinel
+  // and skip the re-bump on resume.
   if (markerBaselineY === null) {
     return { drawnHeight: 0, remainder: p };
   }
