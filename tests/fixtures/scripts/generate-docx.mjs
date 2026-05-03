@@ -392,7 +392,10 @@ async function equationsDoc() {
   const out = mutateDocumentXml(baseBuf, (xml) => {
     // Replace the placeholder paragraph with an OMML equation paragraph.
     const omml = `<w:p><m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:oMath><m:r><m:t>a²+b²=c²</m:t></m:r></m:oMath></m:oMathPara></w:p>`;
-    return xml.replace(/<w:p>[^<]*<w:r><w:t>\[EQUATION_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/, omml);
+    return xml.replace(
+      /<w:p>[^<]*<w:r><w:t(?: [^>]*)?>\[EQUATION_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/,
+      omml,
+    );
   });
   await writeFile(join(FIXTURES, "equations-doc.docx"), out);
   process.stdout.write(`  equations-doc.docx (${(out.length / 1024).toFixed(1)} KB)\n`);
@@ -419,7 +422,10 @@ async function drawingsDoc() {
     // Inject a minimal <w:drawing> with a shape (not an image) — exercises
     // skip-with-warning detection without needing actual rendering data.
     const drawing = `<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="Shape1"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingShape"><wps:wsp xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
-    return xml.replace(/<w:p>[^<]*<w:r><w:t>\[DRAWING_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/, drawing);
+    return xml.replace(
+      /<w:p>[^<]*<w:r><w:t(?: [^>]*)?>\[DRAWING_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/,
+      drawing,
+    );
   });
   await writeFile(join(FIXTURES, "drawings-doc.docx"), out);
   process.stdout.write(`  drawings-doc.docx (${(out.length / 1024).toFixed(1)} KB)\n`);
@@ -446,7 +452,10 @@ async function rtlDoc() {
     // Inject an RTL paragraph with Arabic text.
     const rtl =
       "<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>مرحبا بالعالم</w:t></w:r></w:p>";
-    return xml.replace(/<w:p>[^<]*<w:r><w:t>\[RTL_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/, rtl);
+    return xml.replace(
+      /<w:p>[^<]*<w:r><w:t(?: [^>]*)?>\[RTL_PLACEHOLDER\]<\/w:t><\/w:r><\/w:p>/,
+      rtl,
+    );
   });
   await writeFile(join(FIXTURES, "rtl-doc.docx"), out);
   process.stdout.write(`  rtl-doc.docx (${(out.length / 1024).toFixed(1)} KB)\n`);

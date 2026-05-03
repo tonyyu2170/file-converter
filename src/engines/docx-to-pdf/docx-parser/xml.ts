@@ -61,6 +61,40 @@ export function createXmlParser(): XMLParser {
 }
 
 /**
+ * Order-preserving variant of `createXmlParser`. Required for body-shape
+ * XML (`document.xml`, footnote bodies, header/footer bodies) where children
+ * of mixed tag types are interleaved and document order is semantically
+ * load-bearing — paragraphs and tables share a parent in `<w:body>`, runs
+ * mix `<w:t>`, `<w:tab/>`, `<w:br/>`, `<w:drawing>`, and `<w:footnoteReference>`
+ * inside a single `<w:r>` etc.
+ *
+ * fast-xml-parser's default mode buckets children by tag name, dropping the
+ * inter-tag ordering. `preserveOrder: true` switches the output shape to an
+ * ordered array of single-key objects:
+ *
+ * ```
+ * [{ "w:p": [<children-in-order>...], ":@": {<attrs>} },
+ *  { "w:tbl": [...] },
+ *  { "w:p": [...] }]
+ * ```
+ *
+ * Each entry has exactly one tag-named key (its children array) plus an
+ * optional `":@"` key carrying the element's attributes. Text content is
+ * a child entry of shape `{ "#text": "..." }`. Use the `getTagName`,
+ * `getOrderedChildren`, and `getOrderedAttr` helpers below to traverse.
+ */
+export function createOrderedXmlParser(): XMLParser {
+  return new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    parseTagValue: false,
+    parseAttributeValue: false,
+    trimValues: false,
+    preserveOrder: true,
+  });
+}
+
+/**
  * Returns `true` when the input is well-formed XML, `false` otherwise.
  *
  * fast-xml-parser's `XMLParser.parse` is very lenient — `"<unclosed>"` and
@@ -139,4 +173,106 @@ export function getAttr(node: unknown, attrName: string): string | undefined {
   if (node === null || node === undefined || typeof node !== "object") return undefined;
   const v = (node as Record<string, unknown>)[`@_${attrName}`];
   return typeof v === "string" ? v : undefined;
+}
+
+/* ------------------------------------------------------------------ */
+/*   Ordered-mode (preserveOrder) traversal helpers                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * In `preserveOrder` mode each child entry is a single-key object whose key
+ * is the element's tag name (or `"#text"`), plus an optional `":@"` key
+ * holding the attributes. This shape returns the tag name. Returns
+ * `undefined` for non-object input or entries with no recognizable tag key.
+ */
+export function getTagName(entry: unknown): string | undefined {
+  if (entry === null || entry === undefined || typeof entry !== "object") return undefined;
+  const obj = entry as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (key === ":@") continue;
+    return key;
+  }
+  return undefined;
+}
+
+/**
+ * Returns the ordered children array under the entry's tag key. Always
+ * returns an array (empty when the entry has no children or shape doesn't
+ * match). Use after `getTagName` to walk into a node.
+ */
+export function getOrderedChildren(entry: unknown): unknown[] {
+  if (entry === null || entry === undefined || typeof entry !== "object") return [];
+  const obj = entry as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (key === ":@") continue;
+    const v = obj[key];
+    if (Array.isArray(v)) return v;
+    return [];
+  }
+  return [];
+}
+
+/**
+ * Returns the named attribute value from a `preserveOrder` entry's `":@"`
+ * bucket. Pass the attribute name without the `@_` prefix.
+ */
+export function getOrderedAttr(entry: unknown, attrName: string): string | undefined {
+  if (entry === null || entry === undefined || typeof entry !== "object") return undefined;
+  const attrs = (entry as Record<string, unknown>)[":@"];
+  if (attrs === null || attrs === undefined || typeof attrs !== "object") return undefined;
+  const v = (attrs as Record<string, unknown>)[`@_${attrName}`];
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * Returns the first ordered child whose tag name matches `tag`, or
+ * `undefined` when none is found. Useful for "find the unique <w:pPr> inside
+ * this <w:p>" patterns.
+ */
+export function findOrderedChild(parent: unknown, tag: string): unknown {
+  for (const child of getOrderedChildren(parent)) {
+    if (getTagName(child) === tag) return child;
+  }
+  return undefined;
+}
+
+/**
+ * Returns all ordered children whose tag name matches `tag`. Preserves
+ * document order across same-name siblings.
+ */
+export function findOrderedChildren(parent: unknown, tag: string): unknown[] {
+  const out: unknown[] = [];
+  for (const child of getOrderedChildren(parent)) {
+    if (getTagName(child) === tag) out.push(child);
+  }
+  return out;
+}
+
+/**
+ * Recursively searches the ordered tree for the first descendant with
+ * tag name `tag` (depth-first, document order). Returns `undefined` when
+ * not found. Used to detect skip-with-warning constructs nested anywhere
+ * inside a paragraph (e.g., `<m:oMath>` inside `<w:r>` etc.).
+ */
+export function findOrderedDescendant(parent: unknown, tag: string): unknown {
+  for (const child of getOrderedChildren(parent)) {
+    if (getTagName(child) === tag) return child;
+    const inner = findOrderedDescendant(child, tag);
+    if (inner !== undefined) return inner;
+  }
+  return undefined;
+}
+
+/**
+ * Recursively collects all descendants with tag name `tag` (depth-first,
+ * document order). Used to inspect every `<w:drawing>` in a paragraph to
+ * decide between inline-image vs shape skip.
+ */
+export function findAllDescendants(parent: unknown, tag: string): unknown[] {
+  const out: unknown[] = [];
+  for (const child of getOrderedChildren(parent)) {
+    if (getTagName(child) === tag) out.push(child);
+    out.push(...findAllDescendants(child, tag));
+  }
+  return out;
 }
