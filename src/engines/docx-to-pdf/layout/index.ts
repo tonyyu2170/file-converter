@@ -108,6 +108,15 @@ export async function layoutDocument(
   const onFootnoteRef = (kind: "footnote" | "endnote", noteId: string, page: PDFPage): string =>
     registerMarker(acc, kind, noteId, page);
 
+  // Scratch doc for multi-column Pass 1 (Phase 13 F4). Pass 1 measures
+  // block heights against a no-op discard page, but pdf-lib's image
+  // embed APIs register on the *document* — without a separate scratch
+  // doc, a future synchronous inline-image embed during measure would
+  // double-embed in the final PDF. Created once per conversion and
+  // reused across all sections; scratch-doc state persists for the
+  // lifetime of `layoutDocument` and is discarded at function exit.
+  const scratchPdfDoc = await PDFDocument.create();
+
   const deps: LayoutDeps = {
     numbering: parsed.numbering,
     relationships: parsed.relationships,
@@ -162,6 +171,7 @@ export async function layoutDocument(
         fonts,
         deps,
         footnoteReservedHeightPt,
+        scratchPdfDoc,
       },
       pdfDoc,
     );
