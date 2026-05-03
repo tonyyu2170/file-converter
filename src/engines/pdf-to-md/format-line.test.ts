@@ -71,6 +71,13 @@ describe("formatLine — headings", () => {
   it("treats fontSize above the largest heading as H1", () => {
     expect(formatLine(line("Huge", 50), threeHeadings)).toBe("# Huge");
   });
+
+  it("ties between two heading buckets resolve to the larger heading", () => {
+    // fontSize=21 is equidistant from headings [24, 18] (3 from each).
+    // Tie-break documented in format-line.ts: ties go to the larger heading.
+    const tieHeadings = { body: 12, headings: [24, 18] };
+    expect(formatLine(line("Tie", 21), tieHeadings)).toBe("# Tie");
+  });
 });
 
 describe("formatLine — list items", () => {

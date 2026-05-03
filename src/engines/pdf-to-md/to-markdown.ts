@@ -18,7 +18,12 @@ export type PdfToMdOptions = {
   pageBreaks: "horizontal-rule" | "none";
 };
 
-const PARAGRAPH_GAP_RATIO = 1.5;
+// 1.8 = 1.5 × line-height-factor (spec D5: line-height ≈ fontSize × 1.2,
+// gap > 1.5 × line-height → paragraph break). Multiplied against
+// max(prev.fontSize, current.fontSize) so heading→body transitions
+// (where prev.fontSize is much larger) don't false-trigger a break on
+// the body line that visually follows the heading at normal spacing.
+const PARAGRAPH_GAP_RATIO = 1.8;
 
 function isHeadingLine(line: Line, headings: number[]): boolean {
   if (headings.length === 0) return false;
