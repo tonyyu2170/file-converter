@@ -332,6 +332,8 @@ export function flushFootnoteAreaToPage(
     minYPt: pageGeometry.marginBottomPt - TRAILING_GAP_PT,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
 
   for (const entry of bucket) {
@@ -435,6 +437,8 @@ export function renderEndnotePages(
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
 
   // Heading: "Endnotes" at h2 size.

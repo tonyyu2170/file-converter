@@ -53,6 +53,25 @@ export type LayoutDeps = {
   /** Map from rId to relationship target. Empty map is fine — hyperlinks
    *  whose rId can't resolve render as plain text + warning. */
   relationships: Map<string, RelationshipTarget>;
+  /**
+   * Set of bookmark names declared in the parsed document (body + footnotes
+   * + endnotes + headers + footers). Threaded through to
+   * `attachLinkAnnotation` so internal-anchor hyperlinks
+   * (`<w:hyperlink w:anchor="...">`) can be checked for an existing
+   * destination. A missing anchor produces a `{kind: "skipped", reason}`
+   * result and a warning in `deps.warnings` (spec §10).
+   *
+   * Empty set is the "no anchors known" baseline — any non-empty
+   * `target.anchor` then resolves as missing. Callers that don't care
+   * about anchor checking can pass `new Set()`.
+   *
+   * Non-optional on purpose: the layout-side check is a value test, not an
+   * "is the field present" test, so making the field optional would force
+   * every downstream consumer into an `?? new Set()` dance. The orchestrator
+   * (`layout/index.ts`) populates this from `parsed.bookmarks`; tests pass
+   * `new Set()` (or a populated literal) explicitly.
+   */
+  bookmarks: Set<string>;
   /** Mutable list-state counters — flows across calls so consecutive
    *  list paragraphs at the same `(numId, ilvl)` increment correctly. */
   listState: ListState;
@@ -105,6 +124,29 @@ export type LayoutBlockResult = {
   /** Set when the block couldn't finish in the current column. */
   remainder?: ParsedBlock;
 };
+
+/**
+ * Deep-clone a `ListState` so a measure-pass `layoutBlock` invocation
+ * can advance counters without leaking them into the subsequent draw
+ * pass (Phase 13 F5 — "lists in cells double-bump"). Both nested maps
+ * are cloned: `counters` is `Map<numId, Map<ilvl, n>>`, `lastLevel` is
+ * `Map<numId, ilvl>`. Tables' `measureCellContent` calls this once per
+ * cell to build a scratch `LayoutDeps` whose `listState` is independent
+ * of the orchestrator's running state; counter advances inside the
+ * measure pass are discarded along with the scratch deps.
+ *
+ * Other `LayoutDeps` fields (warnings, bookmarks, embeddedImages, …)
+ * intentionally stay shared — those side effects discovered during
+ * measure (e.g., a missing-anchor warning) are real and should reach
+ * the orchestrator's accumulators.
+ */
+export function cloneListState(state: ListState): ListState {
+  const counters = new Map<string, Map<number, number>>();
+  for (const [numId, perLevel] of state.counters) {
+    counters.set(numId, new Map(perLevel));
+  }
+  return { counters, lastLevel: new Map(state.lastLevel) };
+}
 
 /** Lay out a single block. Dispatches by `block.kind` and (for paragraphs)
  *  whether the paragraph carries a `numPr` list reference. */

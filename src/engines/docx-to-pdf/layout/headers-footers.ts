@@ -217,6 +217,8 @@ function drawBlocksInBand(
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
   for (const block of blocks) {
     if (block.kind === "skip-with-warning") continue;

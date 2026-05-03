@@ -67,6 +67,7 @@ function makeParsedDocx(overrides: Partial<ParsedDocx> = {}): ParsedDocx {
     headers: overrides.headers ?? new Map(),
     footers: overrides.footers ?? new Map(),
     media: overrides.media ?? new Map(),
+    bookmarks: overrides.bookmarks ?? new Set(),
     warnings: overrides.warnings ?? [],
   };
 }
@@ -75,6 +76,7 @@ function makeDeps(): LayoutDeps {
   return {
     numbering: new Map(),
     relationships: new Map(),
+    bookmarks: new Set(),
     listState: { counters: new Map(), lastLevel: new Map() },
     warnings: [],
   };

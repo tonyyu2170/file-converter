@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBodyXml } from "./document-xml";
-import type { Paragraph, Run, Table } from "./types";
+import { DEFAULT_STYLE_KEY, type Paragraph, type Run, type Style, type Table } from "./types";
 
 const W_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
 const R_NS = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -242,6 +242,74 @@ describe("parseBodyXml — runs", () => {
     const xml = doc(p(r("<w:rPr><w:b/></w:rPr>")));
     const para = parseBodyXml(xml).sections[0]?.blocks[0] as Paragraph;
     expect(para.runs).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*   Style → Run merge (F1)                                           */
+/* ------------------------------------------------------------------ */
+
+describe("parseBodyXml — style runProps merged into Run", () => {
+  // Hand-construct a styles map. Avoids round-tripping through
+  // parseStylesXml just to test the merge surface.
+  function makeStyle(
+    styleId: string,
+    runProps: Style["runProps"],
+    extras: Partial<Style> = {},
+  ): Style {
+    return {
+      styleId,
+      type: "paragraph",
+      runProps,
+      paragraphProps: {},
+      ...extras,
+    };
+  }
+
+  it("inherits bold from pStyle when run carries no <w:b/>", () => {
+    // Heading1 style declares bold; the run has no <w:b/>; merged result
+    // should be bold:true.
+    const styles = new Map<string, Style>([["Heading1", makeStyle("Heading1", { bold: true })]]);
+    const xml = doc(p(`<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>`, r(t("Title"))));
+    const para = parseBodyXml(xml, styles).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.bold).toBe(true);
+  });
+
+  it('honors run-level <w:b w:val="0"/> over inherited style bold', () => {
+    // Heading1 declares bold; the run explicitly disables it. Run-level
+    // wins.
+    const styles = new Map<string, Style>([["Heading1", makeStyle("Heading1", { bold: true })]]);
+    const xml = doc(
+      p(
+        `<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>`,
+        r(`<w:rPr><w:b w:val="0"/></w:rPr>`, t("Plain heading")),
+      ),
+    );
+    const para = parseBodyXml(xml, styles).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.bold).toBe(false);
+  });
+
+  it("plain paragraph (no pStyle) defaults to bold:false with no inheritance source", () => {
+    // No pStyle, no run-level <w:b/>: bold collapses to false. Sanity
+    // check that the merge doesn't accidentally fabricate a true.
+    const styles = new Map<string, Style>([["Heading1", makeStyle("Heading1", { bold: true })]]);
+    const xml = doc(p(r(t("body text"))));
+    const para = parseBodyXml(xml, styles).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.bold).toBe(false);
+  });
+
+  it("walks the basedOn chain so a child style inherits its ancestor's bold", () => {
+    // Body → basedOn=Default; Default has bold:true via docDefaults entry.
+    // resolveStyle folds the chain (docDefaults → ancestors → leaf), so
+    // a Body-styled run with no rPr should arrive bold.
+    const styles = new Map<string, Style>([
+      [DEFAULT_STYLE_KEY, makeStyle(DEFAULT_STYLE_KEY, { bold: true })],
+      ["Body", makeStyle("Body", {}, { basedOn: "Normal" })],
+      ["Normal", makeStyle("Normal", {})],
+    ]);
+    const xml = doc(p(`<w:pPr><w:pStyle w:val="Body"/></w:pPr>`, r(t("inherited"))));
+    const para = parseBodyXml(xml, styles).sections[0]?.blocks[0] as Paragraph;
+    expect(para.runs[0]?.bold).toBe(true);
   });
 });
 

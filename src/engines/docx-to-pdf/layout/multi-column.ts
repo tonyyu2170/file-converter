@@ -90,13 +90,6 @@ const MAX_INNER_ITERATIONS = 10_000;
 const SAFETY_TRIPPED_WARNING =
   "multi-column: layout safety guard tripped (block iteration > MAX); output may be truncated";
 
-// TODO(task-10): Pass 1 reuses the real pdfDoc — its discard-page shim
-// absorbs draw calls but NOT pdfDoc.embedPng/embedJpg. When inline-image
-// runs are wired through layoutBlock at Task 10, every image in a
-// multi-column section will embed twice. Switch Pass 1 to a separate
-// PDFDocument.create() *or* pre-embed images at the orchestrator level
-// and pass an embedded-image map through ColumnContext (per the
-// orchestrator notes in spec §3.7).
 export type MultiColumnInput = {
   /** The section's body blocks. The function consumes these top-down. */
   blocks: ParsedBlock[];
@@ -118,6 +111,22 @@ export type MultiColumnInput = {
    * this; Task-10's orchestrator always supplies it.
    */
   footnoteReservedHeightPt?: Pt;
+  /**
+   * Optional scratch `PDFDocument` for Pass 1's natural-fill measure pass
+   * (spec Phase 13 F4). Pass 1 walks blocks against a no-op discard page
+   * to record their natural height, but pdf-lib's `embedPng` / `embedJpg`
+   * register against the *document* (not the page); without isolation a
+   * future inline-image wiring would double-embed every image (once in
+   * the measure pass, once in the real pass). The orchestrator
+   * (`layout/index.ts`) creates this scratch doc once per section and
+   * passes it in; tests omit and the real `pdfDoc` is used instead — safe
+   * today because no synchronous primitive embeds during measure.
+   *
+   * Optional so existing tests and pre-orchestrator callers stay
+   * untouched; absent ⇒ Pass 1 reuses the real `pdfDoc` (Phase-10
+   * behavior, dormant double-embed risk).
+   */
+  scratchPdfDoc?: PDFDocument;
 };
 
 export type MultiColumnResult = {
@@ -179,6 +188,8 @@ function layoutSingleColumn(input: MultiColumnInput, pdfDoc: PDFDocument): Multi
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
   /** Per-page "any content drawn yet" flag — used to swallow leading
    *  forced breaks without emitting a blank page. Reset on every new
@@ -276,14 +287,16 @@ function layoutBalanced(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColu
     safety -= 1;
 
     // Pass 1: measure the natural fill of the remaining blocks at column-1
-    // width into a deep scratch column.
+    // width into a deep scratch column. Image embeds during measure (none
+    // sync today, but possible for future inline-image wiring) hit
+    // `scratchPdfDoc` when supplied so they don't pollute the real doc.
     const naturalHeight = passOneNaturalHeight(
       pending,
       firstCol.widthPt,
       pageGeometry,
       input.fonts,
       input.deps,
-      pdfDoc,
+      input.scratchPdfDoc ?? pdfDoc,
     );
 
     // Balance target: split natural height across N columns, but cap to
@@ -361,6 +374,13 @@ function layoutBalanced(input: MultiColumnInput, pdfDoc: PDFDocument): MultiColu
  * Forced breaks contribute zero height (they're orchestration markers,
  * not content) but the flag-stripped block following the break still
  * lays out normally.
+ *
+ * The `pdfDoc` argument here is the document image embeds register
+ * against. The orchestrator passes a pre-created scratch `PDFDocument`
+ * (via `MultiColumnInput.scratchPdfDoc`) so any embed side effects in
+ * the measure pass don't leak into the final output (Phase 13 F4). When
+ * `scratchPdfDoc` isn't supplied, the real doc is used (Phase-10
+ * behavior, dormant double-embed risk for future inline-image wiring).
  */
 function passOneNaturalHeight(
   blocks: ParsedBlock[],
@@ -370,14 +390,17 @@ function passOneNaturalHeight(
   deps: LayoutDeps,
   pdfDoc: PDFDocument,
 ): Pt {
-  // TODO(task-10): Pass 1 reuses the real pdfDoc — its discard-page shim
-  // absorbs draw calls but NOT pdfDoc.embedPng/embedJpg. When inline-image
-  // runs are wired through layoutBlock at Task 10, every image in a
-  // multi-column section will embed twice. Switch Pass 1 to a separate
-  // PDFDocument.create() *or* pre-embed images at the orchestrator level
-  // and pass an embedded-image map through ColumnContext (per the
-  // orchestrator notes in spec §3.7).
   const discardPage = makeDiscardPage();
+  // Pass 1 must NOT mutate the orchestrator's warnings / list-state. Use
+  // a scratch deps so any warnings or counter bumps emitted during
+  // measure don't leak into Pass 2.
+  const scratchDeps: LayoutDeps = {
+    numbering: deps.numbering,
+    relationships: deps.relationships,
+    bookmarks: deps.bookmarks,
+    listState: { counters: new Map(), lastLevel: new Map() },
+    warnings: [],
+  };
   const ctx: ColumnContext = {
     page: discardPage,
     pageGeometry,
@@ -387,17 +410,10 @@ function passOneNaturalHeight(
     minYPt: -SCRATCH_HEIGHT_PT,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: scratchDeps.warnings,
   };
   const startY = ctx.yPt;
-  // Pass 1 must NOT mutate the orchestrator's warnings / list-state. Use
-  // a scratch deps so any warnings or counter bumps emitted during
-  // measure don't leak into Pass 2.
-  const scratchDeps: LayoutDeps = {
-    numbering: deps.numbering,
-    relationships: deps.relationships,
-    listState: { counters: new Map(), lastLevel: new Map() },
-    warnings: [],
-  };
 
   const pending: ParsedBlock[] = blocks.slice();
   let safety = MAX_INNER_ITERATIONS;
@@ -511,6 +527,8 @@ function fillRealColumns(
     minYPt,
     fonts,
     ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+    bookmarks: deps.bookmarks,
+    warnings: deps.warnings,
   };
 
   let safety = MAX_INNER_ITERATIONS;
@@ -573,6 +591,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }
@@ -595,6 +615,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }
@@ -634,6 +656,8 @@ function fillRealColumns(
         minYPt,
         fonts,
         ...(deps.relationships !== undefined && { relationships: deps.relationships }),
+        bookmarks: deps.bookmarks,
+        warnings: deps.warnings,
       };
       continue;
     }

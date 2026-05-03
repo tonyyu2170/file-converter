@@ -61,6 +61,7 @@ import { rgb } from "pdf-lib";
 // without polluting production code with a DI seam.
 import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";
+import { cloneListState } from "./block-dispatch";
 import { makeDiscardPage } from "./discard-page";
 import type { ColumnContext, ColumnGeometry, Pt } from "./types";
 import { wouldOverflow } from "./y-cursor";
@@ -110,7 +111,7 @@ export function layoutTable(
     if (row === undefined) continue;
 
     // Pre-measure the row's height (max across cell content heights).
-    const rowMeasure = measureRow(row, colWidths, ctx, pdfDoc, deps);
+    const rowMeasure = measureRow(row, colWidths, r, ctx, pdfDoc, deps);
 
     // Atomic-row pagination: if this row doesn't fit AND we've already
     // drawn at least one row, stop and emit a remainder. Borders for
@@ -146,16 +147,36 @@ export function layoutTable(
 /*   Internals                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Resolve final column widths. Falls back to equal distribution when
- *  the parser didn't supply per-column widths or the count is wrong. */
+/** Resolve final column widths. When the parser supplied per-column widths
+ *  they are authoritative — the table grid is fixed at that column count,
+ *  and any row whose cell `gridSpan` overflows that count is clamped at
+ *  layout time (see `effectiveGridSpan`). Falls back to equal distribution
+ *  using the maximum row gridSpan sum when no widths were supplied. */
 function resolveColumnWidths(table: Table, ctx: ColumnContext): number[] {
-  const cellCount = Math.max(...table.rows.map((r) => sumGridSpans(r.cells)), 1);
-  if (table.columnWidthsPt.length === cellCount && table.columnWidthsPt.length > 0) {
+  if (table.columnWidthsPt.length > 0) {
     return table.columnWidthsPt.slice();
   }
+  const cellCount = Math.max(...table.rows.map((r) => sumGridSpans(r.cells)), 1);
   // Equal distribution.
   const colW = ctx.column.widthPt / cellCount;
   return Array.from({ length: cellCount }, () => colW);
+}
+
+/**
+ * Effective gridSpan for a cell given its starting column and the table's
+ * column count. Clamps `cell.gridSpan` to `columnCount - currentCol` so a
+ * cell can never extend past the right edge of the grid (spec §10:
+ * "Table with gridSpan that exceeds row width → clamp + warning").
+ *
+ * Pure / non-mutating: callers receive the clamped value but the
+ * underlying `TableCell` (which may be shared across walks) is unchanged.
+ * The warning emit is gated to a single source of truth — `measureRow`
+ * (runs once per row before any draw walk) — so we don't double-warn.
+ */
+function effectiveGridSpan(cell: TableCell, currentCol: number, columnCount: number): number {
+  const declared = Math.max(1, cell.gridSpan);
+  const remaining = Math.max(1, columnCount - currentCol);
+  return Math.min(declared, remaining);
 }
 
 function sumGridSpans(cells: TableCell[]): number {
@@ -178,6 +199,7 @@ type RowMeasure = {
 function measureRow(
   row: TableRow,
   colWidths: number[],
+  rowIdx: number,
   ctx: ColumnContext,
   pdfDoc: PDFDocument,
   deps: LayoutDeps,
@@ -185,13 +207,22 @@ function measureRow(
   let maxContent = 0;
   const perCell: Pt[] = [];
   let colIdx = 0;
+  const columnCount = colWidths.length;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) {
       perCell.push(0);
       continue;
     }
-    const span = Math.max(1, cell.gridSpan);
+    const declared = Math.max(1, cell.gridSpan);
+    const span = effectiveGridSpan(cell, colIdx, columnCount);
+    if (span < declared) {
+      // Spec §10: cell whose gridSpan exceeds remaining columns is clamped
+      // and the truncation surfaced as a warning. Emit here in measureRow
+      // (runs first per row); drawRowContent uses the same `effectiveGridSpan`
+      // helper so positioning matches without re-warning.
+      deps.warnings.push(`table cell gridSpan clamped (row ${rowIdx})`);
+    }
     const cellWidthPt = sliceWidth(colWidths, colIdx, span);
     if (cell.vMerge === "continue") {
       // Continue cells contribute zero own-content; the start cell's
@@ -247,6 +278,18 @@ function measureCellContent(
     minYPt: -SCRATCH_HEIGHT_PT,
     fonts: parentCtx.fonts,
     ...(parentCtx.relationships !== undefined && { relationships: parentCtx.relationships }),
+    ...(parentCtx.bookmarks !== undefined && { bookmarks: parentCtx.bookmarks }),
+    ...(parentCtx.warnings !== undefined && { warnings: parentCtx.warnings }),
+  };
+  // Phase 13 F5: clone listState for the measure pass. A list paragraph
+  // inside a cell would otherwise bump the global counter twice (once
+  // here in measure, once during the real draw), pathological for cells
+  // containing lists. Other fields (warnings, bookmarks, embeddedImages,
+  // numbering, relationships) intentionally stay shared via the real
+  // `deps` reference — those side effects ARE real and should propagate.
+  const measureDeps: LayoutDeps = {
+    ...deps,
+    listState: cloneListState(deps.listState),
   };
   const startY = ctx.yPt;
   let pending: ParsedBlock[] = cell.blocks.slice();
@@ -254,7 +297,7 @@ function measureCellContent(
   while (pending.length > 0 && safety > 0) {
     const block = pending.shift();
     if (block === undefined) break;
-    const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, deps);
+    const result = blockDispatch.layoutBlock(block, ctx, pdfDoc, measureDeps);
     if (result.remainder !== undefined) {
       pending = [result.remainder, ...pending];
     }
@@ -286,10 +329,13 @@ function drawRowContent(
 ): void {
   let colIdx = 0;
   const rowTopY = parentCtx.yPt;
+  const columnCount = colWidths.length;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) continue;
-    const span = Math.max(1, cell.gridSpan);
+    // Same clamp as `measureRow` — keeps positioning consistent. The
+    // warning was already emitted there if a clamp fired.
+    const span = effectiveGridSpan(cell, colIdx, columnCount);
     const cellWidthPt = sliceWidth(colWidths, colIdx, span);
     const cellLeftX = parentCtx.column.xPt + sliceLeftOffset(colWidths, colIdx);
 
@@ -318,6 +364,8 @@ function drawRowContent(
       ...(parentCtx.relationships !== undefined && {
         relationships: parentCtx.relationships,
       }),
+      ...(parentCtx.bookmarks !== undefined && { bookmarks: parentCtx.bookmarks }),
+      ...(parentCtx.warnings !== undefined && { warnings: parentCtx.warnings }),
     };
     const pending: ParsedBlock[] = cell.blocks.slice();
     let safety = 100;
@@ -422,7 +470,7 @@ function drawTableBorders(
     xCursor += w;
     const boundaryColIdx = c + 1; // 1-based column-boundary index
     for (const entry of renderedRows) {
-      if (rowSpansColumnBoundary(entry.row, boundaryColIdx)) continue;
+      if (rowSpansColumnBoundary(entry.row, boundaryColIdx, colWidths.length)) continue;
       drawHairline(parentCtx, xCursor, entry.topY, xCursor, entry.topY - entry.heightPt);
     }
   }
@@ -439,10 +487,11 @@ function drawHorizontalRowBoundary(
   rowTopY: Pt,
 ): void {
   let colIdx = 0;
+  const columnCount = colWidths.length;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) continue;
-    const span = Math.max(1, cell.gridSpan);
+    const span = effectiveGridSpan(cell, colIdx, columnCount);
     const segWidth = sliceWidth(colWidths, colIdx, span);
     if (cell.vMerge !== "continue") {
       const segLeftX = tableLeftX + sliceLeftOffset(colWidths, colIdx);
@@ -454,12 +503,16 @@ function drawHorizontalRowBoundary(
 
 /** True iff some cell in `row` spans across the column boundary at
  *  `boundaryColIdx` (i.e., its gridSpan covers both sides). */
-function rowSpansColumnBoundary(row: TableRow, boundaryColIdx: number): boolean {
+function rowSpansColumnBoundary(
+  row: TableRow,
+  boundaryColIdx: number,
+  columnCount: number,
+): boolean {
   let colIdx = 0;
   for (let c = 0; c < row.cells.length; c++) {
     const cell = row.cells[c];
     if (cell === undefined) continue;
-    const span = Math.max(1, cell.gridSpan);
+    const span = effectiveGridSpan(cell, colIdx, columnCount);
     // Cell occupies columns [colIdx, colIdx + span). The boundary at
     // boundaryColIdx sits between columns boundaryColIdx-1 and
     // boundaryColIdx. The cell crosses the boundary iff

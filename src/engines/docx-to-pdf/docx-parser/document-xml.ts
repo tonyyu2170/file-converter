@@ -39,7 +39,18 @@
  */
 
 import { defaultSectionProperties, parseSectionProperties } from "./sections";
-import type { Paragraph, ParsedBlock, Run, Section, Table, TableCell, TableRow } from "./types";
+import { resolveStyle } from "./styles-xml";
+import type {
+  Paragraph,
+  ParsedBlock,
+  Run,
+  Section,
+  Style,
+  StyleRunProps,
+  Table,
+  TableCell,
+  TableRow,
+} from "./types";
 import {
   createOrderedXmlParser,
   findAllDescendants,
@@ -56,9 +67,25 @@ import {
  * Walker context. The body parser threads warnings through via mutation so
  * deep call sites can record skip notices without needing to plumb a return
  * channel through every helper.
+ *
+ * `styles` carries the parsed `word/styles.xml` map so paragraph walks can
+ * resolve a paragraph's `pStyle` chain via `resolveStyle` and merge the
+ * resulting `runProps` underneath each run's explicit rPr values. Callers
+ * (footnotes, headers/footers) that don't have access to the styles map
+ * pass an empty map, which `resolveStyle` handles cleanly (returns empty
+ * props for any styleId).
  */
 export type BlockWalkContext = {
   warnings: string[];
+  styles: Map<string, Style>;
+  /**
+   * Per-walk cache for `resolveStyle` results, keyed by paragraph styleId.
+   * The chain walk + cycle-warning emission happens once per styleId rather
+   * than once per paragraph — so a 100-paragraph document of `Heading1`
+   * paragraphs with a malformed `basedOn` cycle no longer emits 100
+   * identical cycle warnings.
+   */
+  resolvedStyleCache: Map<string, StyleRunProps>;
 };
 
 export type ParseBodyResult = {
@@ -70,7 +97,7 @@ export type ParseBodyResult = {
 /*   Public entry — parseBodyXml                                      */
 /* ------------------------------------------------------------------ */
 
-export function parseBodyXml(xml: string): ParseBodyResult {
+export function parseBodyXml(xml: string, styles: Map<string, Style> = new Map()): ParseBodyResult {
   const warnings: string[] = [];
 
   if (!isWellFormedXml(xml)) {
@@ -111,7 +138,7 @@ export function parseBodyXml(xml: string): ParseBodyResult {
     };
   }
 
-  const ctx: BlockWalkContext = { warnings };
+  const ctx: BlockWalkContext = { warnings, styles, resolvedStyleCache: new Map() };
   const sections = walkBodySections(getOrderedChildren(bodyEntry), ctx);
   return { sections, warnings };
 }
@@ -276,6 +303,26 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
   const alignment = readAlignment(pPr);
   const numPr = readNumPr(pPr);
 
+  // Resolve the paragraph's style chain (pStyle → basedOn → ... → docDefaults)
+  // — cached per-styleId on `ctx.resolvedStyleCache`. The chain walk runs
+  // once per unique styleId across the body walk; subsequent paragraphs of
+  // the same style hit the cache. Cycle warnings are emitted at most once
+  // per styleId. `resolveStyle` returns empty props for an unknown styleId
+  // or an empty styles map, so the call is safe even when the parent caller
+  // didn't supply a styles map.
+  let styleRunProps: StyleRunProps | undefined;
+  if (styleId !== undefined) {
+    const cached = ctx.resolvedStyleCache.get(styleId);
+    if (cached !== undefined) {
+      styleRunProps = cached;
+    } else {
+      const resolved = resolveStyle(ctx.styles, styleId);
+      ctx.warnings.push(...resolved.warnings);
+      styleRunProps = resolved.runProps;
+      ctx.resolvedStyleCache.set(styleId, resolved.runProps);
+    }
+  }
+
   // Walk run-level children in order.
   const runs: Run[] = [];
   let rtlSeenInRun = false;
@@ -283,9 +330,18 @@ function parseParagraph(pNode: unknown, ctx: BlockWalkContext): ParsedBlock | un
   // We walk all children of <w:p> except w:pPr, accepting both <w:r> and
   // <w:hyperlink> wrappers. Track-changes wrappers (<w:ins>, <w:del>) are
   // walked transparently — <w:ins> content is kept, <w:del> is dropped.
-  walkParagraphChildren(getOrderedChildren(pNode), ctx, runs, undefined, undefined, false, () => {
-    rtlSeenInRun = true;
-  });
+  walkParagraphChildren(
+    getOrderedChildren(pNode),
+    ctx,
+    runs,
+    undefined,
+    undefined,
+    false,
+    () => {
+      rtlSeenInRun = true;
+    },
+    styleRunProps,
+  );
 
   // If any run flagged RTL, treat the whole paragraph as RTL skip.
   if (rtlSeenInRun) {
@@ -331,6 +387,7 @@ function walkParagraphChildren(
   hyperlinkAnchor: string | undefined,
   inDelete: boolean,
   onRtl: () => void,
+  styleRunProps: StyleRunProps | undefined,
 ): void {
   for (const child of children) {
     const tag = getTagName(child);
@@ -338,7 +395,7 @@ function walkParagraphChildren(
 
     if (tag === "w:r") {
       if (inDelete) continue;
-      parseRun(child, hyperlinkRel, hyperlinkAnchor, onRtl, runs);
+      parseRun(child, hyperlinkRel, hyperlinkAnchor, onRtl, runs, styleRunProps);
       continue;
     }
 
@@ -371,6 +428,7 @@ function walkParagraphChildren(
         innerAnchor,
         inDelete,
         onRtl,
+        styleRunProps,
       );
       continue;
     }
@@ -385,6 +443,7 @@ function walkParagraphChildren(
         hyperlinkAnchor,
         inDelete,
         onRtl,
+        styleRunProps,
       );
       continue;
     }
@@ -399,6 +458,7 @@ function walkParagraphChildren(
         hyperlinkAnchor,
         true,
         onRtl,
+        styleRunProps,
       );
       continue;
     }
@@ -412,6 +472,7 @@ function walkParagraphChildren(
         hyperlinkAnchor,
         inDelete,
         onRtl,
+        styleRunProps,
       );
       continue;
     }
@@ -424,6 +485,7 @@ function walkParagraphChildren(
         hyperlinkAnchor,
         true,
         onRtl,
+        styleRunProps,
       );
       continue;
     }
@@ -439,6 +501,7 @@ function walkParagraphChildren(
         hyperlinkAnchor,
         inDelete,
         onRtl,
+        styleRunProps,
       );
     }
 
@@ -485,6 +548,7 @@ function parseRun(
   hyperlinkAnchor: string | undefined,
   onRtl: () => void,
   runs: Run[],
+  styleRunProps: StyleRunProps | undefined,
 ): void {
   const rPr = findOrderedChild(rNode, "w:rPr");
 
@@ -501,7 +565,7 @@ function parseRun(
   // as a Run and seed a fresh one with the corresponding break flag.
   let chunk = emptyChunk();
   const flush = (): void => {
-    const built = buildRun(chunk, props, hyperlinkRel, hyperlinkAnchor);
+    const built = buildRun(chunk, props, hyperlinkRel, hyperlinkAnchor, styleRunProps);
     if (built !== undefined) runs.push(built);
   };
 
@@ -598,6 +662,7 @@ function buildRun(
   props: ExtractedRunProps,
   hyperlinkRel: string | undefined,
   hyperlinkAnchor: string | undefined,
+  styleRunProps: StyleRunProps | undefined,
 ): Run | undefined {
   if (
     chunk.text === "" &&
@@ -610,16 +675,26 @@ function buildRun(
     return undefined;
   }
 
+  // Merge style-resolved runProps UNDERNEATH the run's explicit rPr values.
+  // Run-level explicit values win; absence inherits from the resolved style
+  // chain (which already includes basedOn ancestors and docDefaults). This
+  // is what makes `<w:p w:pStyle="Heading1">` with no `<w:b/>` on its run
+  // come out bold via the Heading1 style's runProps.bold = true, while a
+  // run carrying explicit `<w:b w:val="0"/>` stays non-bold.
+  const fontFamily = props.fontFamily ?? styleRunProps?.fontFamily;
+  const fontSizePt = props.fontSizePt ?? styleRunProps?.fontSizePt;
+  const colorHex = props.colorHex ?? styleRunProps?.colorHex;
+
   return {
     kind: "run",
     text: chunk.text,
-    bold: props.bold ?? false,
-    italic: props.italic ?? false,
-    underline: props.underline ?? false,
-    strike: props.strike ?? false,
-    ...(props.fontFamily !== undefined ? { fontFamily: props.fontFamily } : {}),
-    ...(props.fontSizePt !== undefined ? { fontSizePt: props.fontSizePt } : {}),
-    ...(props.colorHex !== undefined ? { colorHex: props.colorHex } : {}),
+    bold: props.bold ?? styleRunProps?.bold ?? false,
+    italic: props.italic ?? styleRunProps?.italic ?? false,
+    underline: props.underline ?? styleRunProps?.underline ?? false,
+    strike: props.strike ?? styleRunProps?.strike ?? false,
+    ...(fontFamily !== undefined ? { fontFamily } : {}),
+    ...(fontSizePt !== undefined ? { fontSizePt } : {}),
+    ...(colorHex !== undefined ? { colorHex } : {}),
     ...(hyperlinkRel !== undefined ? { hyperlinkRel } : {}),
     ...(hyperlinkAnchor !== undefined ? { hyperlinkAnchor } : {}),
     ...(chunk.inlineImage !== undefined ? { inlineImage: chunk.inlineImage } : {}),

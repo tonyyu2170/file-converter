@@ -35,10 +35,13 @@
  *   - `rel` present but not `targetMode === "External"` → warn, no
  *     annotation. (Internal-relationship targets aren't PDF-jump targets
  *     by default; we route via `anchor` for that.)
- *   - `anchor` set but no rel and no anchor lookup mechanism in v1 — we
- *     emit a `Dest` annotation with the anchor name; consumers that want
- *     to jump within the PDF need the document's NamedDest table populated
- *     by the orchestrator (Task 10).
+ *   - `anchor` set but the named bookmark isn't declared anywhere in the
+ *     parsed document → skipped with warning (spec §10 / Phase 13 F2).
+ *     Run text was already drawn before annotation attempt, so the
+ *     fallback is plain text + warning.
+ *   - `anchor` present in `bookmarks` → emit a `Dest` annotation with the
+ *     anchor name; consumers that want to jump within the PDF need the
+ *     document's NamedDest table populated by the orchestrator (Task 10).
  */
 
 import type { RelationshipTarget } from "@/engines/docx-to-pdf/docx-parser/types";
@@ -59,15 +62,22 @@ export type AttachResult =
 /**
  * Attach a link annotation rectangle at `(xPt, baselineYPt)` of the given
  * width and height to `page`. Resolves `target` against `relationships`
- * and emits the appropriate annotation kind:
+ * (for external URLs) and `bookmarks` (for internal anchors), emitting
+ * the appropriate annotation kind:
  *   - rel resolves to External URL → URI action link
  *   - rel resolves to Internal target → skipped (we don't support
  *     internal-rel jumps in v1)
  *   - rel doesn't resolve → skipped
- *   - anchor only → Dest link (named destination)
- *   - neither resolves → skipped
+ *   - anchor present in `bookmarks` → Dest link (named destination)
+ *   - anchor missing from `bookmarks` → skipped with
+ *     `"anchor not found: <name>"` (spec §10 / Phase 13 F2)
+ *   - neither rel nor anchor → skipped
  *
  * Returns the result kind so the caller can surface warnings.
+ *
+ * `bookmarks` is the set of all bookmark names declared anywhere in the
+ * parsed document (body + footnotes + headers + footers). An empty set
+ * means "no anchors known" — every anchor lookup is a miss in that case.
  *
  * Rect math: PDF rect is `[llx, lly, urx, ury]` (lower-left + upper-right
  * in absolute page coords). Given a baseline at `baselineYPt` and a
@@ -83,6 +93,7 @@ export function attachLinkAnnotation(
   heightPt: Pt,
   target: LinkTarget,
   relationships: Map<string, RelationshipTarget>,
+  bookmarks: Set<string> = new Set(),
 ): AttachResult {
   if (widthPt <= 0 || heightPt <= 0) {
     return { kind: "skipped", reason: "zero-size rect" };
@@ -107,6 +118,9 @@ export function attachLinkAnnotation(
   }
 
   if (target.anchor !== undefined) {
+    if (!bookmarks.has(target.anchor)) {
+      return { kind: "skipped", reason: `anchor not found: ${target.anchor}` };
+    }
     writeDestAnnotation(page, rect, target.anchor);
     return { kind: "dest", anchor: target.anchor };
   }
@@ -124,6 +138,18 @@ export function attachLinkAnnotation(
  *   - The rect extends slightly below the baseline (descent area) and up
  *     above the baseline by ~80% of the line-height (ascent + leading).
  *   - The 20%/80% split mirrors `paragraph.ts:drawLine` baseline math.
+ *
+ * Phase 13 F8 trade-off: the 20%/80% split here is a fraction of
+ * `lineHeight`, but real glyph cells use approximately 75% ascent and
+ * 20% descent of `fontSize` (NOT `lineHeight`). Since `lineHeight` is
+ * typically `fontSize * 1.2`, this approximation produces a click rect
+ * that's slightly more lenient than the glyph cell — i.e., the user can
+ * click a few points above the cap height or below the descender and
+ * still trigger the link. Acceptable v1 behavior. Tightening to
+ * `fontSize`-relative math (a tighter rect) is deferred — it would
+ * require auditing every caller's `heightPt` to be sure the rect doesn't
+ * collapse below the baseline for unusual font metrics, and the looser
+ * rect is the user-friendly direction to err in.
  */
 export function computeLinkRect(
   xPt: Pt,
@@ -131,6 +157,9 @@ export function computeLinkRect(
   widthPt: Pt,
   heightPt: Pt,
 ): [number, number, number, number] {
+  // descent + ascent must sum to `heightPt` so the rect's vertical span
+  // matches one line of `lineHeight`. The split is (descent 20% / ascent
+  // 80%) — see the function-doc trade-off note above.
   const descent = heightPt * 0.2;
   const ascent = heightPt * 0.8;
   const llx = xPt;

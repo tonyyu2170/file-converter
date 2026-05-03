@@ -130,11 +130,13 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     warnings.push(...r.warnings);
   }
 
-  // 5. Footnotes / endnotes.
+  // 5. Footnotes / endnotes. Pass `styles` so paragraph runs inside
+  // footnote/endnote bodies inherit run-level props from their `pStyle`
+  // chain (matches body behavior).
   let footnotes: Map<string, ParsedBlock[]> = new Map();
   const footnotesXml = decodeEntry("word/footnotes.xml");
   if (footnotesXml !== undefined) {
-    const r = parseFootnotesXml(footnotesXml, "footnote");
+    const r = parseFootnotesXml(footnotesXml, "footnote", styles);
     footnotes = r.value;
     warnings.push(...r.warnings);
   }
@@ -142,14 +144,15 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
   let endnotes: Map<string, ParsedBlock[]> = new Map();
   const endnotesXml = decodeEntry("word/endnotes.xml");
   if (endnotesXml !== undefined) {
-    const r = parseFootnotesXml(endnotesXml, "endnote");
+    const r = parseFootnotesXml(endnotesXml, "endnote", styles);
     endnotes = r.value;
     warnings.push(...r.warnings);
   }
 
   // 6. Headers / footers — one per file. Key by the relationship-target-style
   // path (e.g., "header1.xml") so the layout engine can resolve via
-  // section.headerRefs[X] → relationships → target.
+  // section.headerRefs[X] → relationships → target. `styles` is threaded so
+  // header/footer paragraphs honor `pStyle` inheritance.
   const headers: ParsedDocx["headers"] = new Map();
   const footers: ParsedDocx["footers"] = new Map();
   for (const path of Object.keys(entries)) {
@@ -157,7 +160,7 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     if (headerMatch !== null && headerMatch[1] !== undefined) {
       const xml = decodeEntry(path);
       if (xml === undefined) continue;
-      const r = parseHeaderXml(xml);
+      const r = parseHeaderXml(xml, styles);
       headers.set(`${headerMatch[1]}.xml`, r.value);
       warnings.push(...r.warnings);
       continue;
@@ -166,7 +169,7 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     if (footerMatch !== null && footerMatch[1] !== undefined) {
       const xml = decodeEntry(path);
       if (xml === undefined) continue;
-      const r = parseFooterXml(xml);
+      const r = parseFooterXml(xml, styles);
       footers.set(`${footerMatch[1]}.xml`, r.value);
       warnings.push(...r.warnings);
     }
@@ -186,11 +189,36 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     media.set(path, { path, mime, bytes: buf });
   }
 
-  // 8. Body parse.
-  const bodyResult = parseBodyXml(documentXml);
+  // 8. Body parse. Pass `styles` so paragraph runs merge their pStyle's
+  // resolved runProps underneath their explicit rPr (Heading1 → bold via
+  // inheritance; explicit `<w:b w:val="0"/>` still wins).
+  const bodyResult = parseBodyXml(documentXml, styles);
   warnings.push(...bodyResult.warnings);
 
-  // 9. Assemble.
+  // 9. Bookmark name collection (Phase 13 / F2).
+  //
+  // Strategy: regex pass over each XML string. Bookmarks
+  // (`<w:bookmarkStart w:name="..."/>`) can appear at any depth — direct
+  // children of paragraphs, between paragraphs at body level, inside table
+  // cells, hyperlinks, footnotes/endnotes, headers/footers. Walking every
+  // possible nesting path through the existing parser is more invasive than
+  // a single targeted scan; well-formed XML check (`isWellFormedXml`) has
+  // already happened inside each parser above before its result was
+  // accepted, and the regex matches OOXML's strict-attribute syntax. We
+  // accept the rare cost of double-counting / quote-style mismatches in
+  // exchange for a simple, walker-untouched implementation.
+  const bookmarks = new Set<string>();
+  collectBookmarks(documentXml, bookmarks);
+  if (footnotesXml !== undefined) collectBookmarks(footnotesXml, bookmarks);
+  if (endnotesXml !== undefined) collectBookmarks(endnotesXml, bookmarks);
+  for (const path of Object.keys(entries)) {
+    if (/^word\/header\d+\.xml$/.test(path) || /^word\/footer\d+\.xml$/.test(path)) {
+      const xml = decodeEntry(path);
+      if (xml !== undefined) collectBookmarks(xml, bookmarks);
+    }
+  }
+
+  // 10. Assemble.
   return {
     sections: bodyResult.sections,
     styles,
@@ -202,8 +230,29 @@ export function parseDocx(bytes: Uint8Array): ParsedDocx {
     headers,
     footers,
     media,
+    bookmarks,
     warnings,
   };
+}
+
+/**
+ * Scans an OOXML XML string for `<w:bookmarkStart w:name="..."/>` declarations
+ * and adds each `name` value to `out`. Matches both single- and double-quoted
+ * attribute styles. The regex is a deliberately simple lexer — we don't
+ * attempt to validate that the bookmarkStart appears in a sensible position
+ * (the parser-level walks already gate on well-formed XML).
+ */
+function collectBookmarks(xml: string, out: Set<string>): void {
+  // `\s+` between element name and attributes; `[^>]*?` allows `w:id` or any
+  // other attribute to appear before/after `w:name`. Uses a lazy quantifier
+  // to avoid over-matching across multiple elements.
+  const pattern = /<w:bookmarkStart\b[^>]*?\bw:name\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*?\/?>/g;
+  let match: RegExpExecArray | null = pattern.exec(xml);
+  while (match !== null) {
+    const name = match[1] ?? match[2];
+    if (name !== undefined && name !== "") out.add(name);
+    match = pattern.exec(xml);
+  }
 }
 
 /* ------------------------------------------------------------------ */

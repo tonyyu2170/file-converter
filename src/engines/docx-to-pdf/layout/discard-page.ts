@@ -11,13 +11,11 @@
  * the measure pass produces no real PDF content and registers no
  * duplicate annotations.
  *
- * Known limitation: list paragraphs measured against a discard page will
- * still bump their counter twice (once in measure, once in draw) because
- * the counter lives on `LayoutDeps.listState`, not on the page. Callers
- * that care about counter purity must pass a scratch `LayoutDeps` to the
- * measure pass (`multi-column.ts` does this for Pass 1; `tables.ts`'s
- * cell measurement does not, since none of v1's fixtures place a list
- * inside a table cell).
+ * `LayoutDeps.listState` lives outside the page, so a measure pass that
+ * advances list counters would leak into the subsequent draw pass. Both
+ * `multi-column.ts:passOneNaturalHeight` (whole scratch deps) and
+ * `tables.ts:measureCellContent` (just `listState`, via
+ * `cloneListState`) build scratch deps so counters stay pure.
  */
 
 import type { ColumnContext } from "./types";

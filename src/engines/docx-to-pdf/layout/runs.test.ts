@@ -185,6 +185,86 @@ describe("drawRunSpan", () => {
     const advance = drawRunSpan(ctx, run, "frag", 0, 0);
     expect(advance).toBeCloseTo(4 * 10 * 0.55);
   });
+
+  it("pushes anchor-not-found warning into ctx.warnings on missing anchor", () => {
+    // Phase 13 / F2: a hyperlinkAnchor pointing to a name not in
+    // ctx.bookmarks must surface a warning so the orchestrator can dedupe
+    // and forward to ParsedDocx.warnings. Text was already drawn, so the
+    // user gets plain-text fallback + warning per spec §10.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    drawRunSpan(ctx, run, "click", 100, 200);
+    expect(ctx.warnings).toEqual(["anchor not found: missing-target"]);
+  });
+
+  it("does NOT push a warning when ctx.warnings is undefined (silent fallback)", () => {
+    // Defensive: callers that don't supply a warnings sink (older test
+    // helpers, scratch contexts) get the plain-text fallback without
+    // crashing on a push to undefined.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    // ctx.warnings stays undefined
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    expect(() => drawRunSpan(ctx, run, "click", 100, 200)).not.toThrow();
+  });
+
+  it("does NOT push a warning when anchor IS declared in ctx.bookmarks", () => {
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set(["intro"]);
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "intro" });
+    drawRunSpan(ctx, run, "click", 100, 200);
+    expect(ctx.warnings).toEqual([]);
+  });
+
+  it("dedupes the anchor-not-found warning across repeated references", () => {
+    // 50 references to the same missing anchor (or a tables.ts measure-pass
+    // followed by draw-pass, which calls drawRunSpan twice for cells)
+    // would push 50 identical strings without dedupe.
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    const run = makeRun({ text: "click", hyperlinkAnchor: "missing-target" });
+    for (let i = 0; i < 5; i++) {
+      drawRunSpan(ctx, run, "click", 100, 200);
+    }
+    expect(ctx.warnings).toEqual(["anchor not found: missing-target"]);
+  });
+
+  it("dedupes per-anchor — different missing anchors each get one warning", () => {
+    const ctx = makeColumnContext();
+    ctx.relationships = new Map();
+    ctx.bookmarks = new Set();
+    ctx.warnings = [];
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "a", hyperlinkAnchor: "one" }),
+      "a",
+      100,
+      200,
+    );
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "b", hyperlinkAnchor: "two" }),
+      "b",
+      100,
+      200,
+    );
+    drawRunSpan(
+      ctx,
+      makeRun({ text: "a", hyperlinkAnchor: "one" }),
+      "a",
+      100,
+      200,
+    );
+    expect(ctx.warnings).toEqual(["anchor not found: one", "anchor not found: two"]);
+  });
 });
 
 describe("decorationThickness", () => {

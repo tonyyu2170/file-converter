@@ -108,9 +108,19 @@ export async function layoutDocument(
   const onFootnoteRef = (kind: "footnote" | "endnote", noteId: string, page: PDFPage): string =>
     registerMarker(acc, kind, noteId, page);
 
+  // Scratch doc for multi-column Pass 1 (Phase 13 F4). Pass 1 measures
+  // block heights against a no-op discard page, but pdf-lib's image
+  // embed APIs register on the *document* — without a separate scratch
+  // doc, a future synchronous inline-image embed during measure would
+  // double-embed in the final PDF. Created once per conversion and
+  // reused across all sections; scratch-doc state persists for the
+  // lifetime of `layoutDocument` and is discarded at function exit.
+  const scratchPdfDoc = await PDFDocument.create();
+
   const deps: LayoutDeps = {
     numbering: parsed.numbering,
     relationships: parsed.relationships,
+    bookmarks: parsed.bookmarks,
     listState: { counters: new Map(), lastLevel: new Map() },
     warnings: [],
     embeddedImages,
@@ -161,6 +171,7 @@ export async function layoutDocument(
         fonts,
         deps,
         footnoteReservedHeightPt,
+        scratchPdfDoc,
       },
       pdfDoc,
     );
@@ -319,20 +330,45 @@ async function embedAllMedia(
   pdfDoc: PDFDocumentType,
   parsed: ParsedDocx,
 ): Promise<{ embeddedImages: Map<string, PDFImage>; imageWarnings: string[] }> {
-  const out = new Map<string, PDFImage>();
-  const warnings: string[] = [];
+  // Parallelize embed calls (Phase 13 F7). pdf-lib's image registration
+  // produces an independent `PDFImage` per call; concurrent calls are
+  // safe and the parser's pre-decoded bytes mean no shared I/O. A bad
+  // asset rejects independently — we use `Promise.allSettled` so one
+  // corrupt image doesn't kill the whole batch, mirroring the previous
+  // try/catch per-iteration behavior.
+  type EmbedTask =
+    | { kind: "skip"; path: string; reason: string }
+    | { kind: "embed"; path: string; promise: Promise<PDFImage> };
+  const tasks: EmbedTask[] = [];
   for (const [path, asset] of parsed.media) {
     const fmt = sniffImageFormat(asset.bytes);
     if (fmt === "unknown") {
-      warnings.push(imageSkippedWarning(path, "unknown format"));
+      tasks.push({ kind: "skip", path, reason: "unknown format" });
       continue;
     }
-    try {
-      const img = await embedInlineImage(asset, pdfDoc);
-      out.set(path, img);
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : "embed failed";
-      warnings.push(imageSkippedWarning(path, reason));
+    tasks.push({ kind: "embed", path, promise: embedInlineImage(asset, pdfDoc) });
+  }
+  // Collect resolutions in iteration order so the resulting `Map` is
+  // deterministic across runs (matters for golden tests / warning order).
+  const out = new Map<string, PDFImage>();
+  const warnings: string[] = [];
+  const settled = await Promise.allSettled(
+    tasks.map((t) => (t.kind === "embed" ? t.promise : Promise.resolve(null))),
+  );
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    if (task === undefined) continue;
+    if (task.kind === "skip") {
+      warnings.push(imageSkippedWarning(task.path, task.reason));
+      continue;
+    }
+    const r = settled[i];
+    if (r === undefined) continue;
+    if (r.status === "fulfilled" && r.value !== null) {
+      out.set(task.path, r.value);
+    } else if (r.status === "rejected") {
+      const reason = r.reason instanceof Error ? r.reason.message : "embed failed";
+      warnings.push(imageSkippedWarning(task.path, reason));
     }
   }
   return { embeddedImages: out, imageWarnings: warnings };

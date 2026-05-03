@@ -23,7 +23,7 @@
  */
 
 import { type BlockWalkContext, parseBlocks } from "./document-xml";
-import type { ParsedBlock } from "./types";
+import type { ParsedBlock, Style } from "./types";
 import { createOrderedXmlParser, getOrderedChildren, getTagName, isWellFormedXml } from "./xml";
 
 export type ParseHeaderFooterResult = {
@@ -34,22 +34,33 @@ export type ParseHeaderFooterResult = {
 /**
  * Parses a header XML document (`word/header*.xml`). Returns the parsed
  * block list and any warnings accumulated during the walk.
+ *
+ * `styles` is the parsed `word/styles.xml` map; threaded into the block
+ * walker so header paragraph runs inherit run-level props from their
+ * `pStyle` chain. Defaults to an empty map.
  */
-export function parseHeaderXml(xml: string): ParseHeaderFooterResult {
-  return parseHeaderOrFooter(xml, "w:hdr", "header");
+export function parseHeaderXml(
+  xml: string,
+  styles: Map<string, Style> = new Map(),
+): ParseHeaderFooterResult {
+  return parseHeaderOrFooter(xml, "w:hdr", "header", styles);
 }
 
 /**
  * Parses a footer XML document (`word/footer*.xml`).
  */
-export function parseFooterXml(xml: string): ParseHeaderFooterResult {
-  return parseHeaderOrFooter(xml, "w:ftr", "footer");
+export function parseFooterXml(
+  xml: string,
+  styles: Map<string, Style> = new Map(),
+): ParseHeaderFooterResult {
+  return parseHeaderOrFooter(xml, "w:ftr", "footer", styles);
 }
 
 function parseHeaderOrFooter(
   xml: string,
   rootTag: "w:hdr" | "w:ftr",
   label: "header" | "footer",
+  styles: Map<string, Style>,
 ): ParseHeaderFooterResult {
   const warnings: string[] = [];
 
@@ -77,7 +88,7 @@ function parseHeaderOrFooter(
     return { value: [], warnings };
   }
 
-  const ctx: BlockWalkContext = { warnings };
+  const ctx: BlockWalkContext = { warnings, styles, resolvedStyleCache: new Map() };
   const blocks = parseBlocks(getOrderedChildren(rootEntry), ctx);
   return { value: blocks, warnings };
 }

@@ -75,14 +75,73 @@ describe("attachLinkAnnotation — external URL", () => {
 /* ---------- attachLinkAnnotation: anchor ---------- */
 
 describe("attachLinkAnnotation — internal anchor", () => {
-  it("emits a Dest annotation for an anchor-only target", () => {
+  it("emits a Dest annotation for an anchor declared in bookmarks", () => {
     const page = makeMockPage();
-    const result = attachLinkAnnotation(page, 0, 0, 50, 12, { anchor: "intro" }, relMap());
+    const bookmarks = new Set(["intro"]);
+    const result = attachLinkAnnotation(
+      page,
+      0,
+      0,
+      50,
+      12,
+      { anchor: "intro" },
+      relMap(),
+      bookmarks,
+    );
     expect(result.kind).toBe("dest");
     if (result.kind !== "dest") throw new Error("expected dest");
     expect(result.anchor).toBe("intro");
     const annot = (page as MockPage).__annotations[0];
     expect(annot?.dict.Dest).toBeDefined();
+  });
+
+  it("skips with 'anchor not found' when anchor is missing from bookmarks", () => {
+    const page = makeMockPage();
+    const bookmarks = new Set(["other"]);
+    const result = attachLinkAnnotation(
+      page,
+      0,
+      0,
+      50,
+      12,
+      { anchor: "missing" },
+      relMap(),
+      bookmarks,
+    );
+    expect(result.kind).toBe("skipped");
+    if (result.kind !== "skipped") throw new Error("expected skipped");
+    expect(result.reason).toBe("anchor not found: missing");
+    expect((page as MockPage).__annotations.length).toBe(0);
+  });
+
+  it("treats an empty bookmarks set as 'no anchors known' (defensive miss)", () => {
+    // Defensive: an empty set means we never collected any bookmarks, which
+    // is operationally identical to "the anchor isn't declared". Spec §10
+    // requires plain-text fallback + warning in that case.
+    const page = makeMockPage();
+    const result = attachLinkAnnotation(
+      page,
+      0,
+      0,
+      50,
+      12,
+      { anchor: "intro" },
+      relMap(),
+      new Set(),
+    );
+    expect(result.kind).toBe("skipped");
+    if (result.kind !== "skipped") throw new Error("expected skipped");
+    expect(result.reason).toContain("anchor not found");
+  });
+
+  it("defaults bookmarks parameter to empty set (back-compat for callers)", () => {
+    // Caller omits the optional `bookmarks` arg → treated as empty set,
+    // which means anchor lookups always miss. This protects existing
+    // call-sites that haven't been threaded through the bookmarks plumbing
+    // (none in production, but defensive).
+    const page = makeMockPage();
+    const result = attachLinkAnnotation(page, 0, 0, 50, 12, { anchor: "intro" }, relMap());
+    expect(result.kind).toBe("skipped");
   });
 });
 
@@ -199,5 +258,55 @@ describe("hyperlink integration via drawRunSpan", () => {
       650,
     );
     expect((ctx.page as MockPage).__annotations.length).toBe(0);
+  });
+
+  it("attaches a Dest annotation when anchor is declared in ctx.bookmarks", async () => {
+    const { drawRunSpan } = await import("./runs");
+    const { makeColumnContext } = await import("./_test-helpers");
+    const ctx = makeColumnContext({ yPt: 700 });
+    ctx.relationships = relMap();
+    ctx.bookmarks = new Set(["intro"]);
+    drawRunSpan(
+      ctx,
+      {
+        kind: "run",
+        text: "click",
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        hyperlinkAnchor: "intro",
+      },
+      "click",
+      100,
+      650,
+    );
+    expect((ctx.page as MockPage).__annotations.length).toBe(1);
+  });
+
+  it("skips and pushes a warning when anchor is missing from ctx.bookmarks", async () => {
+    const { drawRunSpan } = await import("./runs");
+    const { makeColumnContext } = await import("./_test-helpers");
+    const ctx = makeColumnContext({ yPt: 700 });
+    ctx.relationships = relMap();
+    ctx.bookmarks = new Set(["something-else"]);
+    ctx.warnings = [];
+    drawRunSpan(
+      ctx,
+      {
+        kind: "run",
+        text: "click",
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        hyperlinkAnchor: "missing",
+      },
+      "click",
+      100,
+      650,
+    );
+    expect((ctx.page as MockPage).__annotations.length).toBe(0);
+    expect(ctx.warnings).toEqual(["anchor not found: missing"]);
   });
 });

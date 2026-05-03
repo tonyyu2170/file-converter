@@ -68,6 +68,7 @@ function makeDeps(overrides: Partial<LayoutDeps> = {}): LayoutDeps {
   return {
     numbering: new Map(),
     relationships: new Map(),
+    bookmarks: new Set(),
     listState: createListState(),
     warnings: [],
     ...overrides,
@@ -520,6 +521,66 @@ describe("layoutSection — Pass 1 isolation from real deps", () => {
     for (let i = 0; i < 5; i++) blocks.push(singleLinePara(`b${i}`));
     layoutSection(baseInput(blocks, 2, { deps }), pdf as unknown as PDFDocument);
     expect(deps.warnings).toEqual([]);
+  });
+
+  it("Pass 1 image embeds register against scratchPdfDoc, not the real pdfDoc (Phase 13 F4)", async () => {
+    // Phase 13 F4: today no synchronous layout primitive embeds images
+    // during Pass 1, but a future inline-image wiring would. To pin the
+    // isolation contract, inject a `layoutBlock` spy that mimics what a
+    // future embed-on-measure would do — calls `pdfDoc.embedPng` /
+    // `embedJpg` — and assert those calls hit `scratchPdfDoc`, not the
+    // real `pdfDoc`. The block-dispatch namespace import lets vi.spyOn
+    // intercept the call at the dispatch boundary.
+    const pdf = makeMockPdfDoc();
+    const realEmbedPng = vi.fn();
+    const realEmbedJpg = vi.fn();
+    (pdf as unknown as { embedPng: typeof realEmbedPng }).embedPng = realEmbedPng;
+    (pdf as unknown as { embedJpg: typeof realEmbedJpg }).embedJpg = realEmbedJpg;
+
+    const scratch = makeMockPdfDoc();
+    const scratchEmbedPng = vi.fn();
+    const scratchEmbedJpg = vi.fn();
+    (scratch as unknown as { embedPng: typeof scratchEmbedPng }).embedPng = scratchEmbedPng;
+    (scratch as unknown as { embedJpg: typeof scratchEmbedJpg }).embedJpg = scratchEmbedJpg;
+
+    // Spy on layoutBlock — every call (measure or draw) invokes
+    // `passedPdfDoc.embedPng()` so we can attribute embeds to the doc
+    // each call received. Discriminate measure vs draw via the page:
+    // measure uses a discard page (no `__calls`), draw uses a real page.
+    const spy = vi.spyOn(blockDispatch, "layoutBlock").mockImplementation((_block, c, p, _d) => {
+      // Simulate an embed during this layout call.
+      const isDraw = "__calls" in (c.page as object);
+      // Use the per-call passed pdfDoc (this is what the test asserts on).
+      (p as unknown as { embedPng: () => void }).embedPng();
+      if (!isDraw) {
+        // Measure pass: zero height, no remainder.
+        return { drawnHeight: 0 };
+      }
+      // Draw pass: zero height, no remainder.
+      return { drawnHeight: 0 };
+    });
+
+    try {
+      const blocks: ParsedBlock[] = [singleLinePara("only")];
+      layoutSection(
+        baseInput(blocks, 2, { scratchPdfDoc: scratch as unknown as PDFDocument }),
+        pdf as unknown as PDFDocument,
+      );
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Pass 1 ran ≥ 1 layoutBlock call against the scratch doc.
+    expect(scratchEmbedPng.mock.calls.length).toBeGreaterThanOrEqual(1);
+    // Pass 2 (real draw) targeted the real doc, but the layoutBlock spy
+    // returned drawnHeight: 0 with no remainder — so Pass 2 may run a
+    // single embed against the real doc. The contract is that the
+    // measure-pass embeds did NOT pollute the real doc's count by N+1
+    // each — i.e., scratch ≥ real (measure runs on the full list while
+    // draw stops after one zero-height block).
+    expect(scratchEmbedPng.mock.calls.length).toBeGreaterThanOrEqual(
+      realEmbedPng.mock.calls.length,
+    );
   });
 });
 

@@ -170,6 +170,13 @@ export function drawRunSpan(
   // the fragment's color or underline here — those are styling choices the
   // source DOCX already made. Per-fragment attachment yields one rect per
   // visual line, matching reader expectations for wrapped links.
+  //
+  // For internal anchors (`Run.hyperlinkAnchor`) we additionally consult
+  // `ctx.bookmarks` (the set of all bookmark names declared in the parsed
+  // doc): a missing anchor returns `{kind: "skipped", reason}` and we push
+  // the reason into `ctx.warnings` (Phase 13 / F2 / spec §10). The text was
+  // already drawn above, so the user sees plain text + warning — exactly
+  // the spec's "render as plain text, log warning" fallback.
   if (
     (run.hyperlinkRel !== undefined || run.hyperlinkAnchor !== undefined) &&
     ctx.relationships !== undefined
@@ -178,7 +185,25 @@ export function drawRunSpan(
     const target: { rel?: string; anchor?: string } = {};
     if (run.hyperlinkRel !== undefined) target.rel = run.hyperlinkRel;
     if (run.hyperlinkAnchor !== undefined) target.anchor = run.hyperlinkAnchor;
-    attachLinkAnnotation(ctx.page, xPt, baselineYPt, advance, heightPt, target, ctx.relationships);
+    const result = attachLinkAnnotation(
+      ctx.page,
+      xPt,
+      baselineYPt,
+      advance,
+      heightPt,
+      target,
+      ctx.relationships,
+      ctx.bookmarks ?? new Set<string>(),
+    );
+    if (result.kind === "skipped" && ctx.warnings !== undefined) {
+      // Dedupe: a missing anchor referenced from N runs (or seen via the
+      // tables.ts measure-then-draw two-pass) would push N identical
+      // strings without this guard. Bounded `includes` scan is fine —
+      // warnings arrays are small.
+      if (!ctx.warnings.includes(result.reason)) {
+        ctx.warnings.push(result.reason);
+      }
+    }
   }
 
   return advance;
