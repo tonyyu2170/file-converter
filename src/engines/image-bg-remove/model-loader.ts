@@ -6,12 +6,11 @@ import { type ImageSegmentationPipeline, env, pipeline } from "@huggingface/tran
 env.allowRemoteModels = false;
 env.allowLocalModels = true;
 env.localModelPath = "/models/";
-// `env.backends.onnx.wasm` is typed as `readonly` on the upstream
-// onnxruntime-common `Env`, but transformers.js itself mutates
-// `wasm.wasmPaths` at runtime (see node_modules/@huggingface/transformers/
-// src/backends/onnx.js). The onnx backend module populates `wasm` as a
-// side effect of being imported, so by the time this module loads, `wasm`
-// is defined. The cast bypasses the misleading readonly type.
+// `env.backends.onnx` is typed `Partial<Env> & { setLogLevel? }`, so
+// every nested field including `wasm` is optional. transformers.js
+// populates `env.backends.onnx` as a side effect of importing the
+// onnx backend, so by the time this module loads `wasm` is defined.
+// The cast bypasses the optional-property type without runtime overhead.
 (env.backends.onnx as { wasm: { wasmPaths: string } }).wasm.wasmPaths = "/onnx-wasm/";
 
 const MODEL_ID = "bg-remove"; // resolves to /models/bg-remove/

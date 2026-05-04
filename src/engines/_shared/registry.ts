@@ -2,6 +2,7 @@ import type { ConversionEngine, OutputItem } from "./types";
 
 export type EngineId =
   | "docx-to-txt"
+  | "image-bg-remove"
   | "image-convert"
   | "image-resize"
   | "image-to-pdf"
@@ -20,6 +21,7 @@ type Loader = () => Promise<{ default: AnyEngine }>;
 
 const REGISTRY: Record<EngineId, Loader> = {
   "docx-to-txt": () => import("@/engines/docx-to-txt"),
+  "image-bg-remove": () => import("@/engines/image-bg-remove"),
   "image-convert": () => import("@/engines/image-convert"),
   "image-resize": () => import("@/engines/image-resize"),
   "image-to-pdf": () => import("@/engines/image-to-pdf"),
