@@ -50,6 +50,12 @@ export type SingleInputEngine<
   validate(file: File, opts: TOptions): ValidationResult;
   convert(file: File, opts: TOptions, signal: AbortSignal): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
+  /** Optional: a tight, pre-conversion estimate of total output bytes.
+   * Return `null` when an honest estimate isn't possible for the current
+   * inputs/options (e.g., not enough files, content-dependent compression).
+   * Engines must only implement this when the estimate is reliably close —
+   * a misleading number is worse than no number. */
+  estimateOutputBytes?: (file: File, opts: TOptions) => number | null;
   OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
 };
 
@@ -61,6 +67,8 @@ export type MultiInputEngine<
   validate(files: File[], opts: TOptions): ValidationResult;
   convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
+  /** See SingleInputEngine.estimateOutputBytes. */
+  estimateOutputBytes?: (files: File[], opts: TOptions) => number | null;
   OptionsPanel?: ComponentType<OptionsPanelProps<TOptions>>;
   StagingArea?: ComponentType<StagingAreaProps<TOptions>>;
 };

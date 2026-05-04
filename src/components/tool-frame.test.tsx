@@ -215,6 +215,68 @@ describe("ToolFrame", () => {
     });
   });
 
+  it("multi-cardinality: renders staged-totals (count + total size) once files are dropped", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div data-testid="staging-files">{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn(async () => ({
+        filename: "out.pdf",
+        mime: "application/pdf",
+        blob: new Blob(["x"]),
+      })) as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    expect(screen.queryByTestId("staged-totals")).toBeNull();
+
+    const f1 = new File([new Uint8Array(1_000_000)], "a.png", { type: "image/png" });
+    const f2 = new File([new Uint8Array(3_200_000)], "b.jpg", { type: "image/jpeg" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [f1, f2] } });
+
+    const totals = await screen.findByTestId("staged-totals");
+    expect(totals).toHaveTextContent("2");
+    expect(totals).toHaveTextContent("files");
+    expect(totals).toHaveTextContent("4.2 MB");
+  });
+
+  it("multi-cardinality: renders output-estimate when engine implements estimateOutputBytes", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div data-testid="staging-files">{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn() as never,
+      StagingArea: Staging,
+      estimateOutputBytes: (files: File[]) =>
+        files.length < 2 ? null : files.reduce((s, f) => s + f.size, 0),
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+
+    // 1 file: estimate hidden (engine returns null)
+    const f1 = new File([new Uint8Array(1_000_000)], "a.pdf", { type: "application/pdf" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [f1] } });
+    await screen.findByTestId("staged-totals");
+    expect(screen.queryByTestId("output-estimate")).toBeNull();
+
+    // 2 files: estimate shown
+    const f2 = new File([new Uint8Array(3_200_000)], "b.pdf", { type: "application/pdf" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [f2] } });
+    const est = await screen.findByTestId("output-estimate");
+    expect(est).toHaveTextContent("4.2 MB");
+  });
+
   it("renders engine.StagingArea and Convert button for multi-cardinality engines", () => {
     const Staging = ({
       files,
@@ -238,6 +300,94 @@ describe("ToolFrame", () => {
     expect(screen.queryByTestId("staging-files")).toBeNull();
     // Convert button is present and disabled.
     expect(screen.getByTestId("convert-button")).toBeDisabled();
+  });
+
+  it("single-cardinality: shows input file size next to the staged filename", async () => {
+    const engine = makeStubEngine();
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File([new Uint8Array(4_200_000)], "in.bin", {
+      type: "application/octet-stream",
+    });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await screen.findByTestId("clear-staged-file");
+    expect(screen.getByText("4.2 MB")).toBeInTheDocument();
+  });
+
+  it("single-cardinality: hides output-estimate when engine has no estimateOutputBytes", async () => {
+    const engine = makeStubEngine();
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File([new Uint8Array(100)], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [file] } });
+
+    await screen.findByTestId("clear-staged-file");
+    expect(screen.queryByTestId("output-estimate")).toBeNull();
+  });
+
+  it("single-cardinality: renders output-estimate when engine.estimateOutputBytes returns a number", async () => {
+    const engine = makeStubEngine({
+      estimateOutputBytes: (file: File) => file.size * 2,
+    });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File([new Uint8Array(2_100_000)], "in.bin", {
+      type: "application/octet-stream",
+    });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [file] } });
+
+    await screen.findByTestId("clear-staged-file");
+    const est = await screen.findByTestId("output-estimate");
+    expect(est).toHaveTextContent("4.2 MB");
+  });
+
+  it("passes inputBytes (snapshot at conversion start) to ResultList for the delta header", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob([new Uint8Array(800_000)]),
+    }));
+    const engine = makeStubEngine({ convert });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File([new Uint8Array(1_000_000)], "in.bin", {
+      type: "application/octet-stream",
+    });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [file] } });
+
+    await screen.findByTestId("clear-staged-file");
+    await waitFor(() => expect(screen.getByTestId("convert-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() => expect(convert).toHaveBeenCalledOnce());
+    const delta = await screen.findByTestId("size-delta");
+    expect(delta).toHaveTextContent("1 MB");
+    expect(delta).toHaveTextContent("800 KB");
+    expect(delta).toHaveTextContent("-20%");
+  });
+
+  it("clearing the staged file removes the prior delta header for the next render cycle", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob([new Uint8Array(500)]),
+    }));
+    const engine = makeStubEngine({ convert });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File([new Uint8Array(1000)], "in.bin", {
+      type: "application/octet-stream",
+    });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [file] } });
+    await screen.findByTestId("clear-staged-file");
+    fireEvent.click(screen.getByTestId("convert-button"));
+    await screen.findByTestId("size-delta");
+
+    fireEvent.click(screen.getByTestId("clear-staged-file"));
+    expect(screen.queryByTestId("size-delta")).toBeNull();
   });
 
   it("Convert button click fires run with stagedFiles", async () => {

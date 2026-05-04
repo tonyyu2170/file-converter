@@ -1,6 +1,7 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
+import { formatBytes } from "@/lib/format-bytes";
 import { useCallback, useState } from "react";
 import { DropZone } from "./drop-zone";
 import { ResultList } from "./result-list";
@@ -16,6 +17,12 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [options, setOptions] = useState<TOptions>(engine.defaultOptions);
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
+  // Snapshot of total input bytes captured at conversion start. Used by
+  // ResultList for the IN→OUT delta header. Must be a snapshot rather than
+  // derived live from stagedFiles, because (especially for multi-cardinality
+  // engines) the user can append more files post-conversion without clearing
+  // the displayed results, which would otherwise produce a stale delta.
+  const [convertedInputBytes, setConvertedInputBytes] = useState<number | null>(null);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
@@ -30,12 +37,15 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     setItems([]);
     setErrorMessage(null);
     setStatus("ready");
+    setConvertedInputBytes(null);
   }, []);
 
   const run = useCallback(
     async (files: File[], opts: TOptions) => {
       setErrorMessage(null);
       setItems([]);
+      const inputBytesAtStart = files.reduce((sum, f) => sum + f.size, 0);
+      setConvertedInputBytes(inputBytesAtStart);
       if (engine.cardinality === "single") {
         const f = files[0];
         if (!f) return;
@@ -107,6 +117,17 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   })();
 
   const stagedFile: File | undefined = stagedFiles[0];
+  const totalInputBytes = stagedFiles.reduce((sum, f) => sum + f.size, 0);
+  // Estimate hook is engine-optional; cardinality narrows the call signature.
+  const estimateBytes: number | null = (() => {
+    if (stagedFiles.length === 0) return null;
+    if (engine.cardinality === "single") {
+      const f = stagedFiles[0];
+      if (!f) return null;
+      return engine.estimateOutputBytes?.(f, options) ?? null;
+    }
+    return engine.estimateOutputBytes?.(stagedFiles, options) ?? null;
+  })();
 
   return (
     <main className="p-6">
@@ -125,10 +146,18 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         />
       )}
       {!isMulti && stagedFile && (
-        <div className="mb-3 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]">
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]">
           <span>
             current file: <span className="text-[var(--color-fg-strong)]">{stagedFile.name}</span>
+            <span> · </span>
+            <span className="text-[var(--color-fg-strong)]">{formatBytes(stagedFile.size)}</span>
           </span>
+          {estimateBytes !== null && (
+            <span data-testid="output-estimate">
+              ≈ <span className="text-[var(--color-fg-strong)]">{formatBytes(estimateBytes)}</span>{" "}
+              output
+            </span>
+          )}
           <button
             type="button"
             data-testid="clear-staged-file"
@@ -138,6 +167,25 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
           >
             [ clear ]
           </button>
+        </div>
+      )}
+      {isMulti && stagedFiles.length > 0 && (
+        <div
+          data-testid="staged-totals"
+          className="mb-3 flex flex-wrap items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]"
+        >
+          <span>
+            <span className="text-[var(--color-fg-strong)]">{stagedFiles.length}</span>{" "}
+            {stagedFiles.length === 1 ? "file" : "files"}
+            <span> · </span>
+            <span className="text-[var(--color-fg-strong)]">{formatBytes(totalInputBytes)}</span>
+          </span>
+          {estimateBytes !== null && (
+            <span data-testid="output-estimate">
+              ≈ <span className="text-[var(--color-fg-strong)]">{formatBytes(estimateBytes)}</span>{" "}
+              output
+            </span>
+          )}
         </div>
       )}
       <DropZone accept={engine.inputAccept} multiple={isMulti} onFiles={handleDrop} />
@@ -159,6 +207,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         items={items}
         {...(archiveBasename !== undefined ? { archiveBasename } : {})}
         {...(engine.archiveSuffix !== undefined ? { archiveSuffix: engine.archiveSuffix } : {})}
+        {...(convertedInputBytes !== null ? { inputBytes: convertedInputBytes } : {})}
       />
     </main>
   );

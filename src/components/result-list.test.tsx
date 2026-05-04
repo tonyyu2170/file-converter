@@ -15,11 +15,11 @@ import { ResultList } from "./result-list";
 
 afterEach(() => vi.clearAllMocks());
 
-function makeItem(name: string) {
+function makeItem(name: string, size = 1) {
   return {
     filename: name,
     mime: "application/pdf",
-    blob: new Blob(["x"], { type: "application/pdf" }),
+    blob: new Blob([new Uint8Array(size)], { type: "application/pdf" }),
   };
 }
 
@@ -76,6 +76,49 @@ describe("ResultList", () => {
     await waitFor(() => {
       expect(buildZipBlob).toHaveBeenCalledWith(items, "output.zip");
     });
+  });
+
+  it("renders per-row output size next to filename", () => {
+    const items = [makeItem("a.pdf", 1500), makeItem("b.pdf", 4_200_000)];
+    render(<ResultList items={items} />);
+    expect(screen.getByText("1.5 KB")).toBeInTheDocument();
+    expect(screen.getByText("4.2 MB")).toBeInTheDocument();
+  });
+
+  it("hides the size-delta header when inputBytes is undefined", () => {
+    const items = [makeItem("a.pdf", 1000)];
+    render(<ResultList items={items} />);
+    expect(screen.queryByTestId("size-delta")).toBeNull();
+  });
+
+  it("renders IN→OUT sizes and a positive delta when output is larger than input", () => {
+    const items = [makeItem("a.pdf", 11_800_000)];
+    render(<ResultList items={items} inputBytes={4_200_000} />);
+    const delta = screen.getByTestId("size-delta");
+    expect(delta).toHaveTextContent("4.2 MB");
+    expect(delta).toHaveTextContent("12 MB");
+    expect(delta).toHaveTextContent("+181%");
+  });
+
+  it("renders a negative delta when output is smaller than input", () => {
+    const items = [makeItem("out.pdf", 800_000)];
+    render(<ResultList items={items} inputBytes={1_000_000} />);
+    expect(screen.getByTestId("size-delta")).toHaveTextContent("-20%");
+  });
+
+  it("renders 0% delta when input and output are equal", () => {
+    const items = [makeItem("out.pdf", 1_000_000)];
+    render(<ResultList items={items} inputBytes={1_000_000} />);
+    expect(screen.getByTestId("size-delta")).toHaveTextContent("0%");
+  });
+
+  it("omits the percent term when inputBytes is 0", () => {
+    const items = [makeItem("out.pdf", 1000)];
+    render(<ResultList items={items} inputBytes={0} />);
+    const delta = screen.getByTestId("size-delta");
+    expect(delta).toHaveTextContent("0 B");
+    expect(delta).toHaveTextContent("1 KB");
+    expect(delta.textContent).not.toMatch(/%/);
   });
 
   it("disables the download-all button while zipping", async () => {
