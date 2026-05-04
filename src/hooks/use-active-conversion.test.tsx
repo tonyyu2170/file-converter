@@ -68,4 +68,21 @@ describe("useActiveConversion", () => {
     renderHook(() => useActiveConversion(true));
     expect(beforeUnloadCalls(addSpy)).toBe(2);
   });
+
+  it("under StrictMode the listener nets to one registration", async () => {
+    const { StrictMode } = await import("react");
+    renderHook(() => useActiveConversion(true), {
+      wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
+    });
+    expect(beforeUnloadCalls(addSpy) - beforeUnloadCalls(removeSpy)).toBe(1);
+  });
+
+  it("attaches the listener when active flips false → true on the same instance", () => {
+    const { rerender } = renderHook(({ a }) => useActiveConversion(a), {
+      initialProps: { a: false },
+    });
+    expect(beforeUnloadCalls(addSpy)).toBe(0);
+    rerender({ a: true });
+    expect(beforeUnloadCalls(addSpy)).toBe(1);
+  });
 });
