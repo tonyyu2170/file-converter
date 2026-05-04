@@ -1,4 +1,4 @@
-import type { ParsedBlock, ParsedDocx, Run, TableRow } from "@/engines/_shared/docx";
+import type { ParsedBlock, ParsedDocx, Run, TableCell, TableRow } from "@/engines/_shared/docx";
 import type { DocxToTxtOptions } from "./options";
 
 function renderRun(run: Run): string {
@@ -11,18 +11,26 @@ function renderRuns(runs: Run[]): string {
   return runs.map(renderRun).join("");
 }
 
+/**
+ * Renders a single table cell's blocks to a string.
+ *
+ * vMerge "continue" cells are vertical-merge continuations — they
+ * belong to the cell above. Emit empty string so the column
+ * alignment is preserved without duplicating the merged cell's text.
+ *
+ * Cells containing multiple paragraphs are flattened with a single
+ * space separator. This preserves the tab-row contract (cells joined
+ * by \t, rows by \n) but loses the paragraph boundary inside the
+ * cell. Plain-text tables are inherently lossy; this trade-off
+ * favours readability of the row structure.
+ */
+function renderCell(cell: TableCell): string {
+  if (cell.vMerge === "continue") return "";
+  return renderBlocks(cell.blocks, " ");
+}
+
 function renderTableRow(row: TableRow): string {
-  return row.cells
-    .map((cell) => {
-      // vMerge "continue" cells are vertical-merge continuations. We emit
-      // empty string to preserve column alignment in tab-separated output.
-      //
-      // Multi-paragraph cells are joined with a single space so that the
-      // cell text stays on one line. Plain-text tables cannot represent
-      // multi-line cells without breaking the tab-separated row structure.
-      return renderBlocks(cell.blocks, " ");
-    })
-    .join("\t");
+  return row.cells.map(renderCell).join("\t");
 }
 
 function renderBlocks(blocks: ParsedBlock[], paragraphSep: string): string {
@@ -74,6 +82,12 @@ function renderBlocks(blocks: ParsedBlock[], paragraphSep: string): string {
  * - `kind: "skip-with-warning"` blocks are skipped silently.
  * - Empty DOCX → empty string, no error.
  * - Multiple sections are flattened as one contiguous block stream.
+ *
+ * **Blank-paragraph policy:** consecutive blank `<w:p/>` elements
+ * (used in DOCX for visual spacing) collapse to a single separator
+ * in the output. Three blank paragraphs between two non-empty
+ * paragraphs produces the same output as one blank — this matches
+ * what most plain-text converters do, but is intentionally lossy.
  */
 export function extractText(doc: ParsedDocx, opts: DocxToTxtOptions): string {
   const paragraphSep = opts.joinParagraphs === "double-newline" ? "\n\n" : "\n";

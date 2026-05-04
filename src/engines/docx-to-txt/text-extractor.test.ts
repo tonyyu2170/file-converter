@@ -298,4 +298,47 @@ describe("extractText", () => {
     expect(rows[0]).toContain("Second");
     expect(rows[0]).toContain("Other");
   });
+
+  it("collapses consecutive blank paragraphs to a single separator", () => {
+    // Three blank paragraphs between two non-empty paragraphs should
+    // collapse to the same output as a single blank paragraph.
+    const doc = makeDoc([
+      makeParagraph([makeRun("First")]),
+      makeParagraph([]), // blank
+      makeParagraph([]), // blank
+      makeParagraph([]), // blank
+      makeParagraph([makeRun("Second")]),
+    ]);
+    const result = extractText(doc, defaultOpts);
+    // Collapsed — not "First\n\n\n\n\n\n\n\nSecond"
+    expect(result).toBe("First\n\nSecond");
+  });
+
+  it("vMerge continue cells emit empty string regardless of content", () => {
+    // A continue cell that happens to carry content must still emit ""
+    // to preserve column alignment and avoid duplicating merged cell text.
+    const doc = makeDoc([
+      makeTable([
+        makeTableRow([
+          { blocks: [makeParagraph([makeRun("Top")])], gridSpan: 1, vMerge: "start" },
+          makeCell([makeParagraph([makeRun("Other")])]),
+        ]),
+        makeTableRow([
+          // This cell is a vMerge continuation but has non-empty blocks.
+          // The implementation must still emit "" to preserve alignment.
+          {
+            blocks: [makeParagraph([makeRun("Should not appear")])],
+            gridSpan: 1,
+            vMerge: "continue",
+          },
+          makeCell([makeParagraph([makeRun("Bottom")])]),
+        ]),
+      ]),
+    ]);
+    const result = extractText(doc, defaultOpts);
+    // Row 1: "Top\tOther", Row 2: "\tBottom" (continue cell is empty)
+    expect(result).toContain("Top\tOther");
+    expect(result).toContain("\tBottom");
+    expect(result).not.toContain("Should not appear");
+  });
 });
