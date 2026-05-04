@@ -48,13 +48,17 @@ test.describe.configure({ mode: "serial", timeout: 240_000 });
 const FIXTURES = [
   // Product on white BG: the model should isolate the subject and leave
   // most of the white background transparent. Coverage upper bound is
-  // generous (0.6) because product silhouettes vary.
-  { file: "product-on-white.jpg", alphaCoverageRange: [0.05, 0.6] as const },
-  // Cluttered portrait. The plan's original range was [0.18, 0.35]; we
-  // widened the upper bound to 0.45 because the new fixture (Osama
-  // Madlom's "Sun Goddess") has long flowing red hair, so the subject
-  // occupies more pixels than a typical bust portrait.
-  { file: "portrait-cluttered-bg.jpg", alphaCoverageRange: [0.18, 0.45] as const },
+  // generous (0.6) because product silhouettes vary. Lower bound widened
+  // from 0.05 → 0.02 because MODNet produces a tighter mask than
+  // BiRefNet on this fixture (observed 0.039); 0.02 still catches an
+  // empty-output regression while clearing MODNet's actual baseline.
+  { file: "product-on-white.jpg", alphaCoverageRange: [0.02, 0.6] as const },
+  // Cluttered portrait. The original BiRefNet-tuned range was
+  // [0.18, 0.45]; widened upper bound from 0.45 → 0.55 because MODNet
+  // is portrait-optimized and produces a denser mask on this fixture
+  // (observed 0.483). 0.55 still catches a fully-opaque-output
+  // regression (would be ~1.0) and a wrong-subject regression.
+  { file: "portrait-cluttered-bg.jpg", alphaCoverageRange: [0.18, 0.55] as const },
   // Failure-mode case: transparent glass. We don't assert correctness —
   // the model has known difficulty with translucent objects — only that
   // it produces *some* output without throwing. The wide 0–0.95 range
