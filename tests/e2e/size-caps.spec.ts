@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -10,10 +10,13 @@ test.describe("size caps", () => {
   test.beforeAll(async () => {
     tmpDir = await mkdtemp(path.join(tmpdir(), "filecnv-sizecaps-"));
     hugePdfPath = path.join(tmpDir, "huge.pdf");
-    // 600 MB all-zero; the cap check reads File.size only, so content
-    // is irrelevant.
-    await writeFile(hugePdfPath, Buffer.alloc(600_000_000, 0));
-  }, 60_000);
+    // 600 MB sparse file; the cap check reads File.size only, so content
+    // is irrelevant. Using truncate keeps Node heap near-zero (vs
+    // Buffer.alloc which would allocate 600 MB per worker).
+    const fh = await open(hugePdfPath, "w");
+    await fh.truncate(600_000_000);
+    await fh.close();
+  });
 
   test.afterAll(async () => {
     await rm(tmpDir, { recursive: true, force: true });
