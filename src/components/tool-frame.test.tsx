@@ -144,7 +144,12 @@ describe("ToolFrame", () => {
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
-    expect(convert).toHaveBeenCalledWith(file, expect.anything(), expect.anything());
+    expect(convert).toHaveBeenCalledWith(
+      file,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("single-cardinality re-drop replaces staged file and clears prior state", async () => {
@@ -446,7 +451,12 @@ describe("ToolFrame", () => {
     await waitFor(() => {
       expect(convert).toHaveBeenCalledOnce();
     });
-    expect(convert).toHaveBeenCalledWith([f1, f2], expect.anything(), expect.anything());
+    expect(convert).toHaveBeenCalledWith(
+      [f1, f2],
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("single-cardinality: rejects drop of a file over the per-category hard cap", () => {
@@ -598,6 +608,138 @@ describe("ToolFrame", () => {
     // Cap message wins over engine custom label so the disabled state isn't unexplained.
     expect(btn).toHaveTextContent(/exceeds 500 mb cap/i);
     expect(btn).not.toHaveTextContent("[ merge ]");
+  });
+
+  it("renders a determinate <progress> bar when an engine emits model-loading events", async () => {
+    // Never-resolving promise: the progress bar is rendered during the
+    // 'converting' window and cleared at done/error. We must observe it
+    // before the run completes, so convert() never resolves.
+    const convert = vi.fn(
+      (
+        _f: File,
+        _o: StubOpts,
+        _s: AbortSignal,
+        runOpts?: { onProgress?: (p: { kind: string; loaded?: number; total?: number }) => void },
+      ) => {
+        runOpts?.onProgress?.({ kind: "model-loading", loaded: 25, total: 100 });
+        return new Promise<OutputItem>(() => {});
+      },
+    );
+    const engine = makeStubEngine({ convert: convert as never });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await screen.findByTestId("clear-staged-file");
+    await waitFor(() => expect(screen.getByTestId("convert-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    const slot = await screen.findByTestId("conversion-progress");
+    expect(slot).toBeInTheDocument();
+    // model-loading branch shows a determinate <progress> with value/max.
+    const bar = slot.querySelector("progress");
+    expect(bar).not.toBeNull();
+    expect(bar).toHaveAttribute("value", "25");
+    expect(bar).toHaveAttribute("max", "100");
+  });
+
+  it("renders an inference status line when an engine emits inference events", async () => {
+    const convert = vi.fn(
+      (
+        _f: File,
+        _o: StubOpts,
+        _s: AbortSignal,
+        runOpts?: { onProgress?: (p: { kind: string; pct?: number }) => void },
+      ) => {
+        runOpts?.onProgress?.({ kind: "inference", pct: 40 });
+        return new Promise<OutputItem>(() => {});
+      },
+    );
+    const engine = makeStubEngine({ convert: convert as never });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await screen.findByTestId("clear-staged-file");
+    await waitFor(() => expect(screen.getByTestId("convert-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    const slot = await screen.findByTestId("conversion-progress");
+    expect(slot).toBeInTheDocument();
+    // Inference branch renders no <progress> element, just a status line.
+    expect(slot.querySelector("progress")).toBeNull();
+    expect(slot).toHaveTextContent(/inferring/i);
+  });
+
+  it("does NOT render a progress bar for engines that never emit progress events", async () => {
+    const convert = vi.fn(async () => ({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    }));
+    const engine = makeStubEngine({ convert });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await screen.findByTestId("clear-staged-file");
+    await waitFor(() => expect(screen.getByTestId("convert-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("status-indicator")).toHaveTextContent("[ DONE ]"),
+    );
+    expect(screen.queryByTestId("conversion-progress")).toBeNull();
+  });
+
+  it("clears the progress bar after the conversion completes", async () => {
+    let resolveConvert: (v: OutputItem) => void = () => {};
+    const convert = vi.fn(
+      (
+        _f: File,
+        _o: StubOpts,
+        _s: AbortSignal,
+        runOpts?: { onProgress?: (p: { kind: string; loaded?: number; total?: number }) => void },
+      ) => {
+        runOpts?.onProgress?.({ kind: "model-loading", loaded: 50, total: 100 });
+        return new Promise<OutputItem>((r) => {
+          resolveConvert = r;
+        });
+      },
+    );
+    const engine = makeStubEngine({ convert: convert as never });
+    render(<ToolFrame engine={engine} />);
+
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), {
+      dataTransfer: { files: [file] },
+    });
+
+    await screen.findByTestId("clear-staged-file");
+    await waitFor(() => expect(screen.getByTestId("convert-button")).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await screen.findByTestId("conversion-progress");
+
+    resolveConvert({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["x"]),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("status-indicator")).toHaveTextContent("[ DONE ]"),
+    );
+    expect(screen.queryByTestId("conversion-progress")).toBeNull();
   });
 
   it("installs beforeunload listener while converting and removes it after", async () => {

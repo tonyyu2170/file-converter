@@ -65,7 +65,12 @@ export type SingleInputEngine<
 > = EngineMeta<TOptions> & {
   cardinality: "single";
   validate(file: File, opts: TOptions): ValidationResult;
-  convert(file: File, opts: TOptions, signal: AbortSignal): Promise<TOutput>;
+  convert(
+    file: File,
+    opts: TOptions,
+    signal: AbortSignal,
+    runOpts?: { onProgress?: (p: ConversionProgress) => void },
+  ): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
   /** Optional: a tight, pre-conversion estimate of total output bytes.
    * Return `null` when an honest estimate isn't possible for the current
@@ -82,7 +87,12 @@ export type MultiInputEngine<
 > = EngineMeta<TOptions> & {
   cardinality: "multi";
   validate(files: File[], opts: TOptions): ValidationResult;
-  convert(files: File[], opts: TOptions, signal: AbortSignal): Promise<TOutput>;
+  convert(
+    files: File[],
+    opts: TOptions,
+    signal: AbortSignal,
+    runOpts?: { onProgress?: (p: ConversionProgress) => void },
+  ): Promise<TOutput>;
   isReadyToConvert?: (opts: TOptions) => boolean;
   /** See SingleInputEngine.estimateOutputBytes. */
   estimateOutputBytes?: (files: File[], opts: TOptions) => number | null;
