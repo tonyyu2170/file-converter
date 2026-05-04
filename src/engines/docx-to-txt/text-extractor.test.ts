@@ -279,4 +279,23 @@ describe("extractText", () => {
     expect(out).toContain("Item 1");
     expect(out).toContain("Item 2");
   });
+
+  it("multi-paragraph table cells stay on one line (no newlines inside row)", () => {
+    // A cell with two paragraphs must not introduce \n inside the row,
+    // which would break the tab-separated structure.
+    const multiParaCell = makeCell([
+      makeParagraph([makeRun("First")]),
+      makeParagraph([makeRun("Second")]),
+    ]);
+    const singleCell = makeCell([makeParagraph([makeRun("Other")])]);
+    const doc = makeDoc([makeTable([makeTableRow([multiParaCell, singleCell])])]);
+    const out = extractText(doc, defaultOpts);
+    // The row must contain exactly one \t (between the two cells)
+    const rows = out.split("\n");
+    expect(rows.length).toBe(1);
+    expect(rows[0]).toContain("\t");
+    expect(rows[0]).toContain("First");
+    expect(rows[0]).toContain("Second");
+    expect(rows[0]).toContain("Other");
+  });
 });

@@ -16,7 +16,11 @@ function renderTableRow(row: TableRow): string {
     .map((cell) => {
       // vMerge "continue" cells are vertical-merge continuations. We emit
       // empty string to preserve column alignment in tab-separated output.
-      return renderBlocks(cell.blocks, "double-newline");
+      //
+      // Multi-paragraph cells are joined with a single space so that the
+      // cell text stays on one line. Plain-text tables cannot represent
+      // multi-line cells without breaking the tab-separated row structure.
+      return renderBlocks(cell.blocks, " ");
     })
     .join("\t");
 }
@@ -29,13 +33,10 @@ function renderBlocks(blocks: ParsedBlock[], paragraphSep: string): string {
   for (const block of blocks) {
     if (block.kind === "paragraph") {
       const text = renderRuns(block.runs);
-      if (text.length > 0 || rendered.length > 0) {
-        // Only push non-empty paragraphs (empty paragraphs in DOCX often
-        // represent blank lines between sections; we skip them to avoid
-        // double-blanking when combined with the separator).
-        if (text.length > 0) {
-          rendered.push({ kind: "paragraph", text });
-        }
+      // Skip empty paragraphs (DOCX blank lines used for spacing). They
+      // would double-blank when combined with the paragraph separator.
+      if (text.length > 0) {
+        rendered.push({ kind: "paragraph", text });
       }
     } else if (block.kind === "table") {
       const rows = block.rows.map(renderTableRow).filter((r) => r.length > 0);
