@@ -15,9 +15,11 @@ const engine: SingleInputEngine<ImageResizeOptions, OutputItem> = {
   cardinality: "single",
   OptionsPanel: ImageResizeOptionsPanel,
   validate(file) {
-    return SUPPORTED_INPUT_MIMES.includes(file.type)
-      ? { ok: true }
-      : { ok: false, reason: "Expected a PNG, JPEG, WebP, or HEIC file" };
+    // Extension fallback for browsers that emit empty file.type for HEIC
+    // (Safari especially). Mirrors docx-to-txt, markdown-to-pdf, txt-to-pdf.
+    if (SUPPORTED_INPUT_MIMES.includes(file.type)) return { ok: true };
+    if (/\.(png|jpe?g|webp|heic|heif)$/i.test(file.name)) return { ok: true };
+    return { ok: false, reason: "Expected a PNG, JPEG, WebP, or HEIC file" };
   },
   async convert(file, opts, signal) {
     const harness = new WorkerHarness<ImageResizeOptions>(

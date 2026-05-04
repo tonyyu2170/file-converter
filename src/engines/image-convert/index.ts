@@ -17,9 +17,13 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   isReadyToConvert: (opts) => opts.output !== null,
   OptionsPanel: ImageConvertOptionsPanel,
   validate(file) {
-    return SUPPORTED_INPUT_MIMES.includes(file.type)
-      ? { ok: true }
-      : { ok: false, reason: "Expected an HEIC, PNG, JPEG, or WebP file" };
+    // Extension fallback for browsers that emit empty file.type for HEIC
+    // (Safari especially). The convert path re-detects via detectMime, so
+    // accepting an extension-only file here is safe — a polyglot/wrong
+    // extension will be caught by detectMime before the worker runs.
+    if (SUPPORTED_INPUT_MIMES.includes(file.type)) return { ok: true };
+    if (/\.(heic|heif|png|jpe?g|webp)$/i.test(file.name)) return { ok: true };
+    return { ok: false, reason: "Expected an HEIC, PNG, JPEG, or WebP file" };
   },
   async convert(file, opts, signal) {
     const detected = await detectMime(file);

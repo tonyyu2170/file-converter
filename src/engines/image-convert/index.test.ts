@@ -46,4 +46,12 @@ describe("image-convert engine metadata", () => {
     const r = engine.validate(f, { output: null, quality: 0.9 });
     expect(r.ok).toBe(false);
   });
+
+  it("validates by extension when MIME is empty (Safari HEIC)", () => {
+    const opts = { output: null, quality: 0.9 };
+    const heicNoMime = new File([new Uint8Array([1])], "photo.heic", { type: "" });
+    const pngNoMime = new File([new Uint8Array([1])], "art.png", { type: "" });
+    expect(engine.validate(heicNoMime, opts)).toEqual({ ok: true });
+    expect(engine.validate(pngNoMime, opts)).toEqual({ ok: true });
+  });
 });

@@ -35,4 +35,11 @@ describe("image-resize engine metadata", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/png|jpeg|webp|heic/i);
   });
+
+  it("validates by extension when MIME is empty (Safari HEIC)", () => {
+    const heicNoMime = new File([new Uint8Array(0)], "photo.heic", { type: "" });
+    const jpegNoMime = new File([new Uint8Array(0)], "art.jpeg", { type: "" });
+    expect(engine.validate(heicNoMime, engine.defaultOptions)).toEqual({ ok: true });
+    expect(engine.validate(jpegNoMime, engine.defaultOptions)).toEqual({ ok: true });
+  });
 });

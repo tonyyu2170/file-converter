@@ -47,6 +47,16 @@ export function computeTargetDimensions(
  * Derive the output filename, MIME, and extension for a given input
  * file and target dimensions. HEIC inputs always output PNG (no
  * canvas HEIC encoder).
+ *
+ * NOTE on the unknown-MIME fallback: when `inputType` is empty or
+ * unrecognized, this function returns mime=PNG but keeps the input
+ * filename's extension (since the HEIC branch only triggers on
+ * literal "image/heic"/"image/heif"). Today this path is unreachable
+ * because the engine's `validate` rejects unsupported MIMEs before
+ * `convert` runs. If validate is ever relaxed (e.g., to accept by
+ * extension when MIME is empty — Safari behavior), the convert path
+ * SHOULD call detectMime first and pass the detected MIME here, so
+ * the output filename matches the actual encoded MIME.
  */
 export function deriveOutput(
   inputName: string,
