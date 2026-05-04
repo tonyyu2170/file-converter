@@ -7,7 +7,7 @@ describe("Home", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
     expect(bar).toHaveTextContent("v0.1.0");
-    expect(bar).toHaveTextContent("8 TOOLS ONLINE");
+    expect(bar).toHaveTextContent("11 TOOLS ONLINE");
   });
 
   it("renders the hero headline as four colored spans", () => {
@@ -59,6 +59,24 @@ describe("Home", () => {
       href: "/tools/pdf-split",
     },
     {
+      testid: "tool-card-pdf-to-image",
+      title: "pdf → image",
+      description: "render each page as png or jpeg",
+      href: "/tools/pdf-to-image",
+    },
+    {
+      testid: "tool-card-pdf-to-md",
+      title: "pdf → md",
+      description: "extract markdown from a pdf (heuristic)",
+      href: "/tools/pdf-to-md",
+    },
+    {
+      testid: "tool-card-docx-to-pdf",
+      title: "docx → pdf",
+      description: "render word documents as pdfs",
+      href: "/tools/docx-to-pdf",
+    },
+    {
       testid: "tool-card-image-resize",
       title: "image resize",
       description: "png, jpg, jpeg, webp, heic · resize by px or %",
@@ -93,10 +111,10 @@ describe("Home", () => {
     },
   );
 
-  it("renders exactly 8 tool cards", () => {
+  it("renders exactly 11 tool cards", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
-    expect(cards).toHaveLength(8);
+    expect(cards).toHaveLength(11);
   });
 
   it("renders the pet panel inside the hero", () => {

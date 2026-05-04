@@ -27,6 +27,24 @@ const TOOLS = [
     href: "/tools/pdf-split",
   },
   {
+    id: "pdf-to-image",
+    title: "pdf → image",
+    description: "render each page as png or jpeg",
+    href: "/tools/pdf-to-image",
+  },
+  {
+    id: "pdf-to-md",
+    title: "pdf → md",
+    description: "extract markdown from a pdf (heuristic)",
+    href: "/tools/pdf-to-md",
+  },
+  {
+    id: "docx-to-pdf",
+    title: "docx → pdf",
+    description: "render word documents as pdfs",
+    href: "/tools/docx-to-pdf",
+  },
+  {
     id: "image-resize",
     title: "image resize",
     description: "png, jpg, jpeg, webp, heic · resize by px or %",
