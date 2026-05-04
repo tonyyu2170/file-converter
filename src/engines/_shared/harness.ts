@@ -1,20 +1,52 @@
 import * as Comlink from "comlink";
 import type { OutputItem } from "./types";
 
+/**
+ * Multi-stage progress event a worker can emit during conversion. Used by
+ * engines with heavy cold-start costs (e.g., ML model loading) so the host
+ * can render a meaningful progress UI rather than an indeterminate spinner.
+ *
+ * - `model-loading`: bytes-based progress while fetching/initialising assets.
+ * - `inference`: 0-100 percentage during the conversion itself.
+ *
+ * Engines that don't emit progress simply never call the callback.
+ */
+export type ConversionProgress =
+  | { kind: "model-loading"; loaded: number; total: number }
+  | { kind: "inference"; pct: number };
+
 export type WorkerEntry<TOptions> = {
   convertSingle?: (
     fileBytes: ArrayBuffer,
     fileName: string,
     fileType: string,
     opts: TOptions,
+    /** Optional Comlink-proxied progress callback. Workers that don't emit
+     * progress simply never call it. */
+    onProgress?: (p: ConversionProgress) => void,
   ) => Promise<OutputItem | OutputItem[]>;
   convertMulti?: (
     files: Array<{ bytes: ArrayBuffer; name: string; type: string }>,
     opts: TOptions,
+    onProgress?: (p: ConversionProgress) => void,
   ) => Promise<OutputItem | OutputItem[]>;
 };
 
 export type WorkerFactory = () => Worker;
+
+export type WorkerHarnessOptions = {
+  /** When true, the harness keeps the worker alive across runSingle/runMulti
+   * calls. Caller is responsible for calling dispose() (typically from a
+   * page-level useEffect cleanup). Off by default for backward compatibility. */
+  persistent?: boolean;
+};
+
+export type RunSingleOptions = {
+  /** Host-side callback the harness wraps with Comlink.proxy() before passing
+   * it to the worker. Workers invoke it to emit ConversionProgress events;
+   * the harness invokes the host callback synchronously on each event. */
+  onProgress?: (p: ConversionProgress) => void;
+};
 
 // Comlink's Remote<T> rewrites function-argument types via the internal
 // UnproxyOrClone<T> mapper, which a generic TOptions cannot satisfy
@@ -25,27 +57,33 @@ type SingleFn<TOptions> = (
   fileName: string,
   fileType: string,
   opts: TOptions,
+  onProgress?: (p: ConversionProgress) => void,
 ) => Promise<OutputItem | OutputItem[]>;
 
 type MultiFn<TOptions> = (
   files: Array<{ bytes: ArrayBuffer; name: string; type: string }>,
   opts: TOptions,
+  onProgress?: (p: ConversionProgress) => void,
 ) => Promise<OutputItem | OutputItem[]>;
 
 export class WorkerHarness<TOptions> {
   private worker: Worker | null = null;
   private remote: Comlink.Remote<WorkerEntry<TOptions>> | null = null;
 
-  constructor(private readonly factory: WorkerFactory) {}
+  constructor(
+    private readonly factory: WorkerFactory,
+    private readonly opts: WorkerHarnessOptions = {},
+  ) {}
 
   async runSingle(
     file: File,
     opts: TOptions,
     signal: AbortSignal,
+    runOpts: RunSingleOptions = {},
   ): Promise<OutputItem | OutputItem[]> {
     this.spawn();
     if (!this.remote?.convertSingle) {
-      this.terminate();
+      this.terminateIfEphemeral();
       throw new Error("worker does not implement convertSingle");
     }
     // Cast to the concrete callable type — the guard above proves
@@ -56,24 +94,25 @@ export class WorkerHarness<TOptions> {
     const buf = await file.arrayBuffer();
     // Early exit if signal was already aborted before reaching this point.
     if (signal.aborted) {
-      this.terminate();
+      this.terminateIfEphemeral();
       throw new DOMException("Aborted", "AbortError");
     }
     const abortPromise = new Promise<never>((_, reject) => {
       const onAbort = () => {
-        this.terminate();
+        this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
     });
+    const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
       const result = await Promise.race([
-        convertSingle(buf, file.name, file.type, opts),
+        convertSingle(buf, file.name, file.type, opts, proxiedOnProgress),
         abortPromise,
       ]);
       return result;
     } finally {
-      this.terminate();
+      this.terminateIfEphemeral();
     }
   }
 
@@ -81,10 +120,11 @@ export class WorkerHarness<TOptions> {
     files: File[],
     opts: TOptions,
     signal: AbortSignal,
+    runOpts: RunSingleOptions = {},
   ): Promise<OutputItem | OutputItem[]> {
     this.spawn();
     if (!this.remote?.convertMulti) {
-      this.terminate();
+      this.terminateIfEphemeral();
       throw new Error("worker does not implement convertMulti");
     }
     // Cast to the concrete callable type — same reason as in runSingle.
@@ -94,21 +134,35 @@ export class WorkerHarness<TOptions> {
     );
     // Early exit if signal was already aborted before reaching this point.
     if (signal.aborted) {
-      this.terminate();
+      this.terminateIfEphemeral();
       throw new DOMException("Aborted", "AbortError");
     }
     const abortPromise = new Promise<never>((_, reject) => {
       const onAbort = () => {
-        this.terminate();
+        this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
     });
+    const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
-      const result = await Promise.race([convertMulti(payload, opts), abortPromise]);
+      const result = await Promise.race([
+        convertMulti(payload, opts, proxiedOnProgress),
+        abortPromise,
+      ]);
       return result;
     } finally {
-      this.terminate();
+      this.terminateIfEphemeral();
+    }
+  }
+
+  /** Force-terminate the persistent worker. No-op for ephemeral mode (the
+   * worker is already gone) and a no-op when no worker has spawned yet. */
+  dispose(): void {
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+      this.remote = null;
     }
   }
 
@@ -118,7 +172,8 @@ export class WorkerHarness<TOptions> {
     this.remote = Comlink.wrap<WorkerEntry<TOptions>>(this.worker);
   }
 
-  private terminate(): void {
+  private terminateIfEphemeral(): void {
+    if (this.opts.persistent) return;
     this.worker?.terminate();
     this.worker = null;
     this.remote = null;
