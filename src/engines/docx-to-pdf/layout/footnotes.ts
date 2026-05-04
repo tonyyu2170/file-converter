@@ -38,12 +38,7 @@
  * uses for Pass-1 natural-height measurement.
  */
 
-import type {
-  Paragraph,
-  ParsedBlock,
-  ParsedDocx,
-  Run,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { Paragraph, ParsedBlock, ParsedDocx, Run } from "@/engines/_shared/docx";
 import { makeDiscardPage } from "@/engines/docx-to-pdf/layout/discard-page";
 import { layoutParagraph } from "@/engines/docx-to-pdf/layout/paragraph";
 import type { PDFDocument, PDFPage } from "pdf-lib";

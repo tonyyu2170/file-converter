@@ -25,7 +25,7 @@
  * unambiguous signatures).
  */
 
-import type { MediaAsset, Run } from "@/engines/_shared/docx/docx-parser/types";
+import type { MediaAsset, Run } from "@/engines/_shared/docx";
 import type { PDFDocument, PDFImage } from "pdf-lib";
 import type { ColumnContext, Pt } from "./types";
 

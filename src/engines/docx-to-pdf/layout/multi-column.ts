@@ -59,7 +59,7 @@
  *     `MultiColumnInput` with a `footnoteReservedHeight: Pt` knob.
  */
 
-import type { ParsedBlock, Run } from "@/engines/_shared/docx/docx-parser/types";
+import type { ParsedBlock, Run } from "@/engines/_shared/docx";
 import type { PDFDocument } from "pdf-lib";
 import * as blockDispatch from "./block-dispatch";
 import type { LayoutDeps } from "./block-dispatch";

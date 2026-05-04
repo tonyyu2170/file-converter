@@ -35,7 +35,7 @@
  *   an fs-backed reader. The worker (Task 12) calls without overrides.
  */
 
-import type { ParsedDocx, RelationshipTarget } from "@/engines/_shared/docx/docx-parser/types";
+import type { ParsedDocx, RelationshipTarget } from "@/engines/_shared/docx";
 import { loadFontBytes as defaultLoadFontBytes } from "@/lib/font-loader";
 import fontkit from "@pdf-lib/fontkit";
 import type { PDFDocument as PDFDocumentType, PDFImage, PDFPage } from "pdf-lib";

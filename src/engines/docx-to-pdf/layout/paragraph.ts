@@ -35,7 +35,7 @@
  * For now we record a TODO and skip image-only runs cleanly.
  */
 
-import type { Paragraph, Run } from "@/engines/_shared/docx/docx-parser/types";
+import type { Paragraph, Run } from "@/engines/_shared/docx";
 import type { PDFDocument } from "pdf-lib";
 import type { LayoutDeps } from "./block-dispatch";
 import { drawInlineImage, fitImageToColumn } from "./images";

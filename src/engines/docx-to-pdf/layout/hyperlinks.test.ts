@@ -1,4 +1,4 @@
-import type { RelationshipTarget } from "@/engines/_shared/docx/docx-parser/types";
+import type { RelationshipTarget } from "@/engines/_shared/docx";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeMockPage } from "./_test-helpers";
 import { attachLinkAnnotation, computeLinkRect } from "./hyperlinks";

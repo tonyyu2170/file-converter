@@ -22,7 +22,7 @@
  * in Task 9 and reuses `ColumnGeometry` to seed alternate column boxes.
  */
 
-import type { RelationshipTarget } from "@/engines/_shared/docx/docx-parser/types";
+import type { RelationshipTarget } from "@/engines/_shared/docx";
 import type { PDFFont, PDFPage } from "pdf-lib";
 
 /** All PDF text in the engine is drawn at PostScript points (1/72 in). */

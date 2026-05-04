@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type {
-  Paragraph,
-  ParsedBlock,
-  ParsedDocx,
-  Run,
-  Section,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { Paragraph, ParsedBlock, ParsedDocx, Run, Section } from "@/engines/_shared/docx";
 import type { PDFDocument } from "pdf-lib";
 import { LETTER_PORTRAIT, makeMockEmbeddedFonts, makeMockPdfDoc } from "./_test-helpers";
 import type { LayoutDeps } from "./block-dispatch";

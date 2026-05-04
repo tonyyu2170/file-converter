@@ -30,11 +30,7 @@
  * and re-invoke `layoutBlock` with the remainder.
  */
 
-import type {
-  NumberingDef,
-  ParsedBlock,
-  RelationshipTarget,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { NumberingDef, ParsedBlock, RelationshipTarget } from "@/engines/_shared/docx";
 import type { PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { layoutListItem } from "./lists";
 import type { ListState } from "./lists";

@@ -1,9 +1,4 @@
-import type {
-  NumberingDef,
-  NumberingLevel,
-  Paragraph,
-  Run,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { NumberingDef, NumberingLevel, Paragraph, Run } from "@/engines/_shared/docx";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeColumnContext, makeMockPdfDoc } from "./_test-helpers";

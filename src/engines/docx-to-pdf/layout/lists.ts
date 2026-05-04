@@ -41,11 +41,7 @@
  *     numbers are predictable in tests.
  */
 
-import type {
-  NumberingDef,
-  NumberingLevel,
-  Paragraph,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { NumberingDef, NumberingLevel, Paragraph } from "@/engines/_shared/docx";
 import type { PDFDocument } from "pdf-lib";
 import type { LayoutDeps } from "./block-dispatch";
 import { layoutParagraph } from "./paragraph";

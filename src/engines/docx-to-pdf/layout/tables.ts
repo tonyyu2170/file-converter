@@ -47,12 +47,7 @@
  *     `deps.warnings` so the orchestrator can surface it to the user.
  */
 
-import type {
-  ParsedBlock,
-  Table,
-  TableCell,
-  TableRow,
-} from "@/engines/_shared/docx/docx-parser/types";
+import type { ParsedBlock, Table, TableCell, TableRow } from "@/engines/_shared/docx";
 import type { PDFDocument } from "pdf-lib";
 import { rgb } from "pdf-lib";
 // Namespace import so tests can `vi.spyOn(blockDispatch, "layoutBlock")`.

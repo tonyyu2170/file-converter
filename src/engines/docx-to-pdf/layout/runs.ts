@@ -21,7 +21,7 @@
  * a small offset below the baseline; strike sits at half x-height.
  */
 
-import type { Run } from "@/engines/_shared/docx/docx-parser/types";
+import type { Run } from "@/engines/_shared/docx";
 import { pickFont } from "@/engines/docx-to-pdf/fonts/substitution-map";
 import type { BundledFontFamily } from "@/engines/docx-to-pdf/fonts/types";
 import { rgb } from "pdf-lib";
