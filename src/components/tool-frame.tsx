@@ -1,6 +1,7 @@
 "use client";
 
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
+import { useActiveConversion } from "@/hooks/use-active-conversion";
 import { formatBytes } from "@/lib/format-bytes";
 import { useCallback, useState } from "react";
 import { DropZone } from "./drop-zone";
@@ -28,6 +29,8 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   const Panel = engine.OptionsPanel;
   const Staging = engine.cardinality === "multi" ? engine.StagingArea : undefined;
   const isMulti = engine.cardinality === "multi";
+
+  useActiveConversion(status === "converting");
 
   // Single-cardinality reset helper. Centralises the four-setter block used
   // by handleDrop and handleClearStaged. Multi-cardinality appends to

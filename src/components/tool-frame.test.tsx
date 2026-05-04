@@ -1,10 +1,12 @@
 import type { ConversionEngine, OutputItem, ValidationResult } from "@/engines/_shared/types";
+import { __resetForTests as resetActiveConversion } from "@/hooks/use-active-conversion";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ToolFrame } from "./tool-frame";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetActiveConversion();
 });
 
 type StubOpts = { ready: boolean };
@@ -435,5 +437,40 @@ describe("ToolFrame", () => {
       expect(convert).toHaveBeenCalledOnce();
     });
     expect(convert).toHaveBeenCalledWith([f1, f2], expect.anything(), expect.anything());
+  });
+
+  it("installs beforeunload listener while converting and removes it after", async () => {
+    // Use a slow convert so we can observe the converting state.
+    let resolveConvert: (v: OutputItem) => void = () => undefined;
+    const convertPromise = new Promise<OutputItem>((res) => {
+      resolveConvert = res;
+    });
+    const convert = vi.fn(async () => convertPromise);
+    const engine = makeStubEngine({ convert });
+
+    resetActiveConversion();
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+
+    const beforeUnloadCalls = (spy: typeof addSpy) =>
+      spy.mock.calls.filter((c) => (c[0] as string) === "beforeunload").length;
+
+    render(<ToolFrame engine={engine} />);
+    const file = new File(["x"], "in.bin", { type: "application/octet-stream" });
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [file] } });
+
+    await screen.findByTestId("clear-staged-file");
+    fireEvent.click(screen.getByTestId("convert-button"));
+
+    await waitFor(() => expect(beforeUnloadCalls(addSpy)).toBe(1));
+    expect(beforeUnloadCalls(removeSpy)).toBe(0);
+
+    resolveConvert({
+      filename: "out.bin",
+      mime: "application/octet-stream",
+      blob: new Blob(["y"]),
+    });
+
+    await waitFor(() => expect(beforeUnloadCalls(removeSpy)).toBe(1));
   });
 });
