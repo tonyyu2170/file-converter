@@ -1,22 +1,10 @@
 import { decodeImage } from "@/engines/_shared/decode-image";
 import type { OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
-import { type ImageResizeOptions, OUTPUT_EXTENSION, OUTPUT_MIME_FOR_INPUT } from "./options";
+import { computeTargetDimensions, deriveOutput } from "./dimensions";
+import type { ImageResizeOptions } from "./options";
 
-const MAX_DIMENSION = 16384; // canvas hard limit on most browsers
-
-function replaceExt(name: string, newExt: string): string {
-  const dot = name.lastIndexOf(".");
-  if (dot <= 0) return `${name}.${newExt}`;
-  return `${name.slice(0, dot)}.${newExt}`;
-}
-
-function withResolutionSuffix(name: string, w: number, h: number, ext: string): string {
-  const base = name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name;
-  return `${base}-${w}x${h}.${ext}`;
-}
-
-export const api = {
+const api = {
   async convertSingle(
     bytes: ArrayBuffer,
     name: string,
@@ -28,51 +16,20 @@ export const api = {
     const bitmap = await decodeImage(file);
 
     try {
-      // Compute target dimensions.
-      let targetW: number;
-      let targetH: number;
+      const target = computeTargetDimensions({ width: bitmap.width, height: bitmap.height }, opts);
+      const output = deriveOutput(name, type, target);
 
-      if (opts.mode === "percent") {
-        targetW = Math.round((bitmap.width * opts.width) / 100);
-        targetH = opts.lockAspectRatio
-          ? Math.round((bitmap.height * opts.width) / 100)
-          : Math.round((bitmap.height * opts.height) / 100);
-      } else {
-        targetW = opts.width;
-        targetH = opts.lockAspectRatio
-          ? Math.round((bitmap.height * opts.width) / bitmap.width)
-          : opts.height;
-      }
-
-      // Validate target dimensions.
-      if (targetW < 1 || targetH < 1) {
-        throw new Error(`Resize target too small: ${targetW}x${targetH}`);
-      }
-      if (targetW > MAX_DIMENSION || targetH > MAX_DIMENSION) {
-        throw new Error(
-          `Resize target exceeds canvas limit (${MAX_DIMENSION}px): ${targetW}x${targetH}`,
-        );
-      }
-
-      // Output MIME — HEIC falls back to PNG.
-      const outputType = OUTPUT_MIME_FOR_INPUT[type] ?? "image/png";
-      const outputExt = OUTPUT_EXTENSION[outputType] ?? "png";
-
-      const canvas = new OffscreenCanvas(targetW, targetH);
+      const canvas = new OffscreenCanvas(target.width, target.height);
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+      ctx.drawImage(bitmap, 0, 0, target.width, target.height);
 
-      const blob = await canvas.convertToBlob({ type: outputType });
-
-      // If the input was HEIC and we're switching to PNG, swap the extension first.
-      const baseName =
-        type === "image/heic" || type === "image/heif" ? replaceExt(name, outputExt) : name;
+      const blob = await canvas.convertToBlob({ type: output.mime });
       return {
-        filename: withResolutionSuffix(baseName, targetW, targetH, outputExt),
-        mime: outputType,
+        filename: output.filename,
+        mime: output.mime,
         blob,
       };
     } finally {
