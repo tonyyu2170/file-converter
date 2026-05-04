@@ -27,4 +27,15 @@ describe("docx-to-txt engine metadata", () => {
     const result = engine.validate(txt, engine.defaultOptions);
     expect(result.ok).toBe(false);
   });
+
+  it("validates by .docx extension when MIME is empty (macOS Safari)", () => {
+    const docxNoMime = new File([new Uint8Array(0)], "report.docx", { type: "" });
+    expect(engine.validate(docxNoMime, engine.defaultOptions)).toEqual({ ok: true });
+  });
+
+  it("rejects non-.docx files with empty MIME", () => {
+    const oddFile = new File([new Uint8Array(0)], "mystery.bin", { type: "" });
+    const result = engine.validate(oddFile, engine.defaultOptions);
+    expect(result.ok).toBe(false);
+  });
 });

@@ -15,7 +15,12 @@ const engine: SingleInputEngine<DocxToTxtOptions, OutputItem> = {
   cardinality: "single",
   OptionsPanel: DocxToTxtOptionsPanel,
   validate(file) {
-    return file.type === DOCX_MIME ? { ok: true } : { ok: false, reason: "Expected a .docx file" };
+    // Extension fallback for browsers that emit empty file.type for .docx
+    // (macOS Finder / Safari, some Chrome configs). Mirrors the validate
+    // pattern in docx-to-pdf, markdown-to-pdf, and txt-to-pdf.
+    if (file.type === DOCX_MIME) return { ok: true };
+    if (/\.docx$/i.test(file.name)) return { ok: true };
+    return { ok: false, reason: "Expected a .docx file" };
   },
   async convert(file, opts, signal) {
     const harness = new WorkerHarness<DocxToTxtOptions>(
