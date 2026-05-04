@@ -11,6 +11,16 @@ afterEach(() => {
 
 type StubOpts = { ready: boolean };
 
+// Allocation-free File for size-cap tests. The cap check reads .size only,
+// so we override that property and skip the underlying Blob byte buffer.
+// CRITICAL on an 8GB dev box: a literal `new Uint8Array(600_000_000)` here
+// would allocate 600 MB per test, and Vitest runs files in parallel.
+function fakeFile(name: string, type: string, size: number): File {
+  const f = new File([], name, { type });
+  Object.defineProperty(f, "size", { value: size });
+  return f;
+}
+
 function makeStubEngine(
   overrides: Partial<ConversionEngine<StubOpts, OutputItem>> = {},
 ): ConversionEngine<StubOpts, OutputItem> {
@@ -437,6 +447,46 @@ describe("ToolFrame", () => {
       expect(convert).toHaveBeenCalledOnce();
     });
     expect(convert).toHaveBeenCalledWith([f1, f2], expect.anything(), expect.anything());
+  });
+
+  it("single-cardinality: rejects drop of a file over the per-category hard cap", () => {
+    const engine = makeStubEngine({ category: "image" });
+    render(<ToolFrame engine={engine} />);
+    const huge = fakeFile("huge.bin", "application/octet-stream", 260_000_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [huge] } });
+    expect(screen.queryByTestId("clear-staged-file")).toBeNull();
+    expect(screen.getByTestId("status-indicator")).toHaveTextContent("[ ERROR ]");
+    expect(screen.getByText(/exceeds the 250 MB cap for image tools/i)).toBeInTheDocument();
+  });
+
+  it("multi-cardinality: rejects entire drop if any file is over hard cap; prior staging unchanged", () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div data-testid="staging-files">{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      category: "pdf" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn() as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    const small = fakeFile("small.pdf", "application/pdf", 1_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [small] } });
+
+    expect(screen.getByTestId("staging-files")).toHaveTextContent("1 files");
+
+    const huge = fakeFile("huge.pdf", "application/pdf", 600_000_000);
+    const ok = fakeFile("ok.pdf", "application/pdf", 2_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [huge, ok] } });
+
+    // Prior staging unchanged; new drop atomically rejected.
+    expect(screen.getByTestId("staging-files")).toHaveTextContent("1 files");
+    expect(screen.getByText(/exceeds the 500 MB cap for pdf tools/i)).toBeInTheDocument();
   });
 
   it("installs beforeunload listener while converting and removes it after", async () => {

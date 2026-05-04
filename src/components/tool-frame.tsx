@@ -1,5 +1,6 @@
 "use client";
 
+import { SIZE_LIMITS_MB, hardCapBytes } from "@/engines/_shared/size-limits";
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 import { useActiveConversion } from "@/hooks/use-active-conversion";
 import { formatBytes } from "@/lib/format-bytes";
@@ -93,6 +94,19 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   );
 
   function handleDrop(files: File[]) {
+    const hard = hardCapBytes(engine.category);
+    const oversized = files.filter((f) => f.size > hard);
+    if (oversized.length > 0) {
+      const names = oversized.map((f) => `${f.name} (${formatBytes(f.size)})`).join(", ");
+      const verb = oversized.length === 1 ? "exceeds" : "exceed";
+      const filesWord = oversized.length === 1 ? "the file" : "the files";
+      setErrorMessage(
+        `${names} ${verb} the ${SIZE_LIMITS_MB[engine.category].hard} MB cap ` +
+          `for ${engine.category} tools. Try splitting ${filesWord} or using a different tool.`,
+      );
+      setStatus("error");
+      return;
+    }
     if (isMulti) {
       setStagedFiles((prev) => [...prev, ...files]);
       return;
