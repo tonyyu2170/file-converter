@@ -68,7 +68,7 @@ public/onnx-wasm/.gitkeep                      # destination for build-copied ON
 scripts/copy-bg-models.mjs                     # prebuild copy step
 src/engines/_shared/harness.ts                 # additive: progress + persistent
 src/components/tool-frame.tsx                  # render progress bar slot
-src/components/sidebar.tsx                     # +1 entry
+src/components/layout/sidebar.tsx              # +1 entry
 src/app/page.tsx                               # +1 home-grid card
 ```
 
@@ -416,7 +416,7 @@ deliberate destination, not a default.
 
 ### 8.3 Sidebar entry
 
-`src/components/sidebar.tsx`'s `TOOLS` array gains:
+`src/components/layout/sidebar.tsx`'s `TOOLS` array gains:
 
 ```ts
 { id: "image-bg-remove", href: "/tools/image-bg-remove", label: "image bg remove", group: "IMAGES" },
