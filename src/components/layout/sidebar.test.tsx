@@ -8,4 +8,24 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("sidebar-home-link")).toHaveAttribute("href", "/");
     expect(screen.getByText("// HOME")).toBeInTheDocument();
   });
+
+  it("renders all four new Phase 15 tool links in their groups", () => {
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: /image resize/i })).toHaveAttribute(
+      "href",
+      "/tools/image-resize",
+    );
+    expect(screen.getByRole("link", { name: /docx→txt/i })).toHaveAttribute(
+      "href",
+      "/tools/docx-to-txt",
+    );
+    expect(screen.getByRole("link", { name: /markdown→pdf/i })).toHaveAttribute(
+      "href",
+      "/tools/markdown-to-pdf",
+    );
+    expect(screen.getByRole("link", { name: /txt→pdf/i })).toHaveAttribute(
+      "href",
+      "/tools/txt-to-pdf",
+    );
+  });
 });

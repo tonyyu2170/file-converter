@@ -52,7 +52,7 @@ import type {
   Table,
   TableCell,
   TableRow,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
 import { rgb } from "pdf-lib";
 // Namespace import so tests can `vi.spyOn(blockDispatch, "layoutBlock")`.

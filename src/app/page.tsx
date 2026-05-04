@@ -26,6 +26,30 @@ const TOOLS = [
     description: "extract page ranges from a pdf",
     href: "/tools/pdf-split",
   },
+  {
+    id: "image-resize",
+    title: "image resize",
+    description: "png, jpg, jpeg, webp, heic · resize by px or %",
+    href: "/tools/image-resize",
+  },
+  {
+    id: "docx-to-txt",
+    title: "docx → txt",
+    description: "extract plain text from word documents",
+    href: "/tools/docx-to-txt",
+  },
+  {
+    id: "markdown-to-pdf",
+    title: "markdown → pdf",
+    description: "render markdown as a styled pdf",
+    href: "/tools/markdown-to-pdf",
+  },
+  {
+    id: "txt-to-pdf",
+    title: "txt → pdf",
+    description: "render text verbatim as a monospace pdf",
+    href: "/tools/txt-to-pdf",
+  },
 ] as const;
 
 const VERSION = "v0.1.0";

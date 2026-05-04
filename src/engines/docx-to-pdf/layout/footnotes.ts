@@ -43,7 +43,7 @@ import type {
   ParsedBlock,
   ParsedDocx,
   Run,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import { makeDiscardPage } from "@/engines/docx-to-pdf/layout/discard-page";
 import { layoutParagraph } from "@/engines/docx-to-pdf/layout/paragraph";
 import type { PDFDocument, PDFPage } from "pdf-lib";

@@ -1,0 +1,11 @@
+short line one
+short line two
+
+paragraph after blank line.
+
+a very long line that definitely exceeds eighty characters so we can test that the engine wraps it correctly at the right margin instead of letting it run off the page boundary like a runaway sentence.
+
+	tabbed line (should expand to 4 spaces)
+
+ligature sequences that crash naive fontkit calls: // => != == || && -- ->
+**bold** renders as 8 literal chars (no markdown interpretation)

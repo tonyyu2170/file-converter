@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { MediaAsset, Run } from "@/engines/docx-to-pdf/docx-parser/types";
+import type { MediaAsset, Run } from "@/engines/_shared/docx/docx-parser/types";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeColumnContext } from "./_test-helpers";

@@ -6,7 +6,7 @@ import type {
   Table,
   TableCell,
   TableRow,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it, vi } from "vitest";
 import { type MockPage, makeColumnContext } from "./_test-helpers";
