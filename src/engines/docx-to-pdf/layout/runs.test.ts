@@ -242,27 +242,9 @@ describe("drawRunSpan", () => {
     ctx.relationships = new Map();
     ctx.bookmarks = new Set();
     ctx.warnings = [];
-    drawRunSpan(
-      ctx,
-      makeRun({ text: "a", hyperlinkAnchor: "one" }),
-      "a",
-      100,
-      200,
-    );
-    drawRunSpan(
-      ctx,
-      makeRun({ text: "b", hyperlinkAnchor: "two" }),
-      "b",
-      100,
-      200,
-    );
-    drawRunSpan(
-      ctx,
-      makeRun({ text: "a", hyperlinkAnchor: "one" }),
-      "a",
-      100,
-      200,
-    );
+    drawRunSpan(ctx, makeRun({ text: "a", hyperlinkAnchor: "one" }), "a", 100, 200);
+    drawRunSpan(ctx, makeRun({ text: "b", hyperlinkAnchor: "two" }), "b", 100, 200);
+    drawRunSpan(ctx, makeRun({ text: "a", hyperlinkAnchor: "one" }), "a", 100, 200);
     expect(ctx.warnings).toEqual(["anchor not found: one", "anchor not found: two"]);
   });
 });
