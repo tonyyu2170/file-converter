@@ -5,12 +5,16 @@ type ToolEntry = { id: string; href: string; label: string; group: string };
 const TOOLS: ToolEntry[] = [
   { id: "home", href: "/", label: "~/", group: "HOME" },
   { id: "image-convert", href: "/tools/image-convert", label: "image convert", group: "IMAGES" },
+  { id: "image-resize", href: "/tools/image-resize", label: "image resize", group: "IMAGES" },
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
   { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
   { id: "pdf-to-image", href: "/tools/pdf-to-image", label: "pdf→image", group: "PDFS" },
   { id: "pdf-to-md", href: "/tools/pdf-to-md", label: "pdf→md", group: "PDFS" },
   { id: "docx-to-pdf", href: "/tools/docx-to-pdf", label: "docx→pdf", group: "DOCS" },
+  { id: "docx-to-txt", href: "/tools/docx-to-txt", label: "docx→txt", group: "DOCS" },
+  { id: "markdown-to-pdf", href: "/tools/markdown-to-pdf", label: "markdown→pdf", group: "DOCS" },
+  { id: "txt-to-pdf", href: "/tools/txt-to-pdf", label: "txt→pdf", group: "DOCS" },
 ];
 
 const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS"] as const;
