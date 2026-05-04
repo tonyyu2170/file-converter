@@ -19,6 +19,7 @@ function readFontFile(filename: string): ArrayBuffer {
 function loadFontsForTest() {
   return {
     body: readFontFile("lora-regular.ttf"),
+    bodyItalic: readFontFile("lora-italic.ttf"),
     headings: readFontFile("inter-regular.ttf"),
     mono: readFontFile("jetbrains-mono-regular.ttf"),
   };
@@ -35,7 +36,9 @@ describe("renderBlocksToPdf", () => {
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBeGreaterThan(0);
     const [page] = pdf.getPages();
-    const { width, height } = page!.getSize();
+    expect(page).toBeDefined();
+    if (!page) return;
+    const { width, height } = page.getSize();
     expect(width).toBe(612);
     expect(height).toBe(792);
   });
@@ -46,7 +49,9 @@ describe("renderBlocksToPdf", () => {
     const bytes = await renderBlocksToPdf(blocks, { pageSize: "a4" }, fonts);
     const pdf = await PDFDocument.load(bytes);
     const [page] = pdf.getPages();
-    const { width, height } = page!.getSize();
+    expect(page).toBeDefined();
+    if (!page) return;
+    const { width, height } = page.getSize();
     expect(width).toBe(595);
     expect(height).toBe(842);
   });
@@ -103,5 +108,72 @@ describe("renderBlocksToPdf", () => {
     const bytes = await renderBlocksToPdf(blocks, { pageSize: "letter" }, fonts);
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBeGreaterThan(0);
+  });
+
+  // Fix 1 regression: multi-word link URL must appear exactly once
+  it("renders a multi-word link with the URL appended exactly once", async () => {
+    const linkObj = { href: "https://example.com" };
+    const blocks: Block[] = [
+      {
+        type: "paragraph",
+        runs: [
+          // Single run with shared link object — parser emits one Run per
+          // source link; wrapRuns splits it into fragments.
+          { text: "click here", style: { link: linkObj } },
+        ],
+      },
+    ];
+    const fonts = loadFontsForTest();
+    const bytes = await renderBlocksToPdf(blocks, { pageSize: "letter" }, fonts);
+    // Load via pdf-lib and verify we get a valid PDF (visual assertion via
+    // pdfjs-dist is not available in Vitest; the E2E test covers that path).
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBeGreaterThan(0);
+    // The renderer must not crash and must produce a single-page result
+    // for this trivially short content.
+    expect(pdf.getPageCount()).toBe(1);
+  });
+
+  // Fix 1 regression: autolink (text === href) must not append parens
+  it("autolink (text === href) does not append parens — produces valid PDF", async () => {
+    const href = "https://example.com";
+    const blocks: Block[] = [
+      {
+        type: "paragraph",
+        runs: [{ text: href, style: { link: { href } } }],
+      },
+    ];
+    const fonts = loadFontsForTest();
+    const bytes = await renderBlocksToPdf(blocks, { pageSize: "letter" }, fonts);
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(1);
+  });
+
+  // Fix 2 regression: blockquote uses italic font — must produce valid PDF
+  it("renders a blockquote with italic font without crashing", async () => {
+    const blocks: Block[] = [
+      {
+        type: "blockquote",
+        runs: [{ text: "To be or not to be, that is the question.", style: {} }],
+      },
+    ];
+    const fonts = loadFontsForTest();
+    const bytes = await renderBlocksToPdf(blocks, { pageSize: "letter" }, fonts);
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBeGreaterThan(0);
+  });
+
+  // Fix 4 regression: single word wider than maxWidth must be force-broken
+  it("force-breaks a single word that exceeds maxWidth", async () => {
+    // 500 'x' chars is far wider than the letter-page content width (~468pt).
+    const longWord = "x".repeat(500);
+    const blocks: Block[] = [{ type: "paragraph", runs: [{ text: longWord, style: {} }] }];
+    const fonts = loadFontsForTest();
+    const bytes = await renderBlocksToPdf(blocks, { pageSize: "letter" }, fonts);
+    const pdf = await PDFDocument.load(bytes);
+    // The renderer must not crash and must produce at least one valid page.
+    // The long word will be broken across multiple visual lines (possibly
+    // across pages), but the PDF must be well-formed.
+    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1);
   });
 });

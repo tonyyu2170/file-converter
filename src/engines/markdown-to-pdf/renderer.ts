@@ -7,6 +7,7 @@ import type { MarkdownToPdfOptions } from "./options";
 
 export type RendererFonts = {
   body: ArrayBuffer | Uint8Array;
+  bodyItalic: ArrayBuffer | Uint8Array;
   headings: ArrayBuffer | Uint8Array;
   mono: ArrayBuffer | Uint8Array;
 };
@@ -25,6 +26,12 @@ const BODY_LINE_HEIGHT_PT = 14;
 const CODE_SIZE_PT = 10;
 const CODE_LINE_HEIGHT_PT = 13;
 
+// Tracks link metadata for the per-link URL paren dedup pass.
+type LinkInfo = {
+  fullText: string; // concatenated text of all fragments of this link
+  lastLineIdx: number; // index of the last wrapped line containing this link
+};
+
 export async function renderBlocksToPdf(
   blocks: Block[],
   opts: MarkdownToPdfOptions,
@@ -34,6 +41,7 @@ export async function renderBlocksToPdf(
   pdf.registerFontkit(fontkit);
 
   const bodyFont = await pdf.embedFont(fonts.body);
+  const bodyItalicFont = await pdf.embedFont(fonts.bodyItalic);
   const headingsFont = await pdf.embedFont(fonts.headings);
   const monoFont = await pdf.embedFont(fonts.mono);
 
@@ -125,17 +133,28 @@ export async function renderBlocksToPdf(
 
     if (block.type === "blockquote") {
       const indent = 24;
-      const wrapped = wrapRuns(block.runs, contentW - indent, bodyFont, monoFont, BODY_SIZE_PT);
-      for (const lineRuns of wrapped) {
+      const wrapped = wrapRuns(
+        block.runs,
+        contentW - indent,
+        bodyItalicFont,
+        monoFont,
+        BODY_SIZE_PT,
+      );
+      const linkMap = buildLinkMap(wrapped);
+      for (let li = 0; li < wrapped.length; li++) {
+        const lineRuns = wrapped[li];
+        if (lineRuns === undefined) continue;
         ensureSpace(BODY_LINE_HEIGHT_PT);
         drawRunsLine(
           page,
           lineRuns,
           margin + indent,
           y - BODY_SIZE_PT,
-          bodyFont,
+          bodyItalicFont,
           monoFont,
           BODY_SIZE_PT,
+          linkMap,
+          li,
         );
         y -= BODY_LINE_HEIGHT_PT;
       }
@@ -153,7 +172,10 @@ export async function renderBlocksToPdf(
         font: bodyFont,
       });
       const wrapped = wrapRuns(block.runs, contentW - indent, bodyFont, monoFont, BODY_SIZE_PT);
-      for (const lineRuns of wrapped) {
+      const linkMap = buildLinkMap(wrapped);
+      for (let li = 0; li < wrapped.length; li++) {
+        const lineRuns = wrapped[li];
+        if (lineRuns === undefined) continue;
         ensureSpace(BODY_LINE_HEIGHT_PT);
         drawRunsLine(
           page,
@@ -163,6 +185,8 @@ export async function renderBlocksToPdf(
           bodyFont,
           monoFont,
           BODY_SIZE_PT,
+          linkMap,
+          li,
         );
         y -= BODY_LINE_HEIGHT_PT;
       }
@@ -172,15 +196,54 @@ export async function renderBlocksToPdf(
 
     // paragraph
     const wrapped = wrapRuns(block.runs, contentW, bodyFont, monoFont, BODY_SIZE_PT);
-    for (const lineRuns of wrapped) {
+    const linkMap = buildLinkMap(wrapped);
+    for (let li = 0; li < wrapped.length; li++) {
+      const lineRuns = wrapped[li];
+      if (lineRuns === undefined) continue;
       ensureSpace(BODY_LINE_HEIGHT_PT);
-      drawRunsLine(page, lineRuns, margin, y - BODY_SIZE_PT, bodyFont, monoFont, BODY_SIZE_PT);
+      drawRunsLine(
+        page,
+        lineRuns,
+        margin,
+        y - BODY_SIZE_PT,
+        bodyFont,
+        monoFont,
+        BODY_SIZE_PT,
+        linkMap,
+        li,
+      );
       y -= BODY_LINE_HEIGHT_PT;
     }
     y -= 4;
   }
 
   return await pdf.save();
+}
+
+/**
+ * Build a map from link-object reference → {fullText, lastLineIdx} for a
+ * set of wrapped lines. Used by drawRunsLine to emit "(href)" exactly once
+ * per source link, on the last line it appears on, comparing the full
+ * original link text (not a post-wrap fragment) to href.
+ */
+function buildLinkMap(lines: Run[][]): Map<NonNullable<Run["style"]["link"]>, LinkInfo> {
+  const map = new Map<NonNullable<Run["style"]["link"]>, LinkInfo>();
+  for (let li = 0; li < lines.length; li++) {
+    const lineRuns = lines[li];
+    if (lineRuns === undefined) continue;
+    for (const run of lineRuns) {
+      const link = run.style.link;
+      if (!link) continue;
+      const existing = map.get(link);
+      if (existing) {
+        existing.fullText += run.text;
+        existing.lastLineIdx = li;
+      } else {
+        map.set(link, { fullText: run.text, lastLineIdx: li });
+      }
+    }
+  }
+  return map;
 }
 
 /**
@@ -230,6 +293,8 @@ function drawMonoText(
 
 // Naive run-flow wrap: split each run by spaces, accumulate words until
 // width exceeds the limit, then start a new line. Code runs use mono font.
+// Single words wider than maxWidth are force-broken at character boundaries
+// so they never overrun the right margin.
 function wrapRuns(
   runs: Run[],
   maxWidth: number,
@@ -248,6 +313,31 @@ function wrapRuns(
       const w = run.style.code
         ? measureMonoText(word, size, monoFont)
         : bodyFont.widthOfTextAtSize(word, size);
+
+      // Force-break a single word that is wider than the available line.
+      if (currentWidth + w > maxWidth && current.length === 0 && w > maxWidth) {
+        let chunk = "";
+        let chunkWidth = 0;
+        for (const ch of word) {
+          const chWidth = run.style.code
+            ? measureMonoText(ch, size, monoFont)
+            : bodyFont.widthOfTextAtSize(ch, size);
+          if (chunkWidth + chWidth > maxWidth && chunk.length > 0) {
+            lines.push([{ text: chunk, style: run.style }]);
+            chunk = ch;
+            chunkWidth = chWidth;
+          } else {
+            chunk += ch;
+            chunkWidth += chWidth;
+          }
+        }
+        if (chunk.length > 0) {
+          current.push({ text: chunk, style: run.style });
+          currentWidth = chunkWidth;
+        }
+        continue;
+      }
+
       if (currentWidth + w > maxWidth && current.length > 0) {
         lines.push(current);
         current = [];
@@ -270,6 +360,12 @@ function drawRunsLine(
   bodyFont: PDFFont,
   monoFont: PDFFont,
   size: number,
+  // Link dedup info built by buildLinkMap. Maps link object reference →
+  // {fullText, lastLineIdx}. Enables emitting "(href)" exactly once per
+  // source link (on its last wrapped line), comparing the FULL original
+  // link text vs href (not a post-wrap fragment).
+  linkMap: Map<NonNullable<Run["style"]["link"]>, LinkInfo>,
+  lineIdx: number,
 ) {
   let cursorX = x;
   for (const run of runs) {
@@ -296,20 +392,27 @@ function drawRunsLine(
     cursorX += w;
   }
 
-  // After the line, if any link's URL differs from its text, append "(href)"
-  // at the end of the line in muted color.
+  // After drawing all runs, emit "(href)" once per source link — only on
+  // the last line the link appears on, and only when the full original
+  // link text differs from the href (i.e. not an autolink).
+  const seenLinks = new Set<NonNullable<Run["style"]["link"]>>();
   for (const run of runs) {
-    if (run.style.link?.href && run.style.link.href !== run.text) {
-      const text = ` (${run.style.link.href})`;
-      const w = bodyFont.widthOfTextAtSize(text, size);
-      page.drawText(text, {
-        x: cursorX,
-        y,
-        size,
-        font: bodyFont,
-        color: rgb(0.4, 0.4, 0.4),
-      });
-      cursorX += w;
-    }
+    const link = run.style.link;
+    if (!link || seenLinks.has(link)) continue;
+    seenLinks.add(link);
+    const info = linkMap.get(link);
+    if (!info) continue;
+    if (info.lastLineIdx !== lineIdx) continue;
+    if (info.fullText === link.href) continue; // autolink — no parens
+    const parenText = ` (${link.href})`;
+    const w = bodyFont.widthOfTextAtSize(parenText, size);
+    page.drawText(parenText, {
+      x: cursorX,
+      y,
+      size,
+      font: bodyFont,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+    cursorX += w;
   }
 }

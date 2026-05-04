@@ -5,19 +5,20 @@ import type { MarkdownToPdfOptions } from "./options";
 import { parseMarkdown } from "./parser";
 import { type RendererFonts, renderBlocksToPdf } from "./renderer";
 
-function replaceExt(name: string, newExt: string): string {
+export function replaceExt(name: string, newExt: string): string {
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return `${name}.${newExt}`;
   return `${name.slice(0, dot)}.${newExt}`;
 }
 
 async function loadFonts(): Promise<RendererFonts> {
-  const [body, headings, mono] = await Promise.all([
+  const [body, bodyItalic, headings, mono] = await Promise.all([
     loadFontByFilename("lora-regular.ttf"),
+    loadFontByFilename("lora-italic.ttf"),
     loadFontByFilename("inter-regular.ttf"),
     loadFontByFilename("jetbrains-mono-regular.ttf"),
   ]);
-  return { body, headings, mono };
+  return { body, bodyItalic, headings, mono };
 }
 
 const api = {

@@ -2,9 +2,13 @@
  * Integration tests for the markdown-to-pdf pipeline:
  * parseMarkdown → renderBlocksToPdf.
  *
- * Worker spawn (via engine.convert) requires a browser Worker API that
- * Vitest/jsdom does not provide — that path is exercised by E2E tests.
- * This file exercises the full conversion pipeline directly.
+ * NOTE — why these tests don't call engine.convert():
+ * Worker spawn requires a browser Worker API that Vitest/jsdom does not
+ * provide. The worker boundary (Comlink expose/proxy, loadFonts
+ * parallelization, WorkerHarness) is exercised by the Playwright E2E
+ * suite in Task 10. This file validates the full conversion pipeline
+ * (parse → render → valid PDF) and correct filename extension handling
+ * by calling the underlying functions directly.
  */
 
 import { readFileSync } from "node:fs";
@@ -13,6 +17,7 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { parseMarkdown } from "./parser";
 import { renderBlocksToPdf } from "./renderer";
+import { replaceExt } from "./worker";
 
 const FONTS_DIR = path.resolve(process.cwd(), "public", "fonts");
 const FIXTURES_DIR = path.resolve(process.cwd(), "tests", "fixtures");
@@ -29,6 +34,7 @@ function readFontFile(filename: string): ArrayBuffer {
 function loadFonts() {
   return {
     body: readFontFile("lora-regular.ttf"),
+    bodyItalic: readFontFile("lora-italic.ttf"),
     headings: readFontFile("inter-regular.ttf"),
     mono: readFontFile("jetbrains-mono-regular.ttf"),
   };
@@ -46,7 +52,9 @@ describe("markdown-to-pdf pipeline", () => {
     expect(pdf.getPageCount()).toBeGreaterThan(0);
 
     const [page] = pdf.getPages();
-    expect(page!.getSize()).toEqual({ width: 612, height: 792 });
+    expect(page).toBeDefined();
+    if (!page) return;
+    expect(page.getSize()).toEqual({ width: 612, height: 792 });
   });
 
   it("respects the pageSize option (a4)", async () => {
@@ -56,16 +64,14 @@ describe("markdown-to-pdf pipeline", () => {
     const bytes = await renderBlocksToPdf(blocks, { pageSize: "a4" }, fonts);
     const pdf = await PDFDocument.load(bytes);
     const [page] = pdf.getPages();
-    expect(page!.getSize()).toEqual({ width: 595, height: 842 });
+    expect(page).toBeDefined();
+    if (!page) return;
+    expect(page.getSize()).toEqual({ width: 595, height: 842 });
   });
 
-  it("output filename would be 'sample.pdf' for input 'sample.md'", () => {
-    // Mirrors the replaceExt logic in worker.ts without spawning a Worker.
-    function replaceExt(name: string, newExt: string): string {
-      const dot = name.lastIndexOf(".");
-      if (dot <= 0) return `${name}.${newExt}`;
-      return `${name.slice(0, dot)}.${newExt}`;
-    }
+  it("output filename uses .pdf extension (replaceExt from worker)", () => {
+    // Tests the exported replaceExt from worker.ts directly — no Worker
+    // spawn needed. Covers the three cases: normal, dotted, no-extension.
     expect(replaceExt("sample.md", "pdf")).toBe("sample.pdf");
     expect(replaceExt("my.file.markdown", "pdf")).toBe("my.file.pdf");
     expect(replaceExt("noext", "pdf")).toBe("noext.pdf");
