@@ -58,12 +58,21 @@ const api = {
       inCtx.drawImage(bitmap, 0, 0);
       const rawInput = RawImage.fromCanvas(inCanvas);
 
-      // pipeline returns Array<{ label, mask: { data: Uint8Array, width, height } }>
+      // pipeline returns Array<{ label, mask: { data: Uint8Array, width, height } }>.
+      // For models without post-processing (e.g. MODNet — the
+      // image-segmentation pipeline's "no subtask" code path) `label` is
+      // null and the array contains a single segment matching input size.
+      // For models that emit labeled segments (e.g. BiRefNet) prefer the
+      // segment whose label looks like the foreground subject; fall back
+      // to the first segment otherwise.
       const result = (await pipe(rawInput)) as Array<{
-        label: string;
+        label: string | null;
         mask: { data: Uint8Array; width: number; height: number };
       }>;
-      const fg = result.find((r) => r.label.toLowerCase().includes("subject")) ?? result[0];
+      const fg =
+        result.find(
+          (r) => typeof r.label === "string" && r.label.toLowerCase().includes("subject"),
+        ) ?? result[0];
       if (!fg) throw new Error("Model returned no segmentation result");
 
       // Phase 4: composite

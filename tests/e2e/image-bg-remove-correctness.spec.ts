@@ -3,76 +3,42 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 // =====================================================================
-// Status: SKIPPED on Playwright's default Chromium. See block comment
-// below for the environmental requirements and the two failure modes
-// observed during Phase 16 / Task 8.
+// Status: gated behind RUN_BG_REMOVE_CORRECTNESS=1. The suite drives
+// real model inference (cold-load + run on three fixtures plus a
+// solid-mode composite check) and is slow + RAM-touchy enough that we
+// don't want it on every CI pass.
 //
-// To run locally on a machine that meets the requirements:
+// To run locally:
 //   RUN_BG_REMOVE_CORRECTNESS=1 pnpm test:e2e --project=chromium \
 //     tests/e2e/image-bg-remove-correctness.spec.ts
 // =====================================================================
 //
-// What this suite is supposed to do
-// ---------------------------------
-// Drive four real conversions through the dev server, decode the
-// resulting PNGs in-page, and assert structural properties:
+// What this suite does
+// --------------------
+// Drives four real conversions through the dev server, decodes the
+// resulting PNGs in-page, and asserts structural properties:
 //   - PNG magic bytes (output is a real PNG, not truncated)
 //   - alpha-coverage is in a fixture-specific range (regression tripwire)
 //   - solid-mode output has zero translucent pixels (compositing works)
 //
-// Why this is currently skipped (the two environmental walls)
-// -----------------------------------------------------------
-// We ship `model_fp16.onnx` (114 MB) for size reasons. ONNX Runtime's
-// WebGPU EP requires the adapter's `shader-f16` feature to execute fp16
-// ops; without it, ORT throws:
+// Environmental notes
+// -------------------
+// The engine ships `model_quantized.onnx` (~6.6 MB int8 MODNet). On
+// Playwright's bundled Chromium the WebGPU adapter (SwiftShader headless
+// or the capped Metal adapter when headed) typically does not advertise
+// `shader-f16`, so the model loader's `pickDevice` probe routes to WASM
+// EP — q8's documented-default execution path. That path runs cleanly on
+// 8 GB hosts (the prior fp16 BiRefNet build OOM'd here, which is why the
+// model was swapped).
 //
-//   "The device (webgpu) does not support fp16."
-//
-// at session creation. The model loader (src/engines/image-bg-remove/
-// model-loader.ts) probes for `shader-f16` and falls back to the WASM
-// EP when absent — that fallback is the right behaviour for real users
-// on machines without WebGPU/shader-f16. Two distinct things still
-// block this suite on Playwright's bundled Chromium:
-//
-// 1) Headless Chromium uses SwiftShader (CPU rasterizer) and does not
-//    advertise `shader-f16`, so the WebGPU branch fails at session
-//    creation. The model loader's fallback then routes to WASM EP.
-//
-// 2) Headed Chromium with --enable-unsafe-webgpu --use-angle=metal does
-//    light up WebGPU, but the bundled adapter caps
-//    `maxStorageBuffersPerShaderStage` at the WebGPU spec minimum (10);
-//    the BiRefNet shader needs 11. ORT throws:
-//
-//      "Too many storage buffers in shader. Current: 11, Max is 10"
-//
-//    Real-world Chromium running against a discrete GPU on macOS/Windows
-//    typically reports limits ≥ 16; this is a Playwright-Chromium-on-Mac
-//    constraint, not a model bug.
-//
-// 3) On the WASM fallback, on the user's 8 GB dev box, ORT throws
-//    `std::bad_alloc` mid-inference. The fp16 ONNX is 114 MB but
-//    activation tensors balloon past the available headroom. The user's
-//    CLAUDE.md flags 8 GB as the floor; production users on similar
-//    hardware would hit the same OOM and the engine would need a
-//    smaller (e.g. int8-quantized) variant or a hard "needs X GB free"
-//    pre-flight check before this is shippable to all users.
-//
-// What's needed to enable this suite
-// ----------------------------------
-// Run on a machine that meets BOTH:
-//   - WebGPU adapter with `shader-f16` AND
-//     `maxStorageBuffersPerShaderStage >= 11`. Discrete GPU on a recent
-//     Chromium release usually qualifies.
-//   - OR: ≥ 16 GB free RAM so the WASM EP fallback path doesn't OOM.
-//
-// Then opt in by setting RUN_BG_REMOVE_CORRECTNESS=1 in the env. The
-// tests below exercise the path real users take and assert structural
-// correctness. Do not silently relax the assertions — if a fixture
-// fails on a capable host, that's signal.
+// Do not silently relax the alpha-coverage assertions. If a fixture
+// fails on a capable host that's signal — either a regression in the
+// model bytes (sha256-checked at install) or a regression in the
+// pre/post-processing harness.
 
 const SHOULD_RUN = process.env.RUN_BG_REMOVE_CORRECTNESS === "1";
 
-// Run sequentially: each test loads the ~114 MB model and runs inference.
+// Run sequentially: each test loads the ~6.6 MB model and runs inference.
 // `mode: "serial"` keeps a single browser context alive across tests in
 // this file but resets the page (and therefore the persistent harness /
 // model cache) between them — that's intentional: each test exercises

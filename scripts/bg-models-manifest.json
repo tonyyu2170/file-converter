@@ -1,20 +1,20 @@
 {
-  "model": "birefnet",
-  "license": "MIT",
-  "source": "onnx-community/BiRefNet_lite-ONNX@de15b22ba131738a16dff04aab8bdf8dc32e3ac1",
-  "requiredDtype": "fp16",
+  "model": "modnet",
+  "license": "Apache-2.0",
+  "source": "Xenova/modnet@fa2fa546052fba4c08921230a26cc69a333fca12",
+  "requiredDtype": "q8",
   "files": [
     {
       "name": "config.json",
-      "sha256": "50acd2d700ee3d5facdcf3aab2312bb586372726dce8bdd5741bdae0ca6eb84f"
+      "sha256": "e144d8af9b1f09649785c77f592a76bbc69504ae02e43700663b2a9f00d9c8a2"
     },
     {
       "name": "preprocessor_config.json",
-      "sha256": "447d9ccb2c4129ab0ca045fc293e7d79dbc45e293ac1e94818d865db77f65a54"
+      "sha256": "07d83634b1fdd20142ca6e3fe55ab92b558f56d1b0f005ff3a7926f1c9e1165d"
     },
     {
-      "name": "onnx/model_fp16.onnx",
-      "sha256": "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402"
+      "name": "onnx/model_quantized.onnx",
+      "sha256": "92e49898c3e05a6d7a944fc67a8cb87c4aad754ffb6ebd949528c7d1105fee3a"
     }
   ],
   "wasm": [
@@ -44,8 +44,8 @@
     }
   ],
   "_notes": {
-    "model_size": "Quantized fp16 ONNX is 114 MB. Larger than the spec's '~80 MB' rough target but the smallest variant the canonical onnx-community/BiRefNet_lite-ONNX repo publishes. The fp32 alternative is 224 MB. Documented in the Phase 16 Task 1 PR description.",
+    "model_size": "Int8-quantized ONNX (model_quantized.onnx) is ~6.6 MB. Replaces the prior BiRefNet-lite fp16 build (114 MB) which exceeded the 8 GB-host WASM EP RAM budget and exceeded Playwright Chromium's WebGPU storage-buffer cap.",
     "ort_version": "Tied to onnxruntime-web 1.26.0-dev.20260416-b7804b056c (the version pinned by @huggingface/transformers 4.2.0). If transformers.js bumps, regenerate these wasm sha256 values.",
-    "pipeline": "Loadable via pipeline('image-segmentation', 'bg-remove', { dtype: 'fp16' }). Smoke-tested on Node — produces an output array with shape [{ label, score, mask }] where mask is a 1-channel RawImage matching input dimensions."
+    "pipeline": "Loadable via pipeline('image-segmentation', 'bg-remove', { dtype: 'q8' }). transformers.js's q8 dtype maps suffix '_quantized', resolving to onnx/model_quantized.onnx. Upstream config.json declares dtype 'fp32', so the override is required to avoid 404s under env.allowRemoteModels=false."
   }
 }

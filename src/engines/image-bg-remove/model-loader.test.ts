@@ -58,13 +58,13 @@ describe("getBgRemovalPipeline", () => {
     expect(events).toEqual([{ kind: "model-loading", loaded: 25, total: 100 }, { kind: "ready" }]);
   });
 
-  it("passes dtype: fp16 to the pipeline call", async () => {
+  it("passes dtype: q8 to the pipeline call", async () => {
     (pipeline as ReturnType<typeof vi.fn>).mockResolvedValue("PIPE");
     await getBgRemovalPipeline(() => {});
     expect(pipeline).toHaveBeenCalledWith(
       "image-segmentation",
       "bg-remove",
-      expect.objectContaining({ dtype: "fp16" }),
+      expect.objectContaining({ dtype: "q8" }),
     );
   });
 });

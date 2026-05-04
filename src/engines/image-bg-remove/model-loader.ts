@@ -21,15 +21,18 @@ export type LoaderProgress =
 
 let pipelinePromise: Promise<ImageSegmentationPipeline> | null = null;
 
-// We ship the fp16 ONNX (`model_fp16.onnx`, 114 MB) rather than fp32 (224 MB)
-// to keep the same-origin payload small. WebGPU can run fp16 ops only when
-// the adapter advertises the `shader-f16` feature; without it, ORT throws
-// "The device (webgpu) does not support fp16." at session creation.
+// We ship the int8 ONNX (`model_quantized.onnx`, ~6.6 MB) — the smallest
+// MODNet variant Xenova/modnet publishes. q8 is transformers.js' WASM-default
+// dtype and runs there with no special adapter features required, so WASM is
+// the safe baseline. WebGPU is an opportunistic upgrade only.
 //
-// Some Chromium environments — older integrated GPUs, certain headless
-// configurations — expose `navigator.gpu` but lack `shader-f16`. In that
-// case we must fall back to the WASM execution provider, which handles
-// fp16 via runtime conversion. This probe runs once per worker context.
+// We use `shader-f16` as the WebGPU eligibility proxy even though q8 doesn't
+// strictly need fp16 ops: an adapter that advertises `shader-f16` is a recent,
+// well-behaved WebGPU implementation, whereas adapters lacking it (older
+// integrated GPUs, headless SwiftShader, some Playwright Chromium configs)
+// have a pattern of breaking on quantized ops too. Falling back to WASM in
+// that case routes those users to the documented-stable q8 path. The probe
+// runs once per worker context.
 //
 // Minimal structural type for navigator.gpu — TS' bundled lib.dom.d.ts in
 // this project's TS version doesn't ship WebGPU types and we don't want to
@@ -55,13 +58,14 @@ export async function getBgRemovalPipeline(
   if (pipelinePromise) return pipelinePromise;
   const device = await pickDevice();
   pipelinePromise = pipeline("image-segmentation", MODEL_ID, {
-    // dtype is pinned to "fp16" because public/models/bg-remove/ ships
-    // model_fp16.onnx (114 MB) and not model.onnx (224 MB fp32). The
-    // upstream config.json declares dtype "fp32"; without this override
-    // transformers.js requests the missing fp32 file and (with
-    // allowRemoteModels=false) 404s. Keep this in sync with
+    // dtype is pinned to "q8" because public/models/bg-remove/ ships
+    // model_quantized.onnx (the int8-quantized weights) and not model.onnx
+    // (fp32). The upstream config.json declares dtype "fp32"; without this
+    // override transformers.js requests the missing fp32 file and (with
+    // allowRemoteModels=false) 404s. transformers.js maps q8 to the
+    // "_quantized" filename suffix. Keep this in sync with
     // scripts/bg-models-manifest.json#requiredDtype.
-    dtype: "fp16",
+    dtype: "q8",
     device,
     progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
       if (p.status === "progress" && typeof p.loaded === "number" && typeof p.total === "number") {
