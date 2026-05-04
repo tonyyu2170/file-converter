@@ -13,6 +13,7 @@ const engine: SingleInputEngine<DocxToPdfOptions, OutputItem> = {
   inputMime: [DOCX_MIME],
   outputMime: "application/pdf",
   defaultOptions: defaultDocxToPdfOptions,
+  category: "document",
   cardinality: "single",
   validate(file) {
     const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");

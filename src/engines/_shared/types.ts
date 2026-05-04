@@ -16,6 +16,8 @@ export type OutputItem = {
   warnings?: string[];
 };
 
+export type EngineCategory = "image" | "pdf" | "document";
+
 export type EngineMeta<TOptions> = {
   id: string;
   inputAccept: string[];
@@ -23,6 +25,7 @@ export type EngineMeta<TOptions> = {
   outputMime: string;
   defaultOptions: TOptions;
   convertButtonLabel?: string;
+  category: EngineCategory;
   /** Filename suffix for ZIP archive when an engine produces multiple
    * outputs. ResultList builds the archive as `<basename><archiveSuffix>.zip`
    * (e.g., "myfile" + "-split" → "myfile-split.zip"). Engines that always

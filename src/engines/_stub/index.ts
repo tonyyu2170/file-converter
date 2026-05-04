@@ -7,6 +7,7 @@ const meta = {
   inputMime: ["application/octet-stream"],
   outputMime: "application/octet-stream",
   defaultOptions: {} as Record<string, never>,
+  category: "image" as const,
 };
 
 const engine: SingleInputEngine<Record<string, never>, OutputItem> = {

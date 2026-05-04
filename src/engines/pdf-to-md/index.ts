@@ -11,6 +11,7 @@ const engine: SingleInputEngine<PdfToMdOptions, OutputItem> = {
   inputMime: SUPPORTED_INPUT_MIMES,
   outputMime: "text/markdown",
   defaultOptions: defaultPdfToMdOptions,
+  category: "pdf",
   cardinality: "single",
   OptionsPanel: PdfToMdOptionsPanel,
   isReadyToConvert: () => true,
