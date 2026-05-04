@@ -1,19 +1,9 @@
 import * as Comlink from "comlink";
-import type { OutputItem } from "./types";
+import type { ConversionProgress, OutputItem } from "./types";
 
-/**
- * Multi-stage progress event a worker can emit during conversion. Used by
- * engines with heavy cold-start costs (e.g., ML model loading) so the host
- * can render a meaningful progress UI rather than an indeterminate spinner.
- *
- * - `model-loading`: bytes-based progress while fetching/initialising assets.
- * - `inference`: 0-100 percentage during the conversion itself.
- *
- * Engines that don't emit progress simply never call the callback.
- */
-export type ConversionProgress =
-  | { kind: "model-loading"; loaded: number; total: number }
-  | { kind: "inference"; pct: number };
+// Re-exported so existing consumers that import ConversionProgress from
+// _shared/harness continue to work after the type moved to _shared/types.
+export type { ConversionProgress } from "./types";
 
 export type WorkerEntry<TOptions> = {
   convertSingle?: (
@@ -41,7 +31,7 @@ export type WorkerHarnessOptions = {
   persistent?: boolean;
 };
 
-export type RunSingleOptions = {
+export type RunOptions = {
   /** Host-side callback the harness wraps with Comlink.proxy() before passing
    * it to the worker. Workers invoke it to emit ConversionProgress events;
    * the harness invokes the host callback synchronously on each event. */
@@ -79,7 +69,7 @@ export class WorkerHarness<TOptions> {
     file: File,
     opts: TOptions,
     signal: AbortSignal,
-    runOpts: RunSingleOptions = {},
+    runOpts: RunOptions = {},
   ): Promise<OutputItem | OutputItem[]> {
     this.spawn();
     if (!this.remote?.convertSingle) {
@@ -120,7 +110,7 @@ export class WorkerHarness<TOptions> {
     files: File[],
     opts: TOptions,
     signal: AbortSignal,
-    runOpts: RunSingleOptions = {},
+    runOpts: RunOptions = {},
   ): Promise<OutputItem | OutputItem[]> {
     this.spawn();
     if (!this.remote?.convertMulti) {

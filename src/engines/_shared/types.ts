@@ -2,6 +2,20 @@ import type { ComponentType } from "react";
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
 
+/**
+ * Multi-stage progress event a worker can emit during conversion. Used by
+ * engines with heavy cold-start costs (e.g., ML model loading) so the host
+ * can render a meaningful progress UI rather than an indeterminate spinner.
+ *
+ * - `model-loading`: bytes-based progress while fetching/initialising assets.
+ * - `inference`: 0-100 percentage during the conversion itself.
+ *
+ * Engines that don't emit progress simply never call the callback.
+ */
+export type ConversionProgress =
+  | { kind: "model-loading"; loaded: number; total: number }
+  | { kind: "inference"; pct: number };
+
 export type OutputItem = {
   filename: string;
   mime: string;
