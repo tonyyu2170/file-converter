@@ -67,3 +67,26 @@ export function resolveFilename(
 export function _resetCache(): void {
   cache.clear();
 }
+
+/**
+ * Generic font loader for engines that don't follow the docx-to-pdf
+ * (family, weight, italic) tuple convention. Loads `/fonts/<filename>`
+ * from the same origin and caches the bytes for the worker's lifetime.
+ *
+ * Used by markdown-to-pdf and txt-to-pdf, which embed a fixed set of
+ * fonts and don't need the family/weight matrix.
+ *
+ * @throws when the fetch fails (404, network).
+ */
+export async function loadFontByFilename(filename: string): Promise<ArrayBuffer> {
+  const cached = cache.get(filename);
+  if (cached) return cached;
+  const url = `/fonts/${filename}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`font fetch failed: ${url} ${response.status}`);
+  }
+  const bytes = await response.arrayBuffer();
+  cache.set(filename, bytes);
+  return bytes;
+}
