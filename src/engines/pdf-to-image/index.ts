@@ -14,6 +14,7 @@ const engine: SingleInputEngine<PdfToImageOptions, OutputItem[]> = {
   outputMime: "image/png",
   defaultOptions: defaultPdfToImageOptions,
   archiveSuffix: "-images",
+  category: "pdf",
   cardinality: "single",
   OptionsPanel: PdfToImageOptionsPanel,
   isReadyToConvert() {

@@ -18,6 +18,7 @@ function makeStubEngine(
     inputMime: ["application/octet-stream"],
     outputMime: "application/octet-stream",
     defaultOptions: { ready: true },
+    category: "image",
     cardinality: "single",
     validate: (): ValidationResult => ({ ok: true }),
     convert: vi.fn(async () => ({

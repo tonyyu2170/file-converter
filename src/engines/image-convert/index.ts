@@ -12,6 +12,7 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   inputMime: SUPPORTED_INPUT_MIMES,
   outputMime: "image/png",
   defaultOptions: defaultImageConvertOptions,
+  category: "image",
   cardinality: "single",
   isReadyToConvert: (opts) => opts.output !== null,
   OptionsPanel: ImageConvertOptionsPanel,

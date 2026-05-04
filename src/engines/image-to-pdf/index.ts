@@ -13,6 +13,7 @@ const engine: MultiInputEngine<ImageToPdfOptions, OutputItem> = {
   outputMime: "application/pdf",
   defaultOptions: defaultImageToPdfOptions,
   convertButtonLabel: "[ convert to pdf ]",
+  category: "image",
   cardinality: "multi",
   OptionsPanel: ImageToPdfOptionsPanel,
   StagingArea: ImageToPdfStagingArea,
