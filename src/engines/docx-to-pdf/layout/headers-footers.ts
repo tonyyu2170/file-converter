@@ -32,7 +32,7 @@
  * function signature for forward compatibility but not consumed in v1.
  */
 
-import type { ParsedBlock, ParsedDocx, Section } from "@/engines/docx-to-pdf/docx-parser/types";
+import type { ParsedBlock, ParsedDocx, Section } from "@/engines/_shared/docx/docx-parser/types";
 import { layoutParagraph } from "@/engines/docx-to-pdf/layout/paragraph";
 import { layoutTable } from "@/engines/docx-to-pdf/layout/tables";
 import type { PDFDocument, PDFPage } from "pdf-lib";

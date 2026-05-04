@@ -44,7 +44,7 @@
  *     document's NamedDest table populated by the orchestrator (Task 10).
  */
 
-import type { RelationshipTarget } from "@/engines/docx-to-pdf/docx-parser/types";
+import type { RelationshipTarget } from "@/engines/_shared/docx/docx-parser/types";
 import { PDFName, PDFString } from "pdf-lib";
 import type { PDFPage } from "pdf-lib";
 import type { Pt } from "./types";

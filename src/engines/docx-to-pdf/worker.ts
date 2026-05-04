@@ -1,6 +1,6 @@
+import { parseDocx } from "@/engines/_shared/docx";
 import type { OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
-import { parseDocx } from "./docx-parser";
 import { layoutDocument } from "./layout";
 import type { DocxToPdfOptions } from "./options";
 

@@ -20,7 +20,7 @@ import { zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
-import { parseDocx } from "../docx-parser";
+import { parseDocx } from "@/engines/_shared/docx";
 import type { BundledFontFamily, FontWeight } from "../fonts/types";
 import { layoutDocument } from "./index";
 

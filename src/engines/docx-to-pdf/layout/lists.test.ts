@@ -3,7 +3,7 @@ import type {
   NumberingLevel,
   Paragraph,
   Run,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeColumnContext, makeMockPdfDoc } from "./_test-helpers";

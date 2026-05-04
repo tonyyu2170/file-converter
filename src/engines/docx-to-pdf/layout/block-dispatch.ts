@@ -34,7 +34,7 @@ import type {
   NumberingDef,
   ParsedBlock,
   RelationshipTarget,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import type { PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { layoutListItem } from "./lists";
 import type { ListState } from "./lists";

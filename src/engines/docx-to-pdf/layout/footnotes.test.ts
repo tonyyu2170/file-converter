@@ -6,7 +6,7 @@ import type {
   ParsedDocx,
   Run,
   Section,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
 import { LETTER_PORTRAIT, makeMockEmbeddedFonts, makeMockPdfDoc } from "./_test-helpers";
 import type { LayoutDeps } from "./block-dispatch";

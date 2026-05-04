@@ -1,4 +1,4 @@
-import type { Paragraph, Run } from "@/engines/docx-to-pdf/docx-parser/types";
+import type { Paragraph, Run } from "@/engines/_shared/docx/docx-parser/types";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeColumnContext, makeMockPdfDoc } from "./_test-helpers";

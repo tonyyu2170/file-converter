@@ -1,4 +1,4 @@
-import type { Run } from "@/engines/docx-to-pdf/docx-parser/types";
+import type { Run } from "@/engines/_shared/docx/docx-parser/types";
 import { describe, expect, it } from "vitest";
 import { type MockPage, makeColumnContext, makeMockEmbeddedFonts } from "./_test-helpers";
 import {

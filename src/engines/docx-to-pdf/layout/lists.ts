@@ -45,7 +45,7 @@ import type {
   NumberingDef,
   NumberingLevel,
   Paragraph,
-} from "@/engines/docx-to-pdf/docx-parser/types";
+} from "@/engines/_shared/docx/docx-parser/types";
 import type { PDFDocument } from "pdf-lib";
 import type { LayoutDeps } from "./block-dispatch";
 import { layoutParagraph } from "./paragraph";
