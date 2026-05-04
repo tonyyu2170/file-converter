@@ -59,4 +59,16 @@ describe("image-bg-remove engine metadata", () => {
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.reason).toMatch(/25 MB/);
   });
+
+  it("validate prefers MIME/extension error over size for unsupported formats", () => {
+    // A 30 MB GIF should fail with the format error (the actionable one),
+    // not the size error. SIMD probe stays first; MIME/extension check
+    // runs before the size cap.
+    const bigGif = new File([new Uint8Array(30_000_000)], "big.gif", {
+      type: "image/gif",
+    });
+    const v = engine.validate(bigGif, engine.defaultOptions);
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toMatch(/PNG, JPEG, or WebP/);
+  });
 });

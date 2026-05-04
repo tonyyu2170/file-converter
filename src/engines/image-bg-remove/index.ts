@@ -48,11 +48,19 @@ const engine: SingleInputEngine<ImageBgRemoveOptions, OutputItem> = {
   cardinality: "single",
   OptionsPanel: ImageBgRemoveOptionsPanel,
   validate(file) {
+    // Order matters: SIMD probe (capability gate) → MIME/extension match →
+    // size cap. A 30 MB GIF should learn it's the wrong format before being
+    // told it's too large; the format error is the actionable one.
     if (!SIMD_OK) {
       return {
         ok: false,
         reason: "Browser too old — bg-remove needs WebAssembly SIMD",
       };
+    }
+    const mimeOk = SUPPORTED_INPUT_MIMES.includes(file.type);
+    const extOk = /\.(png|jpe?g|webp)$/i.test(file.name);
+    if (!mimeOk && !extOk) {
+      return { ok: false, reason: "Expected a PNG, JPEG, or WebP file" };
     }
     if (file.size > MAX_FILE_BYTES) {
       return {
@@ -60,9 +68,7 @@ const engine: SingleInputEngine<ImageBgRemoveOptions, OutputItem> = {
         reason: `File too large for bg-remove (limit 25 MB; got ${(file.size / 1_000_000).toFixed(1)} MB).`,
       };
     }
-    if (SUPPORTED_INPUT_MIMES.includes(file.type)) return { ok: true };
-    if (/\.(png|jpe?g|webp)$/i.test(file.name)) return { ok: true };
-    return { ok: false, reason: "Expected a PNG, JPEG, or WebP file" };
+    return { ok: true };
   },
   async convert(file, opts, signal, runOpts) {
     // Forward runOpts as-is. With exactOptionalPropertyTypes on, building
