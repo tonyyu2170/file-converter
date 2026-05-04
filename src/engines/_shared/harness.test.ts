@@ -173,6 +173,53 @@ describe("WorkerHarness persistent mode", () => {
     expect(fw.terminate).toHaveBeenCalledOnce();
   });
 
+  it("dispose() rejects pending runSingle calls so they don't hang", async () => {
+    // convertSingle returns a Promise that never resolves — simulates a slow
+    // model load or in-flight inference. Without dispose() rejecting the
+    // pending call, terminating the worker would leave the runSingle Promise
+    // dangling forever (the worker can never reply).
+    vi.mocked(Comlink.wrap).mockReturnValue({
+      convertSingle: () => new Promise<OutputItem>(() => undefined),
+    } as never);
+
+    const fw = fakeWorker();
+    const h = new WorkerHarness<Record<string, never>>(() => fw, { persistent: true });
+    const ctrl = new AbortController();
+    const f = new File([new Uint8Array(1)], "a.bin");
+    const pending = h.runSingle(f, {}, ctrl.signal);
+    // Attach a catch handler immediately so the rejection isn't flagged as
+    // unhandled while we wait for the abortPromise to be registered.
+    const settled = pending.catch((e) => e);
+    // Yield the macrotask queue so file.arrayBuffer() resolves and the race
+    // begins — i.e. the abortPromise is constructed and rejecter registered.
+    // setTimeout(0) flushes the microtask queue more reliably than chained
+    // Promise.resolve() awaits when File.arrayBuffer() involves a Blob-read
+    // task (which lands on the macrotask queue in jsdom).
+    await new Promise((r) => setTimeout(r, 0));
+    h.dispose();
+    const err = await settled;
+    expect(err).toMatchObject({ name: "AbortError" });
+    expect(fw.terminate).toHaveBeenCalledOnce();
+  });
+
+  it("dispose() rejects pending runMulti calls so they don't hang", async () => {
+    vi.mocked(Comlink.wrap).mockReturnValue({
+      convertMulti: () => new Promise<OutputItem>(() => undefined),
+    } as never);
+
+    const fw = fakeWorker();
+    const h = new WorkerHarness<Record<string, never>>(() => fw, { persistent: true });
+    const ctrl = new AbortController();
+    const files = [new File([new Uint8Array(1)], "a.bin")];
+    const pending = h.runMulti(files, {}, ctrl.signal);
+    const settled = pending.catch((e) => e);
+    await new Promise((r) => setTimeout(r, 0));
+    h.dispose();
+    const err = await settled;
+    expect(err).toMatchObject({ name: "AbortError" });
+    expect(fw.terminate).toHaveBeenCalledOnce();
+  });
+
   it("dispose() is a no-op for ephemeral mode", async () => {
     vi.mocked(Comlink.wrap).mockReturnValue({
       convertSingle: async (_b: ArrayBuffer, name: string): Promise<OutputItem> => makeOutput(name),

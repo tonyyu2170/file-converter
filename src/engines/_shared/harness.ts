@@ -59,6 +59,11 @@ type MultiFn<TOptions> = (
 export class WorkerHarness<TOptions> {
   private worker: Worker | null = null;
   private remote: Comlink.Remote<WorkerEntry<TOptions>> | null = null;
+  // Pending in-flight runSingle/runMulti rejecters. dispose() walks this set
+  // rejecting each one with AbortError so callers don't hang on a terminated
+  // worker that will never reply. Entries are added when the abortPromise is
+  // constructed and removed in the finally block of the corresponding run.
+  private pendingRejecters = new Set<(reason: unknown) => void>();
 
   constructor(
     private readonly factory: WorkerFactory,
@@ -87,13 +92,19 @@ export class WorkerHarness<TOptions> {
       this.terminateIfEphemeral();
       throw new DOMException("Aborted", "AbortError");
     }
+    // Lift `reject` out of the Promise constructor so the finally block can
+    // remove it from the pendingRejecters set on every exit path
+    // (success / error / abort / dispose).
+    let rejectAbort!: (reason: unknown) => void;
     const abortPromise = new Promise<never>((_, reject) => {
+      rejectAbort = reject;
       const onAbort = () => {
         this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
     });
+    this.pendingRejecters.add(rejectAbort);
     const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
       const result = await Promise.race([
@@ -102,6 +113,7 @@ export class WorkerHarness<TOptions> {
       ]);
       return result;
     } finally {
+      this.pendingRejecters.delete(rejectAbort);
       this.terminateIfEphemeral();
     }
   }
@@ -127,13 +139,18 @@ export class WorkerHarness<TOptions> {
       this.terminateIfEphemeral();
       throw new DOMException("Aborted", "AbortError");
     }
+    // Lift `reject` out of the Promise constructor — see runSingle for the
+    // rationale.
+    let rejectAbort!: (reason: unknown) => void;
     const abortPromise = new Promise<never>((_, reject) => {
+      rejectAbort = reject;
       const onAbort = () => {
         this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
     });
+    this.pendingRejecters.add(rejectAbort);
     const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
       const result = await Promise.race([
@@ -142,13 +159,21 @@ export class WorkerHarness<TOptions> {
       ]);
       return result;
     } finally {
+      this.pendingRejecters.delete(rejectAbort);
       this.terminateIfEphemeral();
     }
   }
 
   /** Force-terminate the persistent worker. No-op for ephemeral mode (the
-   * worker is already gone) and a no-op when no worker has spawned yet. */
+   * worker is already gone) and a no-op when no worker has spawned yet.
+   * Rejects any pending runSingle/runMulti calls before tearing down so
+   * callers (e.g. a route page useEffect cleanup) don't hang on a worker
+   * that has been terminated and will never reply. */
   dispose(): void {
+    for (const reject of this.pendingRejecters) {
+      reject(new DOMException("Disposed", "AbortError"));
+    }
+    this.pendingRejecters.clear();
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;
