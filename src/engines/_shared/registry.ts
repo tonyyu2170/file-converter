@@ -2,6 +2,7 @@ import type { ConversionEngine, OutputItem } from "./types";
 
 export type EngineId =
   | "image-convert"
+  | "image-resize"
   | "image-to-pdf"
   | "pdf-merge"
   | "pdf-split"
@@ -16,6 +17,7 @@ type Loader = () => Promise<{ default: AnyEngine }>;
 
 const REGISTRY: Record<EngineId, Loader> = {
   "image-convert": () => import("@/engines/image-convert"),
+  "image-resize": () => import("@/engines/image-resize"),
   "image-to-pdf": () => import("@/engines/image-to-pdf"),
   "pdf-merge": () => import("@/engines/pdf-merge"),
   "pdf-split": () => import("@/engines/pdf-split"),
