@@ -41,3 +41,9 @@ test-results/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Build artifacts copied from node_modules at install/build time
+public/models/bg-remove/*
+!public/models/bg-remove/.gitkeep
+public/onnx-wasm/*
+!public/onnx-wasm/.gitkeep

@@ -1,0 +1,51 @@
+{
+  "model": "birefnet",
+  "license": "MIT",
+  "source": "onnx-community/BiRefNet_lite-ONNX@de15b22ba131738a16dff04aab8bdf8dc32e3ac1",
+  "requiredDtype": "fp16",
+  "files": [
+    {
+      "name": "config.json",
+      "sha256": "50acd2d700ee3d5facdcf3aab2312bb586372726dce8bdd5741bdae0ca6eb84f"
+    },
+    {
+      "name": "preprocessor_config.json",
+      "sha256": "447d9ccb2c4129ab0ca045fc293e7d79dbc45e293ac1e94818d865db77f65a54"
+    },
+    {
+      "name": "onnx/model_fp16.onnx",
+      "sha256": "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402"
+    }
+  ],
+  "wasm": [
+    {
+      "name": "ort-wasm-simd-threaded.wasm",
+      "sha256": "f4f290847a4df02d0b93cdbf39b4b0e71acefbe80573e7e6b9342a7abd7b290a"
+    },
+    {
+      "name": "ort-wasm-simd-threaded.mjs",
+      "sha256": "5f2cd914554830762579c372d0211614c1e3f40ab3f6c0cfcf0900343229071d"
+    },
+    {
+      "name": "ort-wasm-simd-threaded.asyncify.wasm",
+      "sha256": "e0c0c6d3e73d43b8a249972f8358f845b08cc16fec3c80efafdf8bed40366786"
+    },
+    {
+      "name": "ort-wasm-simd-threaded.asyncify.mjs",
+      "sha256": "5959c6733039619c9af710d8e1bae8d6e84402787990637be987c2b1bd6c5fa9"
+    },
+    {
+      "name": "ort-wasm-simd-threaded.jsep.wasm",
+      "sha256": "ae61141f8fbf0a4e43fd7b4f4d40a1a115627f6facc4f33ddf84074a655e33ea"
+    },
+    {
+      "name": "ort-wasm-simd-threaded.jsep.mjs",
+      "sha256": "522b3769929f5684c83a12cf1e06eedf073b65d161728b4f3757c75d62b14384"
+    }
+  ],
+  "_notes": {
+    "model_size": "Quantized fp16 ONNX is 114 MB. Larger than the spec's '~80 MB' rough target but the smallest variant the canonical onnx-community/BiRefNet_lite-ONNX repo publishes. The fp32 alternative is 224 MB. Documented in the Phase 16 Task 1 PR description.",
+    "ort_version": "Tied to onnxruntime-web 1.26.0-dev.20260416-b7804b056c (the version pinned by @huggingface/transformers 4.2.0). If transformers.js bumps, regenerate these wasm sha256 values.",
+    "pipeline": "Loadable via pipeline('image-segmentation', 'bg-remove', { dtype: 'fp16' }). Smoke-tested on Node — produces an output array with shape [{ label, score, mask }] where mask is a 1-channel RawImage matching input dimensions."
+  }
+}
