@@ -1,7 +1,7 @@
 "use client";
 
 import { SIZE_LIMITS_MB, hardCapBytes, softCapBytes } from "@/engines/_shared/size-limits";
-import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
+import type { ConversionEngine, ConversionProgress, OutputItem } from "@/engines/_shared/types";
 import { useActiveConversion } from "@/hooks/use-active-conversion";
 import { formatBytes } from "@/lib/format-bytes";
 import { useCallback, useState } from "react";
@@ -25,6 +25,11 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
   // engines) the user can append more files post-conversion without clearing
   // the displayed results, which would otherwise produce a stale delta.
   const [convertedInputBytes, setConvertedInputBytes] = useState<number | null>(null);
+  // Latest ConversionProgress event from the active engine. null whenever no
+  // run is in flight or the active engine has not (yet) emitted progress.
+  // Engines that never emit leave this null and the slot never renders —
+  // backward-compatible.
+  const [progress, setProgress] = useState<ConversionProgress | null>(null);
 
   const ready = engine.isReadyToConvert?.(options) ?? true;
   const Panel = engine.OptionsPanel;
@@ -48,6 +53,9 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
     async (files: File[], opts: TOptions) => {
       setErrorMessage(null);
       setItems([]);
+      // Reset progress at the start of every run so a stale event from a
+      // prior run cannot bleed into the new conversion's UI.
+      setProgress(null);
       const inputBytesAtStart = files.reduce((sum, f) => sum + f.size, 0);
       setConvertedInputBytes(inputBytesAtStart);
       if (engine.cardinality === "single") {
@@ -62,13 +70,17 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         setStatus("converting");
         try {
           const ctrl = new AbortController();
-          const result = await engine.convert(f, opts, ctrl.signal);
+          const result = await engine.convert(f, opts, ctrl.signal, {
+            onProgress: setProgress,
+          });
           const out = Array.isArray(result) ? result : [result];
           setItems(out);
           setStatus("done");
+          setProgress(null);
         } catch (err) {
           setErrorMessage(err instanceof Error ? err.message : String(err));
           setStatus("error");
+          setProgress(null);
         }
         return;
       }
@@ -82,12 +94,16 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       setStatus("converting");
       try {
         const ctrl = new AbortController();
-        const result = await engine.convert(files, opts, ctrl.signal);
+        const result = await engine.convert(files, opts, ctrl.signal, {
+          onProgress: setProgress,
+        });
         setItems(Array.isArray(result) ? result : [result]);
         setStatus("done");
+        setProgress(null);
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setStatus("error");
+        setProgress(null);
       }
     },
     [engine],
@@ -173,6 +189,30 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
         <span>·</span>
         <StatusIndicator status={status} />
       </div>
+      {progress && (
+        <div
+          data-testid="conversion-progress"
+          className="mb-3 flex items-center gap-3 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]"
+        >
+          {progress.kind === "model-loading" ? (
+            <>
+              <progress
+                value={progress.loaded}
+                max={progress.total}
+                className="h-1 w-48 appearance-none [&::-webkit-progress-bar]:bg-[var(--color-bg)] [&::-webkit-progress-value]:bg-[var(--color-accent)]"
+              />
+              <span className="tabular-nums text-[var(--color-fg-strong)]">
+                loading model — {(progress.loaded / 1_000_000).toFixed(1)} MB /{" "}
+                {(progress.total / 1_000_000).toFixed(1)} MB
+              </span>
+            </>
+          ) : (
+            <span className="tabular-nums text-[var(--color-fg-strong)]">
+              inferring — {progress.pct >= 100 ? "finishing" : "running"}
+            </span>
+          )}
+        </div>
+      )}
       {Panel && <Panel value={options} onChange={setOptions} />}
       {Staging && stagedFiles.length > 0 && (
         <Staging

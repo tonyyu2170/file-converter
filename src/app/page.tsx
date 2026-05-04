@@ -51,6 +51,12 @@ const TOOLS = [
     href: "/tools/image-resize",
   },
   {
+    id: "image-bg-remove",
+    title: "image bg remove",
+    description: "png, jpg, webp · cutout to transparent or solid color",
+    href: "/tools/image-bg-remove",
+  },
+  {
     id: "docx-to-txt",
     title: "docx → txt",
     description: "extract plain text from word documents",

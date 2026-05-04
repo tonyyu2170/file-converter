@@ -6,6 +6,12 @@ const TOOLS: ToolEntry[] = [
   { id: "home", href: "/", label: "~/", group: "HOME" },
   { id: "image-convert", href: "/tools/image-convert", label: "image convert", group: "IMAGES" },
   { id: "image-resize", href: "/tools/image-resize", label: "image resize", group: "IMAGES" },
+  {
+    id: "image-bg-remove",
+    href: "/tools/image-bg-remove",
+    label: "image bg remove",
+    group: "IMAGES",
+  },
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
   { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
