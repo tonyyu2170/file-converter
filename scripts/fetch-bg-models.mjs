@@ -68,9 +68,10 @@ for (const f of manifest.files) {
     process.exit(1);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  if (sha256(buf) !== f.sha256) {
+  const actual = sha256(buf);
+  if (actual !== f.sha256) {
     console.error(
-      `[fetch-bg-models] sha mismatch for ${f.name}; manifest may be stale`,
+      `[fetch-bg-models] sha256 mismatch for ${f.name}\n  url      ${url}\n  expected ${f.sha256}\n  actual   ${actual}\n  manifest may be stale or HF commit pinned to a different blob`,
     );
     process.exit(1);
   }
