@@ -28,4 +28,12 @@ describe("Sidebar", () => {
       "/tools/txt-to-pdf",
     );
   });
+
+  it("renders the image-bg-remove link in the IMAGES group", () => {
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: /image bg remove/i })).toHaveAttribute(
+      "href",
+      "/tools/image-bg-remove",
+    );
+  });
 });
