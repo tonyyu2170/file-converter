@@ -1,6 +1,6 @@
 "use client";
 
-import { SIZE_LIMITS_MB, hardCapBytes } from "@/engines/_shared/size-limits";
+import { SIZE_LIMITS_MB, hardCapBytes, softCapBytes } from "@/engines/_shared/size-limits";
 import type { ConversionEngine, OutputItem } from "@/engines/_shared/types";
 import { useActiveConversion } from "@/hooks/use-active-conversion";
 import { formatBytes } from "@/lib/format-bytes";
@@ -135,6 +135,26 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
 
   const stagedFile: File | undefined = stagedFiles[0];
   const totalInputBytes = stagedFiles.reduce((sum, f) => sum + f.size, 0);
+
+  const softBytes = softCapBytes(engine.category);
+  const hardBytes = hardCapBytes(engine.category);
+  const overSoft = stagedFiles.length > 0 && totalInputBytes > softBytes;
+  // Aggregate hard cap only meaningful for multi (single caught at drop).
+  const overHardAggregate = isMulti && totalInputBytes > hardBytes;
+
+  // Cap warnings win over engine.convertButtonLabel: a disabled-by-cap
+  // button labelled with the engine's custom string (e.g., '[ merge ]')
+  // would leave the user with no explanation of why it's disabled.
+  const convertLabel: string = (() => {
+    if (overHardAggregate) {
+      return `[ exceeds ${SIZE_LIMITS_MB[engine.category].hard} mb cap ]`;
+    }
+    if (overSoft) {
+      return `[ convert · ${formatBytes(totalInputBytes)} may be slow ]`;
+    }
+    return engine.convertButtonLabel ?? "[ convert ]";
+  })();
+
   // Estimate hook is engine-optional; cardinality narrows the call signature.
   const estimateBytes: number | null = (() => {
     if (stagedFiles.length === 0) return null;
@@ -196,6 +216,14 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
             {stagedFiles.length === 1 ? "file" : "files"}
             <span> · </span>
             <span className="text-[var(--color-fg-strong)]">{formatBytes(totalInputBytes)}</span>
+            {overHardAggregate && (
+              <>
+                <span> · </span>
+                <span className="text-[var(--color-fg-strong)]">
+                  over {SIZE_LIMITS_MB[engine.category].hard} MB cap
+                </span>
+              </>
+            )}
           </span>
           {estimateBytes !== null && (
             <span data-testid="output-estimate">
@@ -209,11 +237,13 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
       <button
         type="button"
         data-testid="convert-button"
-        disabled={stagedFiles.length === 0 || !ready || status === "converting"}
+        disabled={
+          stagedFiles.length === 0 || !ready || status === "converting" || overHardAggregate
+        }
         onClick={handleConvertClick}
         className="mt-3 border border-[var(--color-accent)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] disabled:border-[var(--color-fg-very-muted)] disabled:text-[var(--color-fg-very-muted)]"
       >
-        {engine.convertButtonLabel ?? "[ convert ]"}
+        {convertLabel}
       </button>
       {errorMessage && (
         <div className="mt-3 border border-[var(--color-accent)] p-3 text-[var(--text-sm)] text-[var(--color-fg-strong)]">

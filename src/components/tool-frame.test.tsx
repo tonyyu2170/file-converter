@@ -489,6 +489,117 @@ describe("ToolFrame", () => {
     expect(screen.getByText(/exceeds the 500 MB cap for pdf tools/i)).toBeInTheDocument();
   });
 
+  it("single-cardinality: Convert label transforms when staged file is over soft cap", async () => {
+    const engine = makeStubEngine({ category: "image" });
+    render(<ToolFrame engine={engine} />);
+    // 60 MB > 50 MB image soft cap, < 250 MB hard cap.
+    const big = fakeFile("big.bin", "application/octet-stream", 60_000_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [big] } });
+    await screen.findByTestId("clear-staged-file");
+    const btn = screen.getByTestId("convert-button");
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveTextContent(/may be slow/i);
+    expect(btn).toHaveTextContent("60 MB");
+  });
+
+  it("multi-cardinality: Convert label transforms when aggregate is over soft cap, under hard cap", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div>{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      category: "pdf" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn() as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    // 3 × 50 MB = 150 MB. Over pdf 100 MB soft, under 500 MB hard.
+    const a = fakeFile("a.pdf", "application/pdf", 50_000_000);
+    const b = fakeFile("b.pdf", "application/pdf", 50_000_000);
+    const c = fakeFile("c.pdf", "application/pdf", 50_000_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [a, b, c] } });
+
+    await screen.findByTestId("staged-totals");
+    const btn = screen.getByTestId("convert-button");
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveTextContent(/may be slow/i);
+    expect(btn).toHaveTextContent("150 MB");
+  });
+
+  it("multi-cardinality: aggregate over hard cap disables Convert and adds totals suffix", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div>{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      category: "pdf" as const,
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn() as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    // 6 × 90 MB = 540 MB. Over pdf 500 MB hard. Each individual file
+    // is 90 MB, well under 500 MB hard, so per-file drop check passes.
+    const files = Array.from({ length: 6 }, (_, i) =>
+      fakeFile(`f${i}.pdf`, "application/pdf", 90_000_000),
+    );
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files } });
+
+    await screen.findByTestId("staged-totals");
+    const btn = screen.getByTestId("convert-button");
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent(/exceeds 500 mb cap/i);
+    expect(screen.getByTestId("staged-totals")).toHaveTextContent(/over 500 MB cap/i);
+  });
+
+  it("Convert button shows plain '[ convert ]' when staged total is under soft cap", async () => {
+    const engine = makeStubEngine({ category: "image" });
+    render(<ToolFrame engine={engine} />);
+    const small = fakeFile("small.bin", "application/octet-stream", 1_000_000);
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files: [small] } });
+    await screen.findByTestId("clear-staged-file");
+    expect(screen.getByTestId("convert-button")).toHaveTextContent("[ convert ]");
+  });
+
+  it("cap warnings override engine.convertButtonLabel when over hard cap (multi-cardinality)", async () => {
+    const Staging = ({
+      files,
+    }: { files: File[]; onChange: (n: File[]) => void; options: unknown }) => (
+      <div>{files.length} files</div>
+    );
+    const engine = {
+      ...makeStubEngine(),
+      cardinality: "multi" as const,
+      category: "pdf" as const,
+      convertButtonLabel: "[ merge ]",
+      validate: (() => ({ ok: true }) as const) as never,
+      convert: vi.fn() as never,
+      StagingArea: Staging,
+    } as unknown as ConversionEngine<StubOpts, OutputItem>;
+
+    render(<ToolFrame engine={engine} />);
+    const files = Array.from({ length: 6 }, (_, i) =>
+      fakeFile(`f${i}.pdf`, "application/pdf", 90_000_000),
+    );
+    fireEvent.drop(screen.getByTestId("drop-zone"), { dataTransfer: { files } });
+
+    await screen.findByTestId("staged-totals");
+    const btn = screen.getByTestId("convert-button");
+    expect(btn).toBeDisabled();
+    // Cap message wins over engine custom label so the disabled state isn't unexplained.
+    expect(btn).toHaveTextContent(/exceeds 500 mb cap/i);
+    expect(btn).not.toHaveTextContent("[ merge ]");
+  });
+
   it("installs beforeunload listener while converting and removes it after", async () => {
     // Use a slow convert so we can observe the converting state.
     let resolveConvert: (v: OutputItem) => void = () => undefined;
