@@ -483,7 +483,8 @@ For each fixture, assertions:
 - Output is a decodable PNG (or JPEG when configured); no decode error.
 - Output dimensions match input dimensions exactly.
 - Alpha-mask coverage falls in a fixture-specific expected range. For
-  the portrait fixture, expected alpha coverage is 18–35%; if a model
+  the portrait fixture, expected alpha coverage is 18–55%
+  (portrait-optimized MODNet is denser than BiRefNet was); if a model
   regression drops coverage to <5% or jumps to >70%, the test fails
   with a clear message ("alpha coverage 4% — model output is empty —
   check model-loader path").
@@ -578,6 +579,20 @@ inherit the model-loading infrastructure built here:
   engine warrants.
 
 These are tracked in master spec §16 under "AI image transforms."
+
+**2026-05-04 update — model swap.** Initial implementation shipped
+BiRefNet-lite (general-purpose). After the Phase 16 build hit OOM /
+inference issues on the 8 GB dev box and on Playwright's bundled
+Chromium, the engine was swapped to MODNet int8 (~6.6 MB), the
+smallest Xenova/modnet variant. MODNet is portrait-optimized so its
+masks are denser on the portrait fixture (observed 0.483 vs. the
+BiRefNet 0.18–0.45 range), which is why §10.2's portrait alpha
+coverage range was widened from 18–35% to 18–55%. Device is also
+hard-pinned to wasm: WebGPU + q8 is empirically unverified on real
+hardware we control, and the loader's `.catch` retry path would loop
+forever if WebGPU+q8 failed (each retry would re-pick WebGPU). See
+the model-loader source for the full rationale; reinstate WebGPU
+only after the path is exercised on real dGPU hardware.
 
 ## 13. Plan structure (preview)
 

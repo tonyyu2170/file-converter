@@ -45,6 +45,12 @@ const SHOULD_RUN = process.env.RUN_BG_REMOVE_CORRECTNESS === "1";
 // the cold-load path the way real users hit it on first visit.
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
+// Expected dims are hardcoded (verified once via `sips -g pixelWidth -g
+// pixelHeight tests/fixtures/bg-remove/<file>`). The fixtures are committed
+// at known sizes; if the assertion fails, either the fixture was rotated/
+// resized in the repo (update this table) or the engine inadvertently
+// resized the output (a real regression — spec § 10.2 requires output dims
+// match input dims exactly).
 const FIXTURES = [
   // Product on white BG: the model should isolate the subject and leave
   // most of the white background transparent. Coverage upper bound is
@@ -52,31 +58,53 @@ const FIXTURES = [
   // from 0.05 → 0.02 because MODNet produces a tighter mask than
   // BiRefNet on this fixture (observed 0.039); 0.02 still catches an
   // empty-output regression while clearing MODNet's actual baseline.
-  { file: "product-on-white.jpg", alphaCoverageRange: [0.02, 0.6] as const },
+  {
+    file: "product-on-white.jpg",
+    alphaCoverageRange: [0.02, 0.6] as const,
+    expectedWidth: 1600,
+    expectedHeight: 1128,
+  },
   // Cluttered portrait. The original BiRefNet-tuned range was
   // [0.18, 0.45]; widened upper bound from 0.45 → 0.55 because MODNet
   // is portrait-optimized and produces a denser mask on this fixture
   // (observed 0.483). 0.55 still catches a fully-opaque-output
   // regression (would be ~1.0) and a wrong-subject regression.
-  { file: "portrait-cluttered-bg.jpg", alphaCoverageRange: [0.18, 0.55] as const },
+  {
+    file: "portrait-cluttered-bg.jpg",
+    alphaCoverageRange: [0.18, 0.55] as const,
+    expectedWidth: 1280,
+    expectedHeight: 1600,
+  },
   // Failure-mode case: transparent glass. We don't assert correctness —
   // the model has known difficulty with translucent objects — only that
   // it produces *some* output without throwing. The wide 0–0.95 range
   // is a tripwire for catastrophic regression (e.g., output is fully
   // opaque or fully transparent), not a correctness gate.
-  { file: "transparent-glass.jpg", alphaCoverageRange: [0.0, 0.95] as const },
+  {
+    file: "transparent-glass.jpg",
+    alphaCoverageRange: [0.0, 0.95] as const,
+    expectedWidth: 1028,
+    expectedHeight: 1600,
+  },
 ];
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** Decode a PNG/JPEG blob in the page context and return per-pixel alpha
- * statistics. Runs in real Chromium (not jsdom), so OffscreenCanvas and
- * createImageBitmap are available and behave the way they will in production. */
+ * statistics plus output dimensions. Runs in real Chromium (not jsdom), so
+ * OffscreenCanvas and createImageBitmap are available and behave the way
+ * they will in production. */
 async function alphaStats(
   page: import("@playwright/test").Page,
   bytes: Buffer,
   mime: string,
-): Promise<{ totalPixels: number; opaquePixels: number; translucentPixels: number }> {
+): Promise<{
+  totalPixels: number;
+  opaquePixels: number;
+  translucentPixels: number;
+  width: number;
+  height: number;
+}> {
   return await page.evaluate(
     async ({ b64, mime }) => {
       const bin = atob(b64);
@@ -96,11 +124,15 @@ async function alphaStats(
         if (a > 128) opaque += 1;
         if (a < 255) translucent += 1;
       }
+      const width = bitmap.width;
+      const height = bitmap.height;
       bitmap.close();
       return {
         totalPixels: data.length / 4,
         opaquePixels: opaque,
         translucentPixels: translucent,
+        width,
+        height,
       };
     },
     { b64: bytes.toString("base64"), mime },
@@ -145,6 +177,15 @@ for (const fx of FIXTURES) {
     const coverage = stats.opaquePixels / stats.totalPixels;
     expect(coverage).toBeGreaterThanOrEqual(fx.alphaCoverageRange[0]);
     expect(coverage).toBeLessThanOrEqual(fx.alphaCoverageRange[1]);
+
+    // Output dimensions must match input dimensions exactly (spec § 10.2).
+    // The fixtures are committed at known sizes; if this fails, either the
+    // fixture file changed (update FIXTURES) or the engine inadvertently
+    // resized the output (a real regression — the segmentation harness
+    // upsamples the model mask to the source resolution before alpha-
+    // multiplying).
+    expect(stats.width).toBe(fx.expectedWidth);
+    expect(stats.height).toBe(fx.expectedHeight);
   });
 }
 
@@ -186,5 +227,9 @@ guarded(
     // (#ff0000, not #ffffff) ensures an output produced by skipping the
     // compositing step entirely would not coincidentally pass.
     expect(stats.translucentPixels).toBe(0);
+    // Solid-mode output dims must also match the source product fixture
+    // (1600 x 1128). Same regression rationale as the per-fixture block.
+    expect(stats.width).toBe(1600);
+    expect(stats.height).toBe(1128);
   },
 );

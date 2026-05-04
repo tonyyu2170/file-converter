@@ -22,41 +22,27 @@ export type LoaderProgress =
 let pipelinePromise: Promise<ImageSegmentationPipeline> | null = null;
 
 // We ship the int8 ONNX (`model_quantized.onnx`, ~6.6 MB) — the smallest
-// MODNet variant Xenova/modnet publishes. q8 is transformers.js' WASM-default
-// dtype and runs there with no special adapter features required, so WASM is
-// the safe baseline. WebGPU is an opportunistic upgrade only.
+// MODNet variant Xenova/modnet publishes. The execution device is hard-pinned
+// to "wasm" rather than probed for WebGPU. Reasons:
 //
-// We use `shader-f16` as the WebGPU eligibility proxy even though q8 doesn't
-// strictly need fp16 ops: an adapter that advertises `shader-f16` is a recent,
-// well-behaved WebGPU implementation, whereas adapters lacking it (older
-// integrated GPUs, headless SwiftShader, some Playwright Chromium configs)
-// have a pattern of breaking on quantized ops too. Falling back to WASM in
-// that case routes those users to the documented-stable q8 path. The probe
-// runs once per worker context.
+//  1. WebGPU + q8 is empirically unverified on real hardware we control.
+//     Playwright Chromium's adapter does not advertise `shader-f16`, so our
+//     correctness E2E only ever exercises the WASM path. Shipping a WebGPU
+//     branch that no test covers is a privacy/correctness gamble.
+//  2. transformers.js has known WebGPU+q8 failure modes for some model
+//     classes, and image-segmentation hasn't been verified end-to-end.
+//  3. The retry path in `getBgRemovalPipeline` resets `pipelinePromise` on
+//     `.catch`, so a WebGPU adapter that throws on inference would loop:
+//     each retry re-probes, picks WebGPU again, fails again. WASM avoids
+//     the trap entirely.
 //
-// Minimal structural type for navigator.gpu — TS' bundled lib.dom.d.ts in
-// this project's TS version doesn't ship WebGPU types and we don't want to
-// pull in @webgpu/types just for a feature probe.
-type GpuFeatureProbe = {
-  requestAdapter(): Promise<{ features: { has(name: string): boolean } } | null>;
-};
-async function pickDevice(): Promise<"webgpu" | "wasm"> {
-  if (typeof navigator === "undefined" || !("gpu" in navigator)) return "wasm";
-  try {
-    const gpu = (navigator as Navigator & { gpu: GpuFeatureProbe }).gpu;
-    const adapter = await gpu.requestAdapter();
-    if (adapter?.features.has("shader-f16")) return "webgpu";
-  } catch {
-    // requestAdapter may throw on some configurations; treat as no WebGPU.
-  }
-  return "wasm";
-}
+// Reinstate WebGPU only after the path is exercised on real dGPU hardware
+// (and after wiring a one-shot fallback to WASM on inference failure).
 
 export async function getBgRemovalPipeline(
   onProgress: (p: LoaderProgress) => void,
 ): Promise<ImageSegmentationPipeline> {
   if (pipelinePromise) return pipelinePromise;
-  const device = await pickDevice();
   pipelinePromise = pipeline("image-segmentation", MODEL_ID, {
     // dtype is pinned to "q8" because public/models/bg-remove/ ships
     // model_quantized.onnx (the int8-quantized weights) and not model.onnx
@@ -66,7 +52,9 @@ export async function getBgRemovalPipeline(
     // "_quantized" filename suffix. Keep this in sync with
     // scripts/bg-models-manifest.json#requiredDtype.
     dtype: "q8",
-    device,
+    // WebGPU+q8 is unverified on real hardware; wasm is the path our
+    // correctness E2E exercises and any environment can run.
+    device: "wasm",
     progress_callback: (p: { status: string; loaded?: number; total?: number }) => {
       if (p.status === "progress" && typeof p.loaded === "number" && typeof p.total === "number") {
         onProgress({ kind: "model-loading", loaded: p.loaded, total: p.total });

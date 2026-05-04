@@ -28,7 +28,7 @@ export default function ImageBgRemovePage() {
           data-testid="bg-remove-first-run-banner"
           className="mx-6 mt-3 flex items-center justify-between border border-[var(--color-hairline)] px-3 py-2 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-muted)]"
         >
-          <span>first conversion downloads ~80 mb. after that it&apos;s instant.</span>
+          <span>first conversion downloads ~7 mb. after that it&apos;s instant.</span>
           <button
             type="button"
             onClick={dismiss}

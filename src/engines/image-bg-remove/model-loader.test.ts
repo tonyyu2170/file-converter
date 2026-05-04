@@ -58,13 +58,16 @@ describe("getBgRemovalPipeline", () => {
     expect(events).toEqual([{ kind: "model-loading", loaded: 25, total: 100 }, { kind: "ready" }]);
   });
 
-  it("passes dtype: q8 to the pipeline call", async () => {
+  it("passes dtype: q8 and device: wasm to the pipeline call", async () => {
     (pipeline as ReturnType<typeof vi.fn>).mockResolvedValue("PIPE");
     await getBgRemovalPipeline(() => {});
+    // device is hard-pinned to "wasm"; see model-loader.ts comment for why
+    // the WebGPU probe was removed (unverified on real hardware, and the
+    // .catch retry path would loop forever if WebGPU+q8 failed).
     expect(pipeline).toHaveBeenCalledWith(
       "image-segmentation",
       "bg-remove",
-      expect.objectContaining({ dtype: "q8" }),
+      expect.objectContaining({ dtype: "q8", device: "wasm" }),
     );
   });
 });
