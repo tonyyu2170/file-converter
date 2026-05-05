@@ -9,6 +9,7 @@
     "dev": "next dev",
     "prebuild": "node scripts/copy-bg-models.mjs",
     "build": "next build",
+    "postbuild": "node scripts/check-bundle-isolation.mjs",
     "postinstall": "node scripts/fetch-bg-models.mjs && node scripts/copy-bg-models.mjs",
     "start": "next start",
     "lint": "biome check src tests",
