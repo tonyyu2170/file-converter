@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
 import { expect, test } from "@playwright/test";
+import { PDFDocument } from "pdf-lib";
 
 const fix = (name: string) => path.resolve(__dirname, "../fixtures", name);
 const FIXTURE = fix("pdf-edit/multi-page.pdf");
@@ -31,17 +31,12 @@ test("pdf-edit: rotate, delete, convert, decode output", async ({ page }) => {
 
   // Rotate page-cell-1 (sourceIndex 1) by 90°.
   await page.getByTestId("page-cell-1").getByTestId("rotate-btn").click();
-  await expect(page.getByTestId("page-cell-1")).toHaveAttribute(
-    "data-rotation",
-    "90",
-  );
+  await expect(page.getByTestId("page-cell-1")).toHaveAttribute("data-rotation", "90");
 
   // Delete page-cell-4 (sourceIndex 4 — i.e., "page 5").
   await page.getByTestId("page-cell-4").getByTestId("delete-btn").click();
   await expect(page.getByTestId("page-cell-4")).toHaveCount(0);
-  await expect(page.getByTestId("page-indicator")).toHaveText(
-    "5 pages → 4 pages",
-  );
+  await expect(page.getByTestId("page-indicator")).toHaveText("5 pages → 4 pages");
 
   // Convert — two-step: click Convert, wait for DONE, then click Download.
   const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
