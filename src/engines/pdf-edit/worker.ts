@@ -67,7 +67,10 @@ const api = {
     }
     sourceBytes = bytes;
     try {
-      pdfJsDoc = await loadPdfDocument(bytes);
+      // pdf.js transfers the underlying ArrayBuffer to its internal worker,
+      // detaching the original. Pass a copy so `sourceBytes` stays usable
+      // for the later apply() / applyEdits() path.
+      pdfJsDoc = await loadPdfDocument(bytes.slice(0));
     } catch (err: unknown) {
       sourceBytes = null;
       pdfJsDoc = null;
@@ -118,5 +121,10 @@ const api = {
 };
 
 export type PdfEditWorkerApi = typeof api;
+
+// Test-only export. The api is normally accessed via a Comlink-wrapped
+// Worker; tests use this direct reference to exercise the load → apply
+// integration without spinning up a Worker.
+export { api as __apiForTest };
 
 Comlink.expose(api);
