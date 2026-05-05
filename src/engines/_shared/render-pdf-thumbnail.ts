@@ -49,9 +49,11 @@ export async function renderFirstPageThumbnail(bytes: ArrayBuffer, size: number)
 }
 
 /**
- * Open a PDF document via pdf.js and return the proxy. Caller must call
- * `doc.destroy()` when done — typically in a try/finally pairing with
- * `renderPageThumbnail` calls.
+ * Open a PDF document via pdf.js and return the proxy.
+ *
+ * Caller owns the lifecycle: call `doc.destroy()` when the doc is no longer
+ * needed (file replacement, worker teardown). Do not call `destroy()` while
+ * a render is in flight.
  *
  * Lazy-loads pdfjs-dist on first use; subsequent calls reuse the cached
  * module (same pattern as renderFirstPageThumbnail).
@@ -64,6 +66,11 @@ export async function loadPdfDocument(bytes: ArrayBuffer): Promise<PDFDocumentPr
 /**
  * Render a single page (0-based) of an already-loaded PDF doc to a PNG
  * blob bounded by `size` (longest edge). Aspect ratio preserved.
+ *
+ * `pageIndex` is **0-based** (aligns with `pdf-lib` for code that edits
+ * PDFs). Other `pdfjs-dist` call sites in this repo (`pdf-to-image`,
+ * `pdf-to-md`) use raw **1-based** indices — do not migrate them to this
+ * helper without translating.
  */
 export async function renderPageThumbnail(
   doc: PDFDocumentProxy,
@@ -72,19 +79,23 @@ export async function renderPageThumbnail(
 ): Promise<Blob> {
   // pdf.js page numbers are 1-based.
   const page = await doc.getPage(pageIndex + 1);
-  const viewport = page.getViewport({ scale: 1 });
-  const scale = Math.min(size / viewport.width, size / viewport.height);
-  const scaledViewport = page.getViewport({ scale });
-  const canvas = new OffscreenCanvas(
-    Math.max(1, Math.ceil(scaledViewport.width)),
-    Math.max(1, Math.ceil(scaledViewport.height)),
-  );
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
-  await page.render({
-    canvasContext: ctx as unknown as CanvasRenderingContext2D,
-    viewport: scaledViewport,
-    canvas: canvas as unknown as HTMLCanvasElement,
-  }).promise;
-  return await canvas.convertToBlob({ type: "image/png" });
+  try {
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(size / viewport.width, size / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+    const canvas = new OffscreenCanvas(
+      Math.max(1, Math.ceil(scaledViewport.width)),
+      Math.max(1, Math.ceil(scaledViewport.height)),
+    );
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
+    await page.render({
+      canvasContext: ctx as unknown as CanvasRenderingContext2D,
+      viewport: scaledViewport,
+      canvas: canvas as unknown as HTMLCanvasElement,
+    }).promise;
+    return await canvas.convertToBlob({ type: "image/png" });
+  } finally {
+    page.cleanup();
+  }
 }

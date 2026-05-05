@@ -61,6 +61,7 @@ describe("loadPdfDocument + renderPageThumbnail", () => {
     return {
       getViewport: ({ scale }: { scale: number }) => ({ width: 100 * scale, height: 200 * scale }),
       render: () => ({ promise: Promise.resolve() }),
+      cleanup: vi.fn(),
     };
   }
 
