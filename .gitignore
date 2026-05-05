@@ -39,6 +39,9 @@ test-results/
 # Superpowers brainstorming artifacts (mockups, session state)
 .superpowers/
 
+# Git worktrees (created by using-git-worktrees skill)
+.worktrees/
+
 # Claude Code local settings
 .claude/settings.local.json
 
