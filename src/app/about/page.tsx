@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EnginesTable } from "./engines-table";
 
 const GITHUB_URL = "https://github.com/tonyyu2170/file-converter";
 
@@ -53,10 +54,7 @@ export default function AboutPage() {
       </Section>
 
       <Section heading="engines">
-        {/* Engines table component is wired in the next task. */}
-        <p className="text-[var(--text-sm)] text-[var(--color-fg-very-muted)]">
-          — transparency table loading —
-        </p>
+        <EnginesTable />
       </Section>
 
       <Section heading="source">
