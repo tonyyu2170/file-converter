@@ -13,6 +13,7 @@ import {
 import {
   SortableContext,
   rectSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -35,15 +36,10 @@ type Props = OptionsPanelProps<PdfEditOptions> & {
   onRequestThumbnail?: (sourceIndex: number) => void;
 };
 
-export function PdfEditOptionsPanel({
-  value,
-  onChange,
-  thumbnails,
-  onRequestThumbnail,
-}: Props) {
+export function PdfEditOptionsPanel({ value, onChange, thumbnails, onRequestThumbnail }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const ids = useMemo(() => value.pages.map((p) => p.id), [value.pages]);
@@ -86,7 +82,7 @@ export function PdfEditOptionsPanel({
           type="button"
           onClick={handleRotateAll}
           data-testid="rotate-all"
-          className="border border-foreground px-3 py-1 font-mono text-sm hover:bg-foreground hover:text-background"
+          className="border border-[var(--color-hairline)] px-3 py-1 font-mono text-sm hover:bg-[var(--color-fg)] hover:text-[var(--color-bg)]"
         >
           [ rotate all 90° ]
         </button>
@@ -177,6 +173,32 @@ function PageCell({
     };
   }, [onRequestThumbnail, page.sourceIndex, thumbnailUrl]);
 
+  // Chain R/Delete/Backspace handlers with dnd-kit's keyboard listener.
+  // Destructure dnd-kit's onKeyDown so we can call it after our own handling
+  // (Space and arrow keys must reach dnd-kit's KeyboardSensor).
+  const { onKeyDown: dndKeyDown, ...restListeners } = listeners ?? {};
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // Only intercept when focus is on the cell itself, not an inner button.
+      if (e.target === e.currentTarget) {
+        if (e.key === "r" || e.key === "R") {
+          e.preventDefault();
+          onRotate();
+          return;
+        }
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          onDelete();
+          return;
+        }
+      }
+      // Pass everything else (Space, arrow keys) to dnd-kit's KeyboardSensor.
+      dndKeyDown?.(e as unknown as KeyboardEvent);
+    },
+    [onRotate, onDelete, dndKeyDown],
+  );
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -191,9 +213,11 @@ function PageCell({
       data-page-id={page.id}
       data-source-index={page.sourceIndex}
       data-rotation={page.rotation}
-      className="relative flex flex-col border border-foreground bg-background p-2"
+      aria-label={`page ${page.sourceIndex + 1} — press R to rotate, Delete to remove`}
+      className="relative flex flex-col border border-[var(--color-hairline)] bg-[var(--color-bg)] p-2"
       {...attributes}
-      {...listeners}
+      {...restListeners}
+      onKeyDown={handleKeyDown}
     >
       <div className="flex items-center justify-between text-xs font-mono">
         <span data-testid="page-number">{page.sourceIndex + 1}</span>
@@ -202,7 +226,7 @@ function PageCell({
         </span>
       </div>
       <div
-        className="my-2 flex aspect-[3/4] w-full items-center justify-center bg-foreground/5"
+        className="my-2 flex aspect-[3/4] w-full items-center justify-center bg-[var(--color-surface)]"
         style={{
           minHeight: THUMB_SIZE,
         }}
@@ -210,7 +234,7 @@ function PageCell({
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
-            alt={`page ${page.sourceIndex + 1}`}
+            alt=""
             data-testid="page-thumbnail"
             style={{
               maxWidth: "100%",
@@ -226,25 +250,27 @@ function PageCell({
       <div className="flex items-center justify-between">
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onRotate();
           }}
           data-testid="rotate-btn"
           aria-label={`rotate page ${page.sourceIndex + 1}`}
-          className="border border-foreground px-2 py-0.5 font-mono text-xs hover:bg-foreground hover:text-background"
+          className="border border-[var(--color-hairline)] px-2 py-0.5 font-mono text-xs hover:bg-[var(--color-fg)] hover:text-[var(--color-bg)]"
         >
           ↻
         </button>
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
           data-testid="delete-btn"
           aria-label={`delete page ${page.sourceIndex + 1}`}
-          className="border border-foreground px-2 py-0.5 font-mono text-xs hover:bg-foreground hover:text-background"
+          className="border border-[var(--color-hairline)] px-2 py-0.5 font-mono text-xs hover:bg-[var(--color-fg)] hover:text-[var(--color-bg)]"
         >
           ×
         </button>
