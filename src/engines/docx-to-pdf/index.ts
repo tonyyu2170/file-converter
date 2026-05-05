@@ -14,6 +14,8 @@ const engine: SingleInputEngine<DocxToPdfOptions, OutputItem> = {
   outputMime: "application/pdf",
   defaultOptions: defaultDocxToPdfOptions,
   category: "document",
+  library: "mammoth, pdf-lib",
+  license: "mixed",
   cardinality: "single",
   validate(file) {
     const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");

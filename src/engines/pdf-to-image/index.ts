@@ -15,6 +15,8 @@ const engine: SingleInputEngine<PdfToImageOptions, OutputItem[]> = {
   defaultOptions: defaultPdfToImageOptions,
   archiveSuffix: "-images",
   category: "pdf",
+  library: "pdfjs-dist, Canvas",
+  license: "mixed",
   cardinality: "single",
   OptionsPanel: PdfToImageOptionsPanel,
   isReadyToConvert() {

@@ -13,6 +13,8 @@ const engine: MultiInputEngine<PdfMergeOptions, OutputItem> = {
   defaultOptions: defaultPdfMergeOptions,
   convertButtonLabel: "[ merge pdfs ]",
   category: "pdf",
+  library: "pdf-lib",
+  license: "MIT",
   cardinality: "multi",
   StagingArea: PdfMergeStagingArea,
   isReadyToConvert(opts) {

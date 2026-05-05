@@ -10,6 +10,8 @@ const engine: SingleInputEngine<TxtToPdfOptions, OutputItem> = {
   outputMime: "application/pdf",
   defaultOptions: defaultTxtToPdfOptions,
   category: "document",
+  library: "pdf-lib",
+  license: "MIT",
   cardinality: "single",
   OptionsPanel: TxtToPdfOptionsPanel,
   validate(file) {

@@ -14,6 +14,8 @@ const engine: MultiInputEngine<ImageToPdfOptions, OutputItem> = {
   defaultOptions: defaultImageToPdfOptions,
   convertButtonLabel: "[ convert to pdf ]",
   category: "image",
+  library: "pdf-lib, Canvas",
+  license: "mixed",
   cardinality: "multi",
   OptionsPanel: ImageToPdfOptionsPanel,
   StagingArea: ImageToPdfStagingArea,

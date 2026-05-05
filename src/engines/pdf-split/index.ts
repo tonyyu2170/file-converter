@@ -13,6 +13,8 @@ const engine: SingleInputEngine<PdfSplitOptions, OutputItem[]> = {
   defaultOptions: defaultPdfSplitOptions,
   archiveSuffix: "-split",
   category: "pdf",
+  library: "pdf-lib",
+  license: "MIT",
   cardinality: "single",
   OptionsPanel: PdfSplitOptionsPanel,
   isReadyToConvert(opts) {

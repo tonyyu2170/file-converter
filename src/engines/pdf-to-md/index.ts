@@ -12,6 +12,8 @@ const engine: SingleInputEngine<PdfToMdOptions, OutputItem> = {
   outputMime: "text/markdown",
   defaultOptions: defaultPdfToMdOptions,
   category: "pdf",
+  library: "pdfjs-dist",
+  license: "Apache-2.0",
   cardinality: "single",
   OptionsPanel: PdfToMdOptionsPanel,
   isReadyToConvert: () => true,
