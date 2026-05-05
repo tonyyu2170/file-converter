@@ -83,16 +83,22 @@ const PdfEditOptionsPanelHost: ComponentType<OptionsPanelProps<PdfEditOptions>> 
   const apiRef = useRef<Comlink.Remote<PdfEditWorkerApi> | null>(null);
   // Avoid re-requesting the same page if it's already pending.
   const requestedRef = useRef<Set<number>>(new Set());
+  // Mirrors thumbnails state so the unmount cleanup reads current URLs.
+  const thumbnailsRef = useRef<Record<number, string>>({});
+
+  useEffect(() => {
+    thumbnailsRef.current = thumbnails;
+  }, [thumbnails]);
 
   // Tear down on unmount: revoke object URLs, dispose worker.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup runs once on unmount
+  // All values read via refs — no deps needed; empty array is correct.
   useEffect(() => {
     return () => {
       apiRef.current?.dispose();
       workerRef.current?.terminate();
       workerRef.current = null;
       apiRef.current = null;
-      for (const url of Object.values(thumbnails)) URL.revokeObjectURL(url);
+      for (const url of Object.values(thumbnailsRef.current)) URL.revokeObjectURL(url);
     };
   }, []);
 
@@ -155,27 +161,29 @@ const engine: SingleInputEngine<PdfEditOptions, OutputItem> = {
   async convert(file, opts, signal, _runOpts): Promise<OutputItem> {
     if (signal.aborted) throw new DOMException("aborted", "AbortError");
 
+    // Always load + check page count — the hard limit must apply regardless
+    // of whether the user has already made edits (seeded opts.pages).
+    let pageCount: number;
+    try {
+      ({ pageCount } = await loadFileIntoWorker(file));
+    } catch (err: unknown) {
+      if ((err as EncryptedError | undefined)?.kind === "encrypted") {
+        throw new Error("Encrypted PDFs aren't supported");
+      }
+      throw err;
+    }
+    if (pageCount > MAX_PAGES_HARD) {
+      throw new Error(`Too many pages (${pageCount} > ${MAX_PAGES_HARD}) — split first`);
+    }
+
     let workingOpts = opts;
     if (workingOpts.pages.length === 0) {
-      // No edits were applied (user clicked Convert immediately); load and
-      // pass through with rotation 0 / original order / no deletes.
-      let pageCount: number;
-      try {
-        ({ pageCount } = await loadFileIntoWorker(file));
-      } catch (err: unknown) {
-        if ((err as EncryptedError | undefined)?.kind === "encrypted") {
-          throw new Error("Encrypted PDFs aren't supported");
-        }
-        throw err;
-      }
-      if (pageCount > MAX_PAGES_HARD) {
-        throw new Error(`Too many pages (${pageCount} > ${MAX_PAGES_HARD}) — split first`);
-      }
+      // No edits applied (user clicked Convert immediately); seed with
+      // rotation 0 / original order / no deletes.
       workingOpts = seedFromPageCount(pageCount);
     }
 
     if (signal.aborted) throw new DOMException("aborted", "AbortError");
-    if (!activeApi) await loadFileIntoWorker(file);
     if (!activeApi) throw new Error("pdf-edit: worker failed to initialise");
 
     const bytes = await activeApi.apply(workingOpts);
