@@ -36,4 +36,11 @@ describe("Sidebar", () => {
       "/tools/image-bg-remove",
     );
   });
+
+  it("renders an ABOUT group with a link to /about", () => {
+    render(<Sidebar />);
+    expect(screen.getByText("// ABOUT")).toBeInTheDocument();
+    const aboutLink = screen.getByRole("link", { name: /^about$/ });
+    expect(aboutLink).toHaveAttribute("href", "/about");
+  });
 });

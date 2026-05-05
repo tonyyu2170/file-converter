@@ -22,9 +22,10 @@ const TOOLS: ToolEntry[] = [
   { id: "docx-to-txt", href: "/tools/docx-to-txt", label: "docx→txt", group: "DOCS" },
   { id: "markdown-to-pdf", href: "/tools/markdown-to-pdf", label: "markdown→pdf", group: "DOCS" },
   { id: "txt-to-pdf", href: "/tools/txt-to-pdf", label: "txt→pdf", group: "DOCS" },
+  { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS"] as const;
+const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "ABOUT"] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {
