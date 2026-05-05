@@ -10,7 +10,7 @@ describe("renderFirstPageThumbnail", () => {
       GlobalWorkerOptions: { workerSrc: "" },
       getDocument: () => ({ promise: Promise.reject(new Error("stub: invalid pdf")) }),
     }));
-    const { renderFirstPageThumbnail } = await import("./render-thumbnail");
+    const { renderFirstPageThumbnail } = await import("./render-pdf-thumbnail");
     await expect(renderFirstPageThumbnail(new ArrayBuffer(8), 32)).rejects.toThrow(
       /stub: invalid pdf/,
     );
@@ -40,7 +40,7 @@ describe("renderFirstPageThumbnail", () => {
     if (proto) {
       proto.convertToBlob = async () => fakeBlob;
     }
-    const { renderFirstPageThumbnail } = await import("./render-thumbnail");
+    const { renderFirstPageThumbnail } = await import("./render-pdf-thumbnail");
     const result = await renderFirstPageThumbnail(new ArrayBuffer(8), 32);
     expect(result).toBeInstanceOf(Blob);
     expect(result.type).toBe("image/png");

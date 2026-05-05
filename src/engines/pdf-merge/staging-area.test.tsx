@@ -3,7 +3,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type PdfMergeOptions, type PdfMergeRow, defaultPdfMergeOptions } from "./options";
 
-vi.mock("./render-thumbnail", () => ({
+vi.mock("@/engines/_shared/render-pdf-thumbnail", () => ({
   renderFirstPageThumbnail: vi.fn(async () => {
     throw new Error("stubbed thumbnail failure");
   }),
