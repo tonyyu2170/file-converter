@@ -1,6 +1,8 @@
 import { describe, expectTypeOf, it } from "vitest";
 import type {
   ConversionEngine,
+  EngineLicense,
+  EngineMeta,
   MultiInputEngine,
   OptionsPanelProps,
   OutputItem,
@@ -72,5 +74,42 @@ describe("types", () => {
       options: Opts;
       setOptions: (next: Opts) => void;
     }>();
+  });
+
+  it("EngineLicense accepts each known SPDX value and rejects others", () => {
+    // Accepted values — each must be assignable to EngineLicense.
+    expectTypeOf<"MIT">().toMatchTypeOf<EngineLicense>();
+    expectTypeOf<"Apache-2.0">().toMatchTypeOf<EngineLicense>();
+    expectTypeOf<"BSD-3-Clause">().toMatchTypeOf<EngineLicense>();
+    expectTypeOf<"ISC">().toMatchTypeOf<EngineLicense>();
+    expectTypeOf<"mixed">().toMatchTypeOf<EngineLicense>();
+
+    // The union contains exactly these five literals — no more, no less.
+    expectTypeOf<EngineLicense>().toEqualTypeOf<
+      "MIT" | "Apache-2.0" | "BSD-3-Clause" | "ISC" | "mixed"
+    >();
+
+    // Rejected value — arbitrary string must NOT extend EngineLicense.
+    // @ts-expect-error "GPL-3.0" is not a valid EngineLicense
+    const _bad: EngineLicense = "GPL-3.0";
+    void _bad;
+  });
+
+  it("library and license are optional on EngineMeta", () => {
+    // A value without library/license must still be assignable to EngineMeta.
+    type Opts = { q: number };
+    const withoutOptionals = {
+      id: "test",
+      inputAccept: [".png"],
+      inputMime: ["image/png"],
+      outputMime: "image/png",
+      defaultOptions: { q: 1 },
+      category: "image" as const,
+    } satisfies EngineMeta<Opts>;
+    expectTypeOf(withoutOptionals).toMatchTypeOf<EngineMeta<Opts>>();
+
+    // Optional fields are typed correctly when present.
+    expectTypeOf<EngineMeta<Opts>["library"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<EngineMeta<Opts>["license"]>().toEqualTypeOf<EngineLicense | undefined>();
   });
 });
