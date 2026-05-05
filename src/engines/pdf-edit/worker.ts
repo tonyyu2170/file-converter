@@ -19,7 +19,10 @@ export type EncryptedError = { kind: "encrypted" };
  * Composes user-applied rotation with the source page's existing rotation
  * modulo 360. Double-modulo handles negative values (JS % preserves sign).
  */
-export async function applyEdits(bytes: ArrayBuffer, opts: PdfEditOptions): Promise<Uint8Array> {
+export async function applyEdits(
+  bytes: ArrayBuffer | Uint8Array,
+  opts: PdfEditOptions,
+): Promise<Uint8Array> {
   if (opts.pages.length === 0) {
     throw new Error("at least one page must remain");
   }
