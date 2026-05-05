@@ -69,14 +69,14 @@ function disposeActive(): void {
  * thumbnail map. Mediates between PdfEditOptionsPanel (presentational)
  * and the Comlink-wrapped worker. Used as the engine's OptionsPanel.
  *
- * The host opportunistically points at the module-scoped activeApi so
- * that thumbnails become available after convert() has pre-loaded the
- * file. A clean fix would require the harness to pass the staged File
- * to the OptionsPanel — deferred for a future harness lifecycle seam.
+ * Receives the staged File via the harness's file prop on OptionsPanelProps.
+ * Loads + seeds pages in a useEffect when file changes so thumbnails are
+ * available immediately after staging, before Convert is clicked.
  */
 const PdfEditOptionsPanelHost: ComponentType<OptionsPanelProps<PdfEditOptions>> = ({
   value,
   onChange,
+  file,
 }) => {
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
   const workerRef = useRef<Worker | null>(null);
@@ -85,6 +85,8 @@ const PdfEditOptionsPanelHost: ComponentType<OptionsPanelProps<PdfEditOptions>> 
   const requestedRef = useRef<Set<number>>(new Set());
   // Mirrors thumbnails state so the unmount cleanup reads current URLs.
   const thumbnailsRef = useRef<Record<number, string>>({});
+  // Track the file we last loaded so we don't re-load on every render.
+  const lastLoadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     thumbnailsRef.current = thumbnails;
@@ -104,12 +106,6 @@ const PdfEditOptionsPanelHost: ComponentType<OptionsPanelProps<PdfEditOptions>> 
 
   const requestThumbnail = useCallback(async (sourceIndex: number) => {
     if (requestedRef.current.has(sourceIndex)) return;
-    // FIXME(pdf-edit): apiRef is never populated by this component because
-    // the harness doesn't pass the staged File to the OptionsPanel. The
-    // opportunistic fallback below picks up activeApi once convert() has
-    // called loadFileIntoWorker, so thumbnails appear only post-Convert.
-    // A clean fix requires a harness lifecycle seam (prepare/stage hook).
-    if (!apiRef.current && activeApi) apiRef.current = activeApi;
     if (!apiRef.current) return;
     requestedRef.current.add(sourceIndex);
     try {
@@ -121,6 +117,64 @@ const PdfEditOptionsPanelHost: ComponentType<OptionsPanelProps<PdfEditOptions>> 
       requestedRef.current.delete(sourceIndex);
     }
   }, []);
+
+  // onChange is stable (it's setOptions from ToolFrame's useState); we
+  // intentionally only re-run when `file` changes. The suppression must be
+  // on the useEffect call line for Biome to pick it up.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: onChange is stable setOptions ref; only file triggers reload
+  useEffect(() => {
+    if (!file) {
+      // File cleared — reset state so a future re-stage starts fresh. The
+      // worker singleton is intentionally NOT torn down here; that happens
+      // on host unmount or when a different file is loaded.
+      if (lastLoadedKeyRef.current !== null) {
+        lastLoadedKeyRef.current = null;
+        // Revoke existing thumbnails and reset state.
+        for (const url of Object.values(thumbnailsRef.current)) {
+          URL.revokeObjectURL(url);
+        }
+        setThumbnails({});
+        requestedRef.current = new Set();
+        onChange(defaultPdfEditOptions);
+      }
+      return;
+    }
+
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (key === lastLoadedKeyRef.current) return;
+    lastLoadedKeyRef.current = key;
+
+    // New file — reset prior thumbnails before loading.
+    for (const url of Object.values(thumbnailsRef.current)) {
+      URL.revokeObjectURL(url);
+    }
+    setThumbnails({});
+    requestedRef.current = new Set();
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { pageCount } = await loadFileIntoWorker(file);
+        if (cancelled) return;
+        // Wire up the host's apiRef to the module-scoped active worker so
+        // requestThumbnail can find it.
+        apiRef.current = activeApi;
+        // Seed pages so the OptionsPanel grid populates.
+        onChange(seedFromPageCount(pageCount));
+      } catch (err) {
+        if (cancelled) return;
+        // Encrypted or other load failures: leave pages empty. The
+        // user-facing error surfaces when Convert is clicked (convert()
+        // re-loads and surfaces the typed encryption error). Reset the key
+        // so a re-stage of a different file isn't stuck.
+        lastLoadedKeyRef.current = null;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   return (
     <PdfEditOptionsPanel
@@ -196,10 +250,6 @@ const engine: SingleInputEngine<PdfEditOptions, OutputItem> = {
   },
 
   isReadyToConvert(opts) {
-    // If pages haven't been seeded yet (file just dropped), Convert is
-    // still ready — convert() will seed from the file. If pages have been
-    // seeded, require at least one page remaining.
-    if (opts.totalSourcePages === 0) return true;
     return opts.pages.length > 0;
   },
 };

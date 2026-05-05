@@ -50,11 +50,12 @@ describe("types", () => {
     >();
   });
 
-  it("OptionsPanelProps shape is value + onChange", () => {
+  it("OptionsPanelProps shape is value + onChange + optional file", () => {
     type OptsType = { foo: string };
     expectTypeOf<OptionsPanelProps<OptsType>>().toEqualTypeOf<{
       value: OptsType;
       onChange: (next: OptsType) => void;
+      file?: File | undefined;
     }>();
   });
 

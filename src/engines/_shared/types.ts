@@ -60,6 +60,12 @@ export type EngineMeta<TOptions> = {
 export type OptionsPanelProps<TOptions> = {
   value: TOptions;
   onChange: (next: TOptions) => void;
+  /** The currently-staged file for single-cardinality engines, or
+   * undefined when nothing is staged or the engine is multi-cardinality
+   * (multi engines use the StagingArea slot for file plumbing instead).
+   * Most OptionsPanels ignore this; engines that need pre-convert worker
+   * setup (e.g., pdf-edit) read it to load the file before Convert. */
+  file?: File | undefined;
 };
 
 export type StagingAreaProps<TOptions> = {
