@@ -24,9 +24,7 @@ test("pdf-edit produces zero off-origin requests during conversion", async ({ pa
   });
 
   const input = page.locator('input[type="file"]');
-  await input.setInputFiles(
-    path.resolve(__dirname, "../fixtures/pdf-edit/multi-page.pdf"),
-  );
+  await input.setInputFiles(path.resolve(__dirname, "../fixtures/pdf-edit/multi-page.pdf"));
 
   // Wait for the host's useEffect to seed pages (5 cells).
   await expect(page.getByTestId("page-indicator")).toHaveText("5 pages", {
