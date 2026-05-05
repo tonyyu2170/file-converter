@@ -28,7 +28,8 @@ export async function applyEdits(bytes: ArrayBuffer, opts: PdfEditOptions): Prom
   const target = await PDFDocument.create();
 
   for (const edit of opts.pages) {
-    if (edit.sourceIndex < 0 || edit.sourceIndex >= sourcePages.length) {
+    const sourcePage = sourcePages[edit.sourceIndex];
+    if (!sourcePage) {
       throw new Error(
         `pdf-edit: sourceIndex ${edit.sourceIndex} out of range (0..${sourcePages.length - 1})`,
       );
@@ -37,7 +38,7 @@ export async function applyEdits(bytes: ArrayBuffer, opts: PdfEditOptions): Prom
     if (!copied) {
       throw new Error(`pdf-edit: copyPages returned no page for index ${edit.sourceIndex}`);
     }
-    const sourceRotation = sourcePages[edit.sourceIndex]!.getRotation().angle;
+    const sourceRotation = sourcePage.getRotation().angle;
     const composed = (((sourceRotation + edit.rotation) % 360) + 360) % 360;
     copied.setRotation(degrees(composed));
     target.addPage(copied);
@@ -65,6 +66,8 @@ const api = {
     try {
       pdfJsDoc = await loadPdfDocument(bytes);
     } catch (err: unknown) {
+      sourceBytes = null;
+      pdfJsDoc = null;
       const name = (err as { name?: string }).name;
       if (name === "PasswordException") {
         // Surface encryption as a structured error the engine recognises.
