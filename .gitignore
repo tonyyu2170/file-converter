@@ -50,4 +50,6 @@ public/models/bg-remove/*
 !public/models/bg-remove/.gitkeep
 public/onnx-wasm/*
 !public/onnx-wasm/.gitkeep
+public/ffmpeg/*
+!public/ffmpeg/.gitkeep
 .lighthouseci/

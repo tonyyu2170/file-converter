@@ -1,0 +1,13 @@
+{
+  "package": "@ffmpeg/core",
+  "version": "0.12.10",
+  "license": "LGPL-2.1+",
+  "files": [
+    { "name": "ffmpeg-core.js", "sha256": "b266ab5b952555881dd6310663986994a182acb2b7ff25cf10a25f7a37ac2b21" },
+    { "name": "ffmpeg-core.wasm", "sha256": "9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7" }
+  ],
+  "_notes": {
+    "build": "Single-threaded UMD build. Multi-threaded (with ffmpeg-core.worker.js) is gated behind COOP/COEP headers and lands in Phase 21.",
+    "loading": "loaded by src/engines/_shared/ffmpeg/index.ts via FFmpeg.load({ coreURL: '/ffmpeg/ffmpeg-core.js', wasmURL: '/ffmpeg/ffmpeg-core.wasm' }). Both URLs are same-origin to honor the project's connect-src 'self' privacy guarantee."
+  }
+}
