@@ -41,6 +41,8 @@ describe("TrimScrubber (audio)", () => {
     expect(end.getAttribute("aria-valuenow")).toBe("55");
     expect(start.getAttribute("aria-valuemin")).toBe("0");
     expect(start.getAttribute("aria-valuemax")).toBe("60");
+    expect(start.getAttribute("aria-valuetext")).toBe("00:05.000");
+    expect(end.getAttribute("aria-valuetext")).toBe("00:55.000");
   });
 
   it("ArrowRight on the start handle moves start forward by 1 s", () => {

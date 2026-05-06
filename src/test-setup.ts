@@ -50,6 +50,13 @@ if (typeof globalThis.crypto.randomUUID !== "function") {
   (globalThis.crypto as { randomUUID: () => string }).randomUUID = () => `test-uuid-${++counter}`;
 }
 
+// Silence jsdom's "Not implemented: HTMLCanvasElement.prototype.getContext"
+// noise. Components that paint (e.g. trim-scrubber) already handle a null
+// context — that path runs on every test render under jsdom.
+if (typeof HTMLCanvasElement !== "undefined") {
+  HTMLCanvasElement.prototype.getContext = () => null;
+}
+
 // jsdom does not implement matchMedia; some shadcn primitives query it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,

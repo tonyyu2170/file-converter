@@ -141,6 +141,7 @@ export function TrimScrubber({
         aria-valuemin={0}
         aria-valuemax={durationSec}
         aria-valuenow={startSec}
+        aria-valuetext={formatTimestamp(startSec)}
         aria-disabled={disabled}
         tabIndex={disabled ? -1 : 0}
         onKeyDown={handleKeyDown("start")}
@@ -158,6 +159,7 @@ export function TrimScrubber({
         aria-valuemin={0}
         aria-valuemax={durationSec}
         aria-valuenow={endSec}
+        aria-valuetext={formatTimestamp(endSec)}
         aria-disabled={disabled}
         tabIndex={disabled ? -1 : 0}
         onKeyDown={handleKeyDown("end")}
