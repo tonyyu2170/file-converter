@@ -271,6 +271,16 @@ describe("WorkerHarness.runDecodePeaks", () => {
     await harness.runDecodePeaks(file, 16);
     expect(decodePeaks.mock.calls[0]?.[1]).toBe("flac");
   });
+
+  it("terminates the ephemeral worker when decodePeaks rejects", async () => {
+    const decodePeaks = vi.fn().mockRejectedValue(new Error("ffmpeg blew up"));
+    vi.mocked(Comlink.wrap).mockReturnValue({ decodePeaks } as never);
+    const fw = fakeWorker();
+    const harness = new WorkerHarness<unknown>(() => fw); // ephemeral mode (no { persistent: true })
+    const file = new File([new Uint8Array([0])], "x.wav", { type: "audio/wav" });
+    await expect(harness.runDecodePeaks(file, 8)).rejects.toThrow("ffmpeg blew up");
+    expect(fw.terminate).toHaveBeenCalledOnce();
+  });
 });
 
 describe("WorkerHarness onProgress callback", () => {

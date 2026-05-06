@@ -192,8 +192,8 @@ export class WorkerHarness<TOptions> {
       bucketCount: number,
     ) => Promise<{ min: Float32Array; max: Float32Array }>;
     const ext = (file.name.split(".").pop() ?? "").toLowerCase();
-    const bytes = await file.arrayBuffer();
     try {
+      const bytes = await file.arrayBuffer();
       return await decodePeaks(bytes, ext, bucketCount);
     } finally {
       this.terminateIfEphemeral();
