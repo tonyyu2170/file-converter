@@ -21,8 +21,24 @@ export type LoaderProgress =
 
 let pipelinePromise: Promise<ImageSegmentationPipeline> | null = null;
 
-// We ship the int8 ONNX (`model_quantized.onnx`, ~6.6 MB) — the smallest
-// MODNet variant Xenova/modnet publishes. The execution device is hard-pinned
+// We ship the q8 ONNX (`model_quantized.onnx`, ~42 MB) — onnx-community's
+// transformers.js-packaged build of `schirrmacher/ormbg`, an open
+// RMBG-1.4 alternative. ormbg is a general-purpose dichotomous segmentation
+// model; it replaces the prior MODNet build (~6.6 MB), which was
+// portrait-optimized and produced unusable masks on non-portrait inputs.
+// Verification: docs/superpowers/plans/phase-18-verification-log.md.
+//
+// License: Apache-2.0 (clean; no /about footnote required).
+//
+// Why ormbg over RMBG-1.4 directly: briaai/RMBG-1.4's published config.json
+// declares a Python-class model_type ("SegformerForSemanticSegmentation")
+// and auto_map references Python custom code; transformers.js 4.2.0 cannot
+// dispatch on either, and Python isn't reachable from a static-export
+// browser app. ormbg-ONNX exposes model_type "isnet" which IS in the v4.2.0
+// image-segmentation registry — verified at the installed-source level
+// (node_modules/@huggingface/transformers/src/models/registry.js:649).
+//
+// The execution device is hard-pinned
 // to "wasm" rather than probed for WebGPU. Reasons:
 //
 //  1. WebGPU + q8 is empirically unverified on real hardware we control.

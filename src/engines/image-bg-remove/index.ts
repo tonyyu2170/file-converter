@@ -45,7 +45,7 @@ const engine: SingleInputEngine<ImageBgRemoveOptions, OutputItem> = {
   outputMime: "image/png",
   defaultOptions: defaultImageBgRemoveOptions,
   category: "image",
-  library: "@huggingface/transformers (MODNet, portrait-only)",
+  library: "@huggingface/transformers (ormbg int8)",
   license: "Apache-2.0",
   cardinality: "single",
   OptionsPanel: ImageBgRemoveOptionsPanel,

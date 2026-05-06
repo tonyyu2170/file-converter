@@ -53,38 +53,57 @@ test.describe.configure({ mode: "serial", timeout: 240_000 });
 // match input dims exactly).
 const FIXTURES = [
   // Product on white BG: the model should isolate the subject and leave
-  // most of the white background transparent. Coverage upper bound is
-  // generous (0.6) because product silhouettes vary. Lower bound widened
-  // from 0.05 → 0.02 because MODNet produces a tighter mask than
-  // BiRefNet on this fixture (observed 0.039); 0.02 still catches an
-  // empty-output regression while clearing MODNet's actual baseline.
+  // most of the white background transparent. Range tuned to ±0.02
+  // around the ormbg int8 baseline observed during Phase 18 verification
+  // (see docs/superpowers/plans/phase-18-verification-log.md). ormbg
+  // produces a tight, conservative product silhouette on this fixture.
   {
     file: "product-on-white.jpg",
-    alphaCoverageRange: [0.02, 0.6] as const,
+    alphaCoverageRange: [0.0261, 0.0661] as const,
     expectedWidth: 1600,
     expectedHeight: 1128,
   },
-  // Cluttered portrait. The original BiRefNet-tuned range was
-  // [0.18, 0.45]; widened upper bound from 0.45 → 0.55 because MODNet
-  // is portrait-optimized and produces a denser mask on this fixture
-  // (observed 0.483). 0.55 still catches a fully-opaque-output
-  // regression (would be ~1.0) and a wrong-subject regression.
+  // Cluttered portrait. Tightened around the ormbg int8 baseline; this
+  // fixture stays as a regression gate against losing portrait quality
+  // during the model swap (MODNet → ormbg). Range tuned to ±0.02 around
+  // the observed coverage during Phase 18 verification (see
+  // docs/superpowers/plans/phase-18-verification-log.md).
   {
     file: "portrait-cluttered-bg.jpg",
-    alphaCoverageRange: [0.18, 0.55] as const,
+    alphaCoverageRange: [0.4546, 0.4946] as const,
     expectedWidth: 1280,
     expectedHeight: 1600,
   },
   // Failure-mode case: transparent glass. We don't assert correctness —
   // the model has known difficulty with translucent objects — only that
-  // it produces *some* output without throwing. The wide 0–0.95 range
-  // is a tripwire for catastrophic regression (e.g., output is fully
-  // opaque or fully transparent), not a correctness gate.
+  // it produces *some* output without throwing. Range tuned to ±0.02
+  // around the ormbg int8 baseline observed during Phase 18 verification
+  // (see docs/superpowers/plans/phase-18-verification-log.md); this
+  // remains a tripwire for catastrophic regression (fully opaque or
+  // fully transparent), not a correctness gate.
   {
     file: "transparent-glass.jpg",
-    alphaCoverageRange: [0.0, 0.95] as const,
+    alphaCoverageRange: [0.0435, 0.0835] as const,
     expectedWidth: 1028,
     expectedHeight: 1600,
+  },
+  // Animal in natural setting — added in Phase 18 to broaden non-portrait
+  // coverage with a real-world scene. Range tuned to ±0.02 around the
+  // ormbg int8 baseline observed during Phase 18 verification.
+  {
+    file: "animal.jpg",
+    alphaCoverageRange: [0.1228, 0.1628] as const,
+    expectedWidth: 1600,
+    expectedHeight: 1066,
+  },
+  // Indoor scene — added in Phase 18 to broaden non-portrait coverage with
+  // a recognizable indoor environment. Range tuned to ±0.02 around the
+  // ormbg int8 baseline observed during Phase 18 verification.
+  {
+    file: "indoor-scene.jpg",
+    alphaCoverageRange: [0.0221, 0.0621] as const,
+    expectedWidth: 1600,
+    expectedHeight: 1066,
   },
 ];
 
