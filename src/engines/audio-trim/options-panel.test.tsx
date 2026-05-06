@@ -61,7 +61,9 @@ describe("AudioTrimOptionsPanel", () => {
 
   it("calls onChange with new format when user picks one", () => {
     const onChange = vi.fn();
-    render(<AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={onChange} file={fakeFile} />);
+    render(
+      <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={onChange} file={fakeFile} />,
+    );
     const select = screen.getByLabelText(/output format/i);
     fireEvent.change(select, { target: { value: "mp3" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ outputFormat: "mp3" }));
@@ -69,23 +71,29 @@ describe("AudioTrimOptionsPanel", () => {
 
   it("on file stage, probes duration and writes endSec back into options", async () => {
     const onChange = vi.fn();
-    render(<AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={onChange} file={fakeFile} />);
+    render(
+      <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={onChange} file={fakeFile} />,
+    );
     await waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({ startSec: 0, endSec: 30 }),
-      );
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ startSec: 0, endSec: 30 }));
     });
   });
 
   it("renders nothing waveform-related when no file is staged", () => {
     render(
-      <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={() => {}} file={undefined} />,
+      <AudioTrimOptionsPanel
+        value={defaultAudioTrimOptions}
+        onChange={() => {}}
+        file={undefined}
+      />,
     );
     expect(screen.queryByTestId("trim-scrubber")).not.toBeInTheDocument();
   });
 
   it("renders the TrimScrubber when a file is staged and duration is known", async () => {
-    render(<AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={() => {}} file={fakeFile} />);
+    render(
+      <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={() => {}} file={fakeFile} />,
+    );
     await waitFor(() => {
       expect(screen.getByTestId("trim-scrubber")).toBeInTheDocument();
     });
