@@ -37,6 +37,7 @@ Each engine folder contains `index.ts` (the engine export), `worker.ts` (the Com
 
 - **Static export only.** `next build` writes to `out/` and Vercel serves it. There is no serverless runtime in v1. Adding one breaks the privacy guarantee.
 - **Security headers live in `vercel.json`, not `next.config.ts`.** Static export bypasses the Next.js server, so `headers()` in `next.config.ts` is a no-op for production. Easy mistake.
+- **COOP/COEP are defined in two places: `vercel.json` (production) and `next.config.ts` (`pnpm dev` only).** The dev rule is what makes `crossOriginIsolated === true` locally so `@ffmpeg/core-mt` loads under `pnpm dev`. Keep the two locations aligned — the `tests/e2e/coop-coep.spec.ts` regression gate enforces both at CI time.
 - **`'wasm-unsafe-eval'` is allowed in `script-src`** for libheif/ffmpeg. **`'unsafe-eval'` is not, and `'unsafe-inline'` is not allowed in `style-src`.** If shadcn/ui or any library injects runtime `<style>` tags, fix the build (precompile, restyle, or drop the offender) — do not relax the header.
 - **No `fetch` / `XMLHttpRequest` inside `src/engines/`.** A Biome lint rule enforces this; the privacy regression Playwright test asserts zero outbound network during conversion. Both must stay green.
 - **Workers are launched via `new Worker(new URL('./worker.ts', import.meta.url))`** with Comlink-typed RPC. **Do not use `next dev --turbopack`** — Turbopack's worker resolution is incomplete in Next.js 15 and will break this pattern. Default Webpack dev server only.
