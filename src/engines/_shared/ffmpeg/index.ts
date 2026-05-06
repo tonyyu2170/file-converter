@@ -12,8 +12,8 @@ import type { FFmpeg as FFmpegType } from "@ffmpeg/ffmpeg";
 // (CSP `connect-src 'self'`).
 
 const MT_PATHS = {
-  coreURL:   "/ffmpeg/mt/ffmpeg-core.js",
-  wasmURL:   "/ffmpeg/mt/ffmpeg-core.wasm",
+  coreURL: "/ffmpeg/mt/ffmpeg-core.js",
+  wasmURL: "/ffmpeg/mt/ffmpeg-core.wasm",
   workerURL: "/ffmpeg/mt/ffmpeg-core.worker.js",
 } as const;
 
@@ -22,10 +22,14 @@ const ST_PATHS = {
   wasmURL: "/ffmpeg/st/ffmpeg-core.wasm",
 } as const;
 
+// `crossOriginIsolated` is fixed for the agent cluster's lifetime by the
+// COOP/COEP headers received with the top-level document — it cannot change
+// mid-session — so memoizing the MT/ST decision into the singleton is safe.
+// The `typeof` arm is defensive against runtimes that don't define the
+// property (jsdom, non-browser harnesses); lib.dom types it as boolean.
 function isCrossOriginIsolated(): boolean {
   return (
-    typeof globalThis.crossOriginIsolated !== "undefined" &&
-    globalThis.crossOriginIsolated === true
+    typeof globalThis.crossOriginIsolated !== "undefined" && globalThis.crossOriginIsolated === true
   );
 }
 
@@ -41,6 +45,10 @@ export async function loadFfmpeg(): Promise<FFmpegType> {
     await ff.load(isCrossOriginIsolated() ? MT_PATHS : ST_PATHS);
     return ff;
   })().catch((err) => {
+    // On failure, clear the singleton so the next call retries. Note: the
+    // retry will re-evaluate isCrossOriginIsolated() — which hasn't changed
+    // — so an MT-load failure retries on MT, not ST. ST-as-fallback for
+    // mid-session MT-asset failures is a Phase 22+ concern.
     instancePromise = null;
     throw err;
   });

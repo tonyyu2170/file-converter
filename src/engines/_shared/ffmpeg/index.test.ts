@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@ffmpeg/ffmpeg", () => {
   const FFmpegMock = vi.fn().mockImplementation(() => ({
@@ -12,9 +12,9 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { __resetForTests, loadFfmpeg } from "./index";
 
 // jsdom does not define `crossOriginIsolated`. Each test installs the property
-// in beforeEach and removes it in afterEach so no test leaks state into
-// another (the loader memoizes its decision inside the singleton; resetting
-// both the singleton AND the global property is required).
+// at the top of the test and clears it in afterEach so no test leaks state
+// into another — the loader memoizes its decision inside the singleton, so
+// resetting both the singleton AND the global property is required.
 function setCrossOriginIsolated(value: boolean): void {
   Object.defineProperty(globalThis, "crossOriginIsolated", {
     configurable: true,
@@ -23,8 +23,13 @@ function setCrossOriginIsolated(value: boolean): void {
 }
 
 function clearCrossOriginIsolated(): void {
-  // delete is safe because the previous defineProperty was configurable: true.
-  delete (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated;
+  // defineProperty (vs `delete`) avoids Biome's noDelete rule; vs plain
+  // assignment, it sidesteps the read-only descriptor jsdom creates when
+  // setCrossOriginIsolated installs the property without writable: true.
+  Object.defineProperty(globalThis, "crossOriginIsolated", {
+    configurable: true,
+    value: undefined,
+  });
 }
 
 afterEach(() => {
