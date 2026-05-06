@@ -19,9 +19,7 @@ export const AUDIO_TRIM_FORMATS: ReadonlyArray<AudioTrimFormat> = [
   "flac",
 ];
 
-export const AUDIO_TRIM_BITRATE_OPTIONS: ReadonlyArray<AudioTrimBitrate> = [
-  64, 128, 192, 256, 320,
-];
+export const AUDIO_TRIM_BITRATE_OPTIONS: ReadonlyArray<AudioTrimBitrate> = [64, 128, 192, 256, 320];
 
 export const defaultAudioTrimOptions: AudioTrimOptions = {
   startSec: 0,
@@ -38,18 +36,12 @@ function extensionOf(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
 }
 
-export function outputExtensionFor(
-  fmt: AudioTrimFormat,
-  inputName: string,
-): string {
+export function outputExtensionFor(fmt: AudioTrimFormat, inputName: string): string {
   if (fmt === "same") return extensionOf(inputName);
   return OUTPUT_EXTENSION[fmt];
 }
 
-export function outputMimeFor(
-  fmt: AudioTrimFormat,
-  inputMime: string,
-): string {
+export function outputMimeFor(fmt: AudioTrimFormat, inputMime: string): string {
   if (fmt === "same") return inputMime;
   return OUTPUT_MIME[fmt];
 }

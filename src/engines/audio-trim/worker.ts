@@ -2,12 +2,7 @@ import { loadFfmpeg } from "@/engines/_shared/ffmpeg";
 import { decodePeaksInWorker } from "@/engines/_shared/trim-scrubber/decode-peaks";
 import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
-import {
-  type AudioTrimOptions,
-  isLossyOutput,
-  outputExtensionFor,
-  outputMimeFor,
-} from "./options";
+import { type AudioTrimOptions, isLossyOutput, outputExtensionFor, outputMimeFor } from "./options";
 
 // Cancellation note: this worker uses the WorkerHarness in `persistent: true`
 // mode (see ./index.ts). In-flight ffmpeg work is NOT terminated when the user
