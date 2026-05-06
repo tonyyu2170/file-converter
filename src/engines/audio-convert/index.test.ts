@@ -10,12 +10,7 @@ describe("audio-convert engine descriptor", () => {
 
   it("declares the four spec-mandated formats in inputAccept and inputMime", () => {
     expect(engine.inputAccept).toEqual([".mp3", ".wav", ".m4a", ".flac"]);
-    expect(engine.inputMime).toEqual([
-      "audio/mpeg",
-      "audio/wav",
-      "audio/mp4",
-      "audio/flac",
-    ]);
+    expect(engine.inputMime).toEqual(["audio/mpeg", "audio/wav", "audio/mp4", "audio/flac"]);
   });
 
   it("declares ffmpeg.wasm as the library with GPL-2.0-or-later license", () => {

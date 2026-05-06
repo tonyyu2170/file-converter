@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIO_BITRATE_OPTIONS,
   AUDIO_FORMAT_LOSSY,
-  defaultAudioConvertOptions,
   OUTPUT_EXTENSION,
   OUTPUT_MIME,
+  defaultAudioConvertOptions,
   isLossy,
 } from "./options";
 

@@ -1,17 +1,9 @@
 import { WorkerHarness } from "@/engines/_shared/harness";
 import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
-import {
-  type AudioConvertOptions,
-  defaultAudioConvertOptions,
-} from "./options";
+import { type AudioConvertOptions, defaultAudioConvertOptions } from "./options";
 import { AudioConvertOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = [
-  "audio/mpeg",
-  "audio/wav",
-  "audio/mp4",
-  "audio/flac",
-];
+const SUPPORTED_INPUT_MIMES = ["audio/mpeg", "audio/wav", "audio/mp4", "audio/flac"];
 
 // Spec §7.1 — 500 MB cap: typical music files fit comfortably; ffmpeg.wasm
 // audio operations are fast at this size on the single-threaded core.

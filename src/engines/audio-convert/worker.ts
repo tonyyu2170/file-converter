@@ -1,12 +1,7 @@
-import * as Comlink from "comlink";
 import { loadFfmpeg } from "@/engines/_shared/ffmpeg";
 import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
-import {
-  type AudioConvertOptions,
-  OUTPUT_EXTENSION,
-  OUTPUT_MIME,
-  isLossy,
-} from "./options";
+import * as Comlink from "comlink";
+import { type AudioConvertOptions, OUTPUT_EXTENSION, OUTPUT_MIME, isLossy } from "./options";
 
 // Cancellation note: this worker uses the WorkerHarness in `persistent: true`
 // mode, which means in-flight ffmpeg work is NOT terminated when the user
@@ -65,8 +60,8 @@ const api = {
     const inExt = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? "bin").toLowerCase();
     const outExt = OUTPUT_EXTENSION[fmt];
     const id = crypto.randomUUID();
-    let inName = `in_${id}.${inExt}`;
-    let outName = `out_${id}.${outExt}`;
+    const inName = `in_${id}.${inExt}`;
+    const outName = `out_${id}.${outExt}`;
 
     try {
       await ff.writeFile(inName, new Uint8Array(bytes));
@@ -103,8 +98,16 @@ const api = {
       };
     } finally {
       ff.off("progress", progressHandler);
-      try { await ff.deleteFile(inName); } catch { /* best-effort */ }
-      try { await ff.deleteFile(outName); } catch { /* best-effort */ }
+      try {
+        await ff.deleteFile(inName);
+      } catch {
+        /* best-effort */
+      }
+      try {
+        await ff.deleteFile(outName);
+      } catch {
+        /* best-effort */
+      }
     }
   },
 };

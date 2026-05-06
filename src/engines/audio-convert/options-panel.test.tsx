@@ -6,12 +6,7 @@ import { AudioConvertOptionsPanel } from "./options-panel";
 describe("AudioConvertOptionsPanel", () => {
   it("renders four format options", () => {
     const onChange = vi.fn();
-    render(
-      <AudioConvertOptionsPanel
-        value={defaultAudioConvertOptions}
-        onChange={onChange}
-      />,
-    );
+    render(<AudioConvertOptionsPanel value={defaultAudioConvertOptions} onChange={onChange} />);
     for (const fmt of ["mp3", "wav", "m4a", "flac"]) {
       expect(screen.getByText(fmt, { exact: false })).toBeInTheDocument();
     }
@@ -41,15 +36,8 @@ describe("AudioConvertOptionsPanel", () => {
 
   it("calls onChange with new outputFormat when a format radio is selected", () => {
     const onChange = vi.fn();
-    render(
-      <AudioConvertOptionsPanel
-        value={defaultAudioConvertOptions}
-        onChange={onChange}
-      />,
-    );
+    render(<AudioConvertOptionsPanel value={defaultAudioConvertOptions} onChange={onChange} />);
     fireEvent.click(screen.getByLabelText(/mp3/i));
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ outputFormat: "mp3" }),
-    );
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ outputFormat: "mp3" }));
   });
 });

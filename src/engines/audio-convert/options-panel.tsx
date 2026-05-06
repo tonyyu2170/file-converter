@@ -1,7 +1,12 @@
 "use client";
 
 import type { OptionsPanelProps } from "@/engines/_shared/types";
-import { AUDIO_BITRATE_OPTIONS, type AudioConvertFormat, type AudioConvertOptions, isLossy } from "./options";
+import {
+  AUDIO_BITRATE_OPTIONS,
+  type AudioConvertFormat,
+  type AudioConvertOptions,
+  isLossy,
+} from "./options";
 
 const FORMATS: AudioConvertFormat[] = ["mp3", "wav", "m4a", "flac"];
 
@@ -9,8 +14,7 @@ export function AudioConvertOptionsPanel({
   value,
   onChange,
 }: OptionsPanelProps<AudioConvertOptions>) {
-  const showBitrate =
-    value.outputFormat !== null && isLossy(value.outputFormat);
+  const showBitrate = value.outputFormat !== null && isLossy(value.outputFormat);
 
   return (
     <div
