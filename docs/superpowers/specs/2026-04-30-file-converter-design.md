@@ -613,7 +613,9 @@ This is a personal project; success is measured against the stated problem, not 
 1. **The privacy guarantee is real and verifiable.** A network panel inspection during any conversion shows zero requests beyond the initial page load. CSP enforced. Documented and demonstrated on `/about`.
 2. **At least one conversion the user actually does today** (HEIC→PNG, PDF merge) is faster and more pleasant than the third-party site they currently use.
 3. **The site looks intentionally designed** — the brutalist aesthetic is consistent and confident across every screen, not generic SaaS.
-4. **Production quality bar met** — TypeScript strict; Lighthouse ≥ 95 across all categories; securityheaders.com grade A; axe AA clean; CI green on every PR.
+4. **Production quality bar met** — TypeScript strict; Lighthouse ≥ 95 across Performance / Accessibility / Best Practices (SEO exempt while hosted on `*.vercel.app`, see below); securityheaders.com grade A; axe AA clean; CI green on every PR.
+
+   **Deviation — Lighthouse SEO on `*.vercel.app`:** Vercel auto-injects `x-robots-tag: noindex` on all team-prefix and deploy-hash subdomains under `*.vercel.app` to prevent SEO duplication with the project's canonical URL. This single header trips the `is-crawlable` audit and forces the SEO category to ~60. Resolution path: assign a custom domain (post-v1); the `noindex` header is not present on custom domains. SEO ≥ 95 will be re-verified at that point.
 5. **Adding a new conversion** (audio, archive, etc.) post-v1 takes a single PR that adds one engine module + one route, without touching shared code.
 
 ## 18. Open questions / risks

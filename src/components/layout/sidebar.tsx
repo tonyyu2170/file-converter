@@ -53,7 +53,7 @@ export function Sidebar() {
                 key={t.id}
                 href={t.href}
                 data-testid={t.id === "home" ? "sidebar-home-link" : undefined}
-                className="block py-0.5 text-[var(--color-fg-muted)] hover:text-[var(--color-fg-strong)]"
+                className="block py-1 text-[var(--color-fg-muted)] hover:text-[var(--color-fg-strong)]"
               >
                 {t.label}
               </Link>
