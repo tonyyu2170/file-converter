@@ -352,3 +352,95 @@ Privacy regression E2E: green. Solid-mode test: green.
 
 Replaces the invalidated "RMBG-1.4 q8 dry run result" section above with
 real, current-toolchain data on the actually-shipping model.
+
+## Phase 18 complete (Task 8)
+
+**Outcome:** model swap landed. Background-removal engine now uses
+`onnx-community/ormbg-ONNX` q8 (Apache-2.0, 42 MB, model_type "isnet")
+instead of MODNet (Apache-2.0, 6.6 MB, portrait-only). The general-purpose
+mask quality is the swap's whole point; quality is structurally validated
+by the gated correctness E2E (Task 6) running on five committed fixtures
+spanning portrait, product-on-white, transparent-glass, animal, and
+indoor-scene scenes.
+
+**Selection journey (preserved in branch history, not squashed):**
+
+1. Spec §3.6 lead candidate: BiRefNet-lite int8 — unavailable on canonical
+   publishers (Task 1.1 research subagent confirmed via HF API).
+2. fp16 BiRefNet-lite empirical retry: OOM (`OrtRun() std::bad_alloc`) on
+   2 MP input under WASM EP. Phase 16 historical note reconfirmed under
+   the current toolchain (transformers.js 4.2.0). Disqualified.
+3. RMBG-1.4 q8 (briaai/RMBG-1.4): selected after fp16 OOM, dry-run
+   "successes" recorded. Subsequent investigation revealed those
+   successes were Cache API artifacts — transformers.js was serving
+   stale MODNet config from `transformers-cache`, running MODNet, not
+   RMBG-1.4. With cache cleared, RMBG-1.4 produces "Unsupported model
+   type SegformerForSemanticSegmentation". Its config_type is a Python
+   class name, not in transformers.js v4.2.0's image-segmentation
+   registry; auto_map points at Python custom code. Unloadable.
+4. Research subagent enumerated v4.2.0's actual registered model_types
+   (`detr`, `clipseg`, `modnet`, `birefnet`, `isnet`, `ben`, `segformer`,
+   `sapiens`, `swin`, `mobilenet_*`, `maskformer`) by reading
+   `node_modules/@huggingface/transformers/src/models/registry.js`. The
+   only canonical-publisher general-purpose RMBG-class q8 with a
+   transformers.js-compatible model_type is `onnx-community/ormbg-ONNX`
+   (model_type `isnet`, Apache-2.0).
+5. ormbg-ONNX empirically verified twice: chrome MCP with cache
+   cleared (controller-driven), and Playwright Chromium gated E2E
+   (Task 6 implementer-driven). Both green; coverage values
+   deterministic across runs.
+
+**Implementation commit chain (top → bottom):**
+
+| SHA | Title |
+|-----|-------|
+| `df2179d` | Phase 18: retune bg-remove correctness ranges + add 2 fixtures |
+| `6dbf1cf` | Phase 18: amend model-loader comments to ormbg |
+| `07ee8f3` | Phase 18: amend engine descriptor library text to ormbg int8 |
+| `763dbe0` | Phase 18: amend manifest to onnx-community/ormbg-ONNX q8 |
+| `275b177` | docs(phase-18): post-mortem — RMBG-1.4 was a cache artifact |
+| `cba064c` | Phase 18: add animal + indoor-scene non-portrait fixtures |
+| `d56c904` | Phase 18: engine descriptor library text reflects RMBG-1.4 swap |
+| `07d5014` | Phase 18: model-loader comments reflect RMBG-1.4 swap |
+| `803724a` | Phase 18: swap bg-remove model to RMBG-1.4 q8 (manifest) |
+| `b4eb8df` | docs(phase-18): bg-remove model verification log |
+
+The four "RMBG-1.4" commits (`803724a`, `07d5014`, `d56c904`) are
+preserved as historical record of the wrong path; they are functionally
+superseded by the four amendment commits (`275b177`, `763dbe0`, `07ee8f3`,
+`6dbf1cf`). The fixture commit (`cba064c`) and verification-log commit
+(`b4eb8df`) are valid as-is.
+
+**Quality summary:** structurally validated by gated correctness E2E + privacy
+regression E2E (both green). Visual mask-quality smoke is queued for the
+user's optional manual sweep but is technically duplicative of the automated
+correctness gate. Coverage baselines on the 5 fixtures are recorded above
+in the "ormbg int8 correctness E2E baselines" section.
+
+**Known caveats / queued for Phase 26:**
+- `/about` engines table footnote ("portrait-optimized") is still
+  rendered for the `image-bg-remove` row. The model is no longer
+  portrait-only; footnote removal is queued for Phase 26 master-spec
+  amendments per spec §3.6's explicit deferral of the /about edit.
+- v2 master spec (§3.6) names BiRefNet-lite int8 as the lead candidate
+  for the bg-remove swap. It currently doesn't exist in q8 form. Spec
+  text amendment (BiRefNet-lite int8 → ormbg-ONNX) is also queued for
+  Phase 26 master-spec edits.
+- Indoor-scene fixture coverage is low (~4.2%). RMBG-class models are
+  primarily trained on people/objects, not abstract environments;
+  scene-heavy inputs may produce sparse masks. This is a known model
+  limitation, not a regression — and it's STABLE (Pass 1 = Pass 2
+  coverage to 4 dp), so the regression gate works.
+
+**Verification artifacts:**
+- Coverage baselines: §"ormbg int8 correctness E2E baselines (Task 6 — final)"
+- Privacy regression: passing E2E (`tests/e2e/privacy-regression-image-bg-remove.spec.ts`)
+- Bundle isolation: green via `scripts/check-bundle-isolation.mjs`
+- Full project verification (Task 7): typecheck 0, lint 0, 1194/1194 tests, build clean
+- Manual smoke + manual privacy verification: queued for the user's optional sweep
+
+**v1.1 escape hatch viability:** if v2 stalls at any later phase, this
+phase ships independently as v1.1. All Phase 18 changes are within
+`src/engines/image-bg-remove/`, `tests/e2e/image-bg-remove*`,
+`tests/fixtures/bg-remove/`, `scripts/bg-models-manifest.json`, and the
+verification log. No shared-code edits, no cross-engine coupling.
