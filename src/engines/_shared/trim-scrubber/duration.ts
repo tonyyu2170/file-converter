@@ -18,14 +18,23 @@ export async function readMediaDurationSec(
   try {
     return await new Promise<number>((resolve, reject) => {
       const el = document.createElement("audio");
-      const onLoaded = () => {
-        if (Number.isFinite(el.duration) && el.duration > 0) {
-          resolve(el.duration);
-        } else {
-          reject(new Error("media duration is not finite"));
-        }
+      const watchdog = setTimeout(() => {
+        reject(new Error("media metadata timeout (10s)"));
+      }, 10_000);
+      const settle = (fn: () => void) => {
+        clearTimeout(watchdog);
+        fn();
       };
-      const onError = () => reject(new Error("failed to load audio metadata"));
+      const onLoaded = () =>
+        settle(() => {
+          if (Number.isFinite(el.duration) && el.duration > 0) {
+            resolve(el.duration);
+          } else {
+            reject(new Error("media duration is not finite"));
+          }
+        });
+      const onError = () =>
+        settle(() => reject(new Error("failed to load audio metadata")));
       el.addEventListener("loadedmetadata", onLoaded, { once: true });
       el.addEventListener("error", onError, { once: true });
       el.preload = "metadata";

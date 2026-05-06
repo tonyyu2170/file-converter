@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readMediaDurationSec } from "./duration";
+
+// NOTE: The audio-modality test is intentionally skipped under vitest's
+// default jsdom environment, because jsdom's HTMLMediaElement is a stub
+// that never fires `loadedmetadata` against blob URLs. The live audio
+// probe behavior is covered by tests/e2e/audio-trim.spec.ts and the
+// gated correctness suite in tests/e2e/audio-trim-correctness.spec.ts
+// (Task 11). This file's video-modality test is ungated and runs under
+// any environment.
 
 /**
  * jsdom's HTMLMediaElement is a stub: it exposes the DOM API surface but
@@ -52,4 +60,34 @@ describe("readMediaDurationSec", () => {
     const file = makeSilentWav(0.5);
     await expect(readMediaDurationSec(file, "video")).rejects.toThrow(/video.*phase 22/i);
   });
+});
+
+describe("readMediaDurationSec watchdog", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it(
+    // Runs under jsdom: jsdom's <audio> stub never fires loadedmetadata or
+    // error, so the only settle path is the 10s watchdog.
+    "rejects with a timeout error when metadata never arrives within 10s",
+    async () => {
+      const file = new File(
+        [new Uint8Array([0, 1, 2, 3])],
+        "garbage.bin",
+        { type: "application/octet-stream" },
+      );
+      const promise = readMediaDurationSec(file, "audio");
+      // Attach the rejection handler before advancing timers so the
+      // rejection isn't treated as unhandled.
+      const rejection = expect(promise).rejects.toThrow(
+        /media metadata timeout/i,
+      );
+      await vi.advanceTimersByTimeAsync(10_001);
+      await rejection;
+    },
+  );
 });
