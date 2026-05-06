@@ -1,20 +1,20 @@
 {
-  "model": "rmbg-1.4",
-  "license": "other (bria-rmbg-1.4 — non-commercial)",
-  "source": "briaai/RMBG-1.4@2ceba5a5efaec153162aedea169f76caf9b46cf8",
+  "model": "ormbg",
+  "license": "Apache-2.0",
+  "source": "onnx-community/ormbg-ONNX@034e2d884afbab897e10e78fc5bb566b29533fd6",
   "requiredDtype": "q8",
   "files": [
     {
       "name": "config.json",
-      "sha256": "d774e7d35151efb2479a83f132a57048334adf722e6e354309e30c56e3b35fbe"
+      "sha256": "d0b94ab052ace79177085c66a00a3f014a973edb09999cb0108bb01e65ded060"
     },
     {
       "name": "preprocessor_config.json",
-      "sha256": "6f9c2cfdb87edd9b83c1314629657d5b320a6a89f8481c872a36253132e33afa"
+      "sha256": "ed502c6ea29c5fb8aafdafdc5bcf1657dfca09888ff753e5c358672ebcfd448d"
     },
     {
       "name": "onnx/model_quantized.onnx",
-      "sha256": "a6648479275dfd0ede0f3a8abc20aa5c437b394681b05e5af6d268250aaf40f3"
+      "sha256": "ffbcae62a7b675d616e64cb392ee028786c4cf74f83596590fba13733ef00171"
     }
   ],
   "wasm": [
@@ -44,9 +44,9 @@
     }
   ],
   "_notes": {
-    "model_size": "Int8-quantized ONNX (model_quantized.onnx) is 44.4 MB. General-purpose successor to MODNet (which was portrait-optimized and produced unusable masks on non-portrait inputs). Verification: docs/superpowers/plans/phase-18-verification-log.md (committed b4eb8df). Empirical peak RSS ~1.5 GB on the 8 GB dev box.",
+    "model_size": "Int8-quantized ONNX (model_quantized.onnx) is ~42 MB. General-purpose dichotomous segmentation (schirrmacher/ormbg, packaged by onnx-community as a transformers.js-compatible RMBG-1.4 alternative). Replaces MODNet (which was portrait-optimized).",
     "ort_version": "Tied to onnxruntime-web 1.26.0-dev.20260416-b7804b056c (the version pinned by @huggingface/transformers 4.2.0). If transformers.js bumps, regenerate these wasm sha256 values.",
-    "pipeline": "Loadable via pipeline('image-segmentation', 'bg-remove', { dtype: 'q8' }). transformers.js's q8 dtype maps suffix '_quantized', resolving to onnx/model_quantized.onnx. The model directory name 'bg-remove' is hardcoded in scripts/copy-bg-models.mjs and src/engines/image-bg-remove/model-loader.ts (MODEL_ID); the manifest's 'model' field controls the cache directory name only.",
-    "license_note": "RMBG-1.4 ships under BRIA's bria-rmbg-1.4 license — non-commercial use only; commercial use requires a paid license from BRIA. Acceptable for this project (personal solo-user file converter, no monetization). Disclosure on /about engines table is queued for Phase 26 master-spec amendments."
+    "pipeline": "Loadable via pipeline('image-segmentation', 'bg-remove', { dtype: 'q8' }). model_type 'isnet' is registered for image-segmentation in v4.2.0's CUSTOM_ARCHITECTURES_MAPPING (verified in node_modules/@huggingface/transformers/src/models/registry.js:649). The model directory name 'bg-remove' is hardcoded in scripts/copy-bg-models.mjs and src/engines/image-bg-remove/model-loader.ts (MODEL_ID); the manifest's 'model' field controls the cache directory name only.",
+    "selection_rationale": "briaai/RMBG-1.4 q8 (the spec's lead candidate) is unloadable in transformers.js 4.2.0 — see docs/superpowers/plans/phase-18-verification-log.md post-mortem. ormbg-ONNX is the only canonical-publisher port that combines (a) general-purpose RMBG-class architecture, (b) q8 weights at ~40 MB target size, (c) transformers.js-compatible model_type, and (d) Apache-2.0 license."
   }
 }
