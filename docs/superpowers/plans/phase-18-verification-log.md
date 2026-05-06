@@ -329,3 +329,26 @@ Cross-referenced against published quantized ONNX ports of general-purpose RMBG-
 - Empirical verification with `transformers-cache` cleared is queued (controller-driven, not subagent-driven, to enforce cache hygiene).
 - Tasks 5 (fixtures) and 6 (correctness range retune) remain valid; the fixtures are model-agnostic.
 - No squash. Branch history preserves the misstep + the correction.
+
+## ormbg int8 correctness E2E baselines (Task 6 — final)
+
+Empirical verification with `transformers-cache` cleared. ormbg-ONNX loads
+cleanly in both regular Chrome (chrome MCP, controller-driven) and
+Playwright Chromium (this gated E2E run). model_type "isnet" routes through
+v4.2.0's CUSTOM_ARCHITECTURES_MAPPING. No SegformerForSemanticSegmentation
+error.
+
+Coverage values from `tests/e2e/image-bg-remove-correctness.spec.ts`:
+
+| Fixture | Pass 1 coverage | Pass 2 coverage | Final range in spec |
+|---------|-----------------|-----------------|---------------------|
+| product-on-white.jpg | 0.0461 | 0.0461 | [0.0261, 0.0661] |
+| portrait-cluttered-bg.jpg | 0.4746 | 0.4746 | [0.4546, 0.4946] |
+| transparent-glass.jpg | 0.0635 | 0.0635 | [0.0435, 0.0835] |
+| animal.jpg | n/a | 0.1428 | [0.1228, 0.1628] |
+| indoor-scene.jpg | n/a | 0.0421 | [0.0221, 0.0621] |
+
+Privacy regression E2E: green. Solid-mode test: green.
+
+Replaces the invalidated "RMBG-1.4 q8 dry run result" section above with
+real, current-toolchain data on the actually-shipping model.
