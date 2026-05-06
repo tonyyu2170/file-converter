@@ -34,16 +34,33 @@ function ensureDir(d) {
 
 const srcDir = join(repoRoot, "node_modules", "@ffmpeg", "core", "dist", "umd");
 const dstDir = join(repoRoot, "public", "ffmpeg");
+
+// Fix D: fail fast with a single diagnostic if @ffmpeg/core isn't installed.
+if (!existsSync(srcDir)) {
+  console.error(`[copy-ffmpeg-core] @ffmpeg/core UMD dir not found: ${srcDir}`);
+  process.exit(1);
+}
+
 ensureDir(dstDir);
 
 for (const f of manifest.files) {
+  // Fix B: reject filenames that could escape the destination directory.
+  if (f.name.includes("/") || f.name.includes("\\") || f.name.includes("..")) {
+    console.error(`[copy-ffmpeg-core] invalid filename in manifest: ${f.name}`);
+    process.exit(1);
+  }
+
   const src = join(srcDir, f.name);
   const dst = join(dstDir, f.name);
+
+  // Fix C: verify existsSync, copy first, then hash the destination (matches
+  // copy-bg-models.mjs semantics — catches disk-layer corruption during write).
   if (!existsSync(src)) {
     console.error(`[copy-ffmpeg-core] missing source: ${src}`);
     process.exit(1);
   }
-  const actual = sha256(src);
+  copyFileSync(src, dst);
+  const actual = sha256(dst);
   if (actual !== f.sha256) {
     console.error(
       `[copy-ffmpeg-core] sha256 mismatch for ${f.name}: ` +
@@ -51,6 +68,5 @@ for (const f of manifest.files) {
     );
     process.exit(1);
   }
-  copyFileSync(src, dst);
   console.log(`[copy-ffmpeg-core] copied ${f.name}`);
 }
