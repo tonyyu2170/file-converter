@@ -7,7 +7,7 @@ describe("Home", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
     expect(bar).toHaveTextContent("v1.0.0");
-    expect(bar).toHaveTextContent("14 TOOLS ONLINE");
+    expect(bar).toHaveTextContent("15 TOOLS ONLINE");
   });
 
   it("renders the hero headline as four colored spans", () => {
@@ -106,6 +106,12 @@ describe("Home", () => {
       description: "render text verbatim as a monospace pdf",
       href: "/tools/txt-to-pdf",
     },
+    {
+      testid: "tool-card-audio-trim",
+      title: "audio trim",
+      description: "mp3, wav, m4a, flac · trim to a sub-range, lossless when format unchanged",
+      href: "/tools/audio-trim",
+    },
   ])(
     "renders tool card $testid with title, description, and href",
     ({ testid, title, description, href }) => {
@@ -117,10 +123,10 @@ describe("Home", () => {
     },
   );
 
-  it("renders exactly 14 tool cards", () => {
+  it("renders exactly 15 tool cards", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
-    expect(cards).toHaveLength(14);
+    expect(cards).toHaveLength(15);
   });
 
   it("renders the pet panel inside the hero", () => {

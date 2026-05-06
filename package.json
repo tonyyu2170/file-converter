@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs",
+    "prebuild": "node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs && node scripts/check-vercel-headers.mjs",
     "build": "next build",
     "postbuild": "node scripts/check-bundle-isolation.mjs",
     "postinstall": "node scripts/fetch-bg-models.mjs && node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs",
@@ -26,6 +26,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/core-mt": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@huggingface/transformers": "^4.2.0",

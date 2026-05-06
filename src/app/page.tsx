@@ -86,6 +86,12 @@ const TOOLS = [
     description: "mp3, wav, m4a, flac · convert between formats",
     href: "/tools/audio-convert",
   },
+  {
+    id: "audio-trim",
+    title: "audio trim",
+    description: "mp3, wav, m4a, flac · trim to a sub-range, lossless when format unchanged",
+    href: "/tools/audio-trim",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";
