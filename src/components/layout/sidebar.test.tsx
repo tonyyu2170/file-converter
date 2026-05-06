@@ -43,4 +43,13 @@ describe("Sidebar", () => {
     const aboutLink = screen.getByRole("link", { name: /^about$/ });
     expect(aboutLink).toHaveAttribute("href", "/about");
   });
+
+  it("renders the audio-convert link in the AUDIO group", () => {
+    render(<Sidebar />);
+    expect(screen.getByText("// AUDIO")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /audio convert/i })).toHaveAttribute(
+      "href",
+      "/tools/audio-convert",
+    );
+  });
 });

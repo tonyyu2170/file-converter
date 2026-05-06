@@ -7,6 +7,7 @@ describe("SIZE_LIMITS_MB", () => {
       image: { soft: 50, hard: 250 },
       pdf: { soft: 100, hard: 500 },
       document: { soft: 25, hard: 100 },
+      audio: { soft: 100, hard: 500 },
     });
   });
 });
@@ -19,5 +20,7 @@ describe("softCapBytes / hardCapBytes", () => {
     expect(hardCapBytes("pdf")).toBe(500_000_000);
     expect(softCapBytes("document")).toBe(25_000_000);
     expect(hardCapBytes("document")).toBe(100_000_000);
+    expect(softCapBytes("audio")).toBe(100_000_000);
+    expect(hardCapBytes("audio")).toBe(500_000_000);
   });
 });

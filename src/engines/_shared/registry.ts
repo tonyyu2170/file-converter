@@ -1,6 +1,7 @@
 import type { ConversionEngine, OutputItem } from "./types";
 
 export type EngineId =
+  | "audio-convert"
   | "docx-to-txt"
   | "image-bg-remove"
   | "image-convert"
@@ -21,6 +22,7 @@ type AnyEngine = ConversionEngine<any, OutputItem | OutputItem[]>;
 type Loader = () => Promise<{ default: AnyEngine }>;
 
 const REGISTRY: Record<EngineId, Loader> = {
+  "audio-convert": () => import("@/engines/audio-convert"),
   "docx-to-txt": () => import("@/engines/docx-to-txt"),
   "image-bg-remove": () => import("@/engines/image-bg-remove"),
   "image-convert": () => import("@/engines/image-convert"),
