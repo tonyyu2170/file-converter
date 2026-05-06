@@ -89,6 +89,12 @@ test.describe("audio-trim correctness", () => {
     // -c copy with the same range produces a file very close to the input size.
     expect(stat.size).toBeGreaterThan(inStat.size * 0.5);
     expect(stat.size).toBeLessThan(inStat.size * 1.5);
+    expect(download.suggestedFilename()).toMatch(/\.mp3$/i);
+    const bytes = await fs.readFile(outPath);
+    const isMp3 =
+      (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) || // "ID3"
+      (bytes[0] === 0xff && (bytes[1] === 0xfb || bytes[1] === 0xf3 || bytes[1] === 0xf2));
+    expect(isMp3).toBe(true);
   });
 
   test("format change to wav produces a RIFF/WAVE file matching the trimmed duration", async ({
