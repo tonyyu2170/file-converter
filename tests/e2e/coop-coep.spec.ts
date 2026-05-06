@@ -23,12 +23,14 @@ const TOOL_ROUTES = [
 
 const ALL_ROUTES = ["/", "/about", ...TOOL_ROUTES] as const;
 
-const POLICY_CONSOLE_PATTERN = /coep|opener-policy|require-corp/i;
+// Matches COOP/COEP errors AND the related Cross-Origin-Resource-Policy
+// errors browsers emit when COEP blocks an asset whose source didn't set
+// `Cross-Origin-Resource-Policy: cross-origin`. Important for catching
+// future asset-pipeline drift (a third-party CDN slipping in, etc.).
+const POLICY_CONSOLE_PATTERN = /coep|opener-policy|require-corp|cross-origin-resource-policy/i;
 
 for (const route of ALL_ROUTES) {
-  test(`${route} sets COOP same-origin and COEP require-corp`, async ({
-    page,
-  }) => {
+  test(`${route} sets COOP same-origin and COEP require-corp`, async ({ page }) => {
     const response = await page.goto(route);
     expect(response, `no response for ${route}`).not.toBeNull();
     const headers = response?.headers() ?? {};
@@ -36,9 +38,7 @@ for (const route of ALL_ROUTES) {
     expect(headers["cross-origin-embedder-policy"]).toBe("require-corp");
   });
 
-  test(`${route} reports crossOriginIsolated === true in page context`, async ({
-    page,
-  }) => {
+  test(`${route} reports crossOriginIsolated === true in page context`, async ({ page }) => {
     await page.goto(route);
     const isolated = await page.evaluate(() => globalThis.crossOriginIsolated);
     expect(isolated).toBe(true);
@@ -57,8 +57,11 @@ for (const route of ALL_ROUTES) {
       }
     });
     await page.goto(route);
-    // Settle network so any deferred font/script loads have a chance to log.
-    await page.waitForLoadState("networkidle");
+    // `load` (not `networkidle`) — Next.js's HMR websocket under `pnpm dev`
+    // never settles, so networkidle is a known flake source. Policy errors
+    // for blocked resources fire during initial-document parse + first-paint,
+    // both before `load` resolves.
+    await page.waitForLoadState("load");
     expect(offending, `policy errors on ${route}`).toEqual([]);
   });
 }
@@ -114,4 +117,33 @@ test("/tools/audio-convert fetches the MT ffmpeg worker file when isolated", asy
   const stFetches = fetched.filter((p) => p.startsWith("/ffmpeg/st/"));
   expect(mtFetches.length).toBeGreaterThan(0);
   expect(stFetches).toEqual([]);
+});
+
+test("/tools/audio-convert completes a conversion on Firefox (proxy for MT load)", async ({
+  page,
+  browserName,
+}, testInfo) => {
+  // Firefox-only counterpart to the MT-worker-fetch test above. Playwright on
+  // Firefox cannot observe the nested-worker request, so we instead assert the
+  // conversion reaches [ DONE ]. This catches MT-load failures (e.g., a wrong
+  // path, a corrupted worker bytes) that would hang the conversion on Firefox.
+  // Does NOT catch silent ST fallback (ST also produces output) — that gap is
+  // accepted; the chromium/webkit wiring test covers it.
+  test.skip(
+    browserName !== "firefox",
+    "Firefox-only completion proxy; chromium/webkit are covered by the worker-fetch wiring test above.",
+  );
+  testInfo.setTimeout(120_000);
+
+  await page.goto("/tools/audio-convert");
+  await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
+
+  const fixture = path.resolve(__dirname, "../fixtures/audio/sample.wav");
+  await page.locator('input[type="file"]').setInputFiles(fixture);
+  await page.getByLabel(/^mp3/i).click();
+  await page.getByTestId("convert-button").click();
+
+  await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
+    timeout: 90_000,
+  });
 });
