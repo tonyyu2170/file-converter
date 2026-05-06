@@ -1,15 +1,15 @@
 import type { FFmpeg as FFmpegType } from "@ffmpeg/ffmpeg";
 
-// Side-effecting at module load: nothing. The FFmpeg instance is constructed
-// lazily on first loadFfmpeg() call so this module can sit in a worker
-// without paying the import cost until a conversion actually runs.
+// Module-load cost: the only top-level statement that references @ffmpeg/ffmpeg
+// is `import type`, which is erased at compile time. The runtime
+// `await import("@ffmpeg/ffmpeg")` lives inside loadFfmpeg() — DO NOT hoist it
+// to a static top-level import, or scripts/check-bundle-isolation.mjs will
+// flag this module as leaking @ffmpeg/ffmpeg into the homepage chunk.
 //
-// Both URLs are same-origin (`/ffmpeg/...`) — written this way so the worker
-// never makes an off-origin fetch during conversion, honoring the project's
-// `connect-src 'self'` CSP. Bytes are populated by scripts/copy-ffmpeg-core.mjs
-// from node_modules/@ffmpeg/core/dist/umd/.
-
-export type FFmpegProgress = { percent: number; phase?: string };
+// CORE_URL/WASM_URL are same-origin paths so the worker never makes an off-
+// origin fetch during conversion (project's `connect-src 'self'` CSP).
+// Bytes are populated by scripts/copy-ffmpeg-core.mjs from
+// node_modules/@ffmpeg/core/dist/umd/.
 
 const CORE_URL = "/ffmpeg/ffmpeg-core.js";
 const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
