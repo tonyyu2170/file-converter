@@ -6,6 +6,7 @@ export const SIZE_LIMITS_MB: Record<EngineCategory, { soft: number; hard: number
   image: { soft: 50, hard: 250 },
   pdf: { soft: 100, hard: 500 },
   document: { soft: 25, hard: 100 },
+  audio: { soft: 100, hard: 500 },
 } as const;
 
 // SI thresholds (×1_000_000), matching the formatBytes helper.

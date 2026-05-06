@@ -30,7 +30,7 @@ export type OutputItem = {
   warnings?: string[];
 };
 
-export type EngineCategory = "image" | "pdf" | "document";
+export type EngineCategory = "image" | "pdf" | "document" | "audio";
 
 export type EngineLicense = "MIT" | "Apache-2.0" | "BSD-3-Clause" | "ISC" | "mixed";
 
