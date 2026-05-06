@@ -21,16 +21,22 @@ export type LoaderProgress =
 
 let pipelinePromise: Promise<ImageSegmentationPipeline> | null = null;
 
-// We ship the q8 ONNX (`model_quantized.onnx`, ~44 MB) — the int8-quantized
-// build of BRIA's RMBG-1.4 (`briaai/RMBG-1.4`). RMBG-1.4 is a general-purpose
-// dichotomous segmentation model; it replaces the prior MODNet build (~6.6 MB),
-// which was portrait-optimized and produced unusable masks on non-portrait
-// inputs. Verification: docs/superpowers/plans/phase-18-verification-log.md.
+// We ship the q8 ONNX (`model_quantized.onnx`, ~42 MB) — onnx-community's
+// transformers.js-packaged build of `schirrmacher/ormbg`, an open
+// RMBG-1.4 alternative. ormbg is a general-purpose dichotomous segmentation
+// model; it replaces the prior MODNet build (~6.6 MB), which was
+// portrait-optimized and produced unusable masks on non-portrait inputs.
+// Verification: docs/superpowers/plans/phase-18-verification-log.md.
 //
-// License: bria-rmbg-1.4 (non-commercial; commercial use requires a paid
-// license from BRIA). Acceptable for this project (personal solo-user file
-// converter, no monetization). Disclosure on /about engines table is queued
-// for Phase 26 master-spec amendments.
+// License: Apache-2.0 (clean; no /about footnote required).
+//
+// Why ormbg over RMBG-1.4 directly: briaai/RMBG-1.4's published config.json
+// declares a Python-class model_type ("SegformerForSemanticSegmentation")
+// and auto_map references Python custom code; transformers.js 4.2.0 cannot
+// dispatch on either, and Python isn't reachable from a static-export
+// browser app. ormbg-ONNX exposes model_type "isnet" which IS in the v4.2.0
+// image-segmentation registry — verified at the installed-source level
+// (node_modules/@huggingface/transformers/src/models/registry.js:649).
 //
 // The execution device is hard-pinned
 // to "wasm" rather than probed for WebGPU. Reasons:
