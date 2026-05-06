@@ -266,3 +266,66 @@ RMBG-1.4 q8 instead. The spec text should be amended to reflect the empirical
 selection — that amendment is queued for Phase 26's master-spec-edits batch
 (consistent with Phase 18's "narrow scope" framing — engine-internal changes
 only, /about footnote and spec amendments deferred to Phase 26).
+
+## Post-mortem — RMBG-1.4 verification was a cache artifact (Task 1.7 — added in remediation)
+
+The Decision section above selected `briaai/RMBG-1.4` q8 based on dry-run successes in regular Chrome (`[ DONE ]` status on two fixtures, captured 4.46 MB PNG output). Subsequent empirical re-test invalidated that data:
+
+1. transformers.js stores model files in **Cache API** under the key `transformers-cache`. The dry-run Chrome instance had a populated cache from prior MODNet sessions in this project.
+2. With `transformers-cache` cleared (via `caches.delete('transformers-cache')` in DevTools), regular Chrome reproduces the **same failure** Playwright's bundled Chromium hit during the gated E2E run:
+   ```
+   Unsupported model type "SegformerForSemanticSegmentation" for task
+   "image-segmentation". None of the candidate model classes support
+   this type.
+   ```
+3. The dry-run "successes" were transformers.js serving the cached MODNet `config.json` from `transformers-cache` and loading MODNet weights (which still happen to live at `model_quantized.onnx`). The output was MODNet on a portrait — exactly what MODNet is good at — masquerading as RMBG-1.4 verification.
+
+### Root cause for briaai/RMBG-1.4 incompatibility
+
+`briaai/RMBG-1.4`'s `config.json` declares:
+- `model_type: "SegformerForSemanticSegmentation"` — a Python class name, not a value in transformers.js v4.2.0's image-segmentation registry.
+- `auto_map.AutoModelForImageSegmentation: "briarmbg.BriaRMBG"` — points at Python custom code that transformers.js cannot execute.
+
+The model is loadable only through `transformers` (Python) or via Python custom-code execution. transformers.js (which is what the engine uses) cannot dispatch on either field. End of road for this port.
+
+### Fallback chain re-evaluation
+
+Original spec §3.6 documented `BiRefNet-lite int8 → ISNet-DIS-tiny → U2Net quantized` as fallbacks. None are published in q8 form by canonical publishers. The fp16 BiRefNet-lite OOM was already empirically confirmed.
+
+Research-mode subagent enumerated transformers.js-compatible image-segmentation `model_type` values from installed v4.2.0 source (`registry.js`):
+
+- ImageSegmentation auto-class: `detr`, `clipseg`, `modnet`, `birefnet`, `isnet`, `ben`
+- SemanticSegmentation: `segformer`, `sapiens`, `swin`, `mobilenet_v1/v2/v3/v4`
+- UniversalSegmentation: `detr`, `maskformer`
+
+Cross-referenced against published quantized ONNX ports of general-purpose RMBG-class models. **One viable candidate**: `onnx-community/ormbg-ONNX`.
+
+### New selection: `onnx-community/ormbg-ONNX` q8
+
+| Field | Value |
+|-------|-------|
+| HuggingFace source | `onnx-community/ormbg-ONNX` |
+| Pinned commit | `034e2d884afbab897e10e78fc5bb566b29533fd6` |
+| License | Apache-2.0 (no non-commercial footnote — license-cleaner than RMBG-1.4) |
+| dtype | `q8` |
+| `config.json` size | 27 bytes, sha256 `d0b94ab052ace79177085c66a00a3f014a973edb09999cb0108bb01e65ded060` |
+| `preprocessor_config.json` size | 283 bytes, sha256 `ed502c6ea29c5fb8aafdafdc5bcf1657dfca09888ff753e5c358672ebcfd448d` |
+| `onnx/model_quantized.onnx` size | 44,315,205 bytes (~42.3 MB), sha256 `ffbcae62a7b675d616e64cb392ee028786c4cf74f83596590fba13733ef00171` |
+| `model_type` | `isnet` (verified in `node_modules/@huggingface/transformers/src/models/registry.js:649`) |
+| Resolved class | `PreTrainedModel` via CUSTOM_ARCHITECTURES_MAPPING (image-segmentation auto-class) |
+| Base model | `schirrmacher/ormbg` — open RMBG-1.4 alternative, general-purpose dichotomous segmentation |
+
+### What this invalidates above
+
+- The "Decision (Task 1.4)" section's "Selected model: briaai/RMBG-1.4" line is empirically false. The new selection is `onnx-community/ormbg-ONNX`.
+- The "OOM verification — RMBG-1.4 q8 dry run result (Task 1.3 revised)" section recorded results that were really MODNet running through `transformers-cache`. Peak RSS ~1.5 GB measurement is still useful as a real-world ceiling for MODNet on this host, but is not a verification of RMBG-1.4 or ormbg.
+- The "Disqualification — final summary" table's RMBG-1.4 row should now read "available q8, but unloadable in transformers.js 4.2.0 (model_type / auto_map both Python-only)."
+
+### Action items now in flight
+
+- Manifest amended to `onnx-community/ormbg-ONNX@034e2d88...` (new commit superseding `803724a`).
+- Engine descriptor `library` text amended to `"@huggingface/transformers (ormbg int8)"` (new commit superseding `d56c904`).
+- Model-loader comments amended to reference ormbg + the post-mortem (new commit superseding `07d5014`).
+- Empirical verification with `transformers-cache` cleared is queued (controller-driven, not subagent-driven, to enforce cache hygiene).
+- Tasks 5 (fixtures) and 6 (correctness range retune) remain valid; the fixtures are model-agnostic.
+- No squash. Branch history preserves the misstep + the correction.
