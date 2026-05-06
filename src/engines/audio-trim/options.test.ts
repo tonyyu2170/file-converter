@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIO_TRIM_BITRATE_OPTIONS,
   AUDIO_TRIM_FORMATS,
+  type AudioTrimOptions,
   defaultAudioTrimOptions,
   isLossyOutput,
   outputExtensionFor,
   outputMimeFor,
-  type AudioTrimOptions,
 } from "./options";
 
 describe("audio-trim options", () => {
