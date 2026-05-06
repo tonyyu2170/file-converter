@@ -260,11 +260,15 @@ describe("WorkerHarness.runDecodePeaks", () => {
     vi.mocked(Comlink.wrap).mockReturnValue({} as never);
     const harness = new WorkerHarness<unknown>(fakeWorker, { persistent: true });
     const file = new File([new Uint8Array([0])], "x.wav", { type: "audio/wav" });
-    await expect(harness.runDecodePeaks(file, 32)).rejects.toThrow(/does not implement decodePeaks/);
+    await expect(harness.runDecodePeaks(file, 32)).rejects.toThrow(
+      /does not implement decodePeaks/,
+    );
   });
 
   it("lowercases the extension when reading from the file name", async () => {
-    const decodePeaks = vi.fn().mockResolvedValue({ min: new Float32Array(), max: new Float32Array() });
+    const decodePeaks = vi
+      .fn()
+      .mockResolvedValue({ min: new Float32Array(), max: new Float32Array() });
     vi.mocked(Comlink.wrap).mockReturnValue({ decodePeaks } as never);
     const harness = new WorkerHarness<unknown>(fakeWorker, { persistent: true });
     const file = new File([new Uint8Array([0])], "Tune.FLAC", { type: "audio/flac" });

@@ -33,8 +33,7 @@ export async function readMediaDurationSec(
             reject(new Error("media duration is not finite"));
           }
         });
-      const onError = () =>
-        settle(() => reject(new Error("failed to load audio metadata")));
+      const onError = () => settle(() => reject(new Error("failed to load audio metadata")));
       el.addEventListener("loadedmetadata", onLoaded, { once: true });
       el.addEventListener("error", onError, { once: true });
       el.preload = "metadata";

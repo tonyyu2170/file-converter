@@ -70,24 +70,17 @@ describe("readMediaDurationSec watchdog", () => {
     vi.useRealTimers();
   });
 
-  it(
-    // Runs under jsdom: jsdom's <audio> stub never fires loadedmetadata or
-    // error, so the only settle path is the 10s watchdog.
-    "rejects with a timeout error when metadata never arrives within 10s",
-    async () => {
-      const file = new File(
-        [new Uint8Array([0, 1, 2, 3])],
-        "garbage.bin",
-        { type: "application/octet-stream" },
-      );
-      const promise = readMediaDurationSec(file, "audio");
-      // Attach the rejection handler before advancing timers so the
-      // rejection isn't treated as unhandled.
-      const rejection = expect(promise).rejects.toThrow(
-        /media metadata timeout/i,
-      );
-      await vi.advanceTimersByTimeAsync(10_001);
-      await rejection;
-    },
-  );
+  it(// Runs under jsdom: jsdom's <audio> stub never fires loadedmetadata or
+  // error, so the only settle path is the 10s watchdog.
+  "rejects with a timeout error when metadata never arrives within 10s", async () => {
+    const file = new File([new Uint8Array([0, 1, 2, 3])], "garbage.bin", {
+      type: "application/octet-stream",
+    });
+    const promise = readMediaDurationSec(file, "audio");
+    // Attach the rejection handler before advancing timers so the
+    // rejection isn't treated as unhandled.
+    const rejection = expect(promise).rejects.toThrow(/media metadata timeout/i);
+    await vi.advanceTimersByTimeAsync(10_001);
+    await rejection;
+  });
 });
