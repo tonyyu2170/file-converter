@@ -83,11 +83,12 @@ describe("types", () => {
     expectTypeOf<"Apache-2.0">().toMatchTypeOf<EngineLicense>();
     expectTypeOf<"BSD-3-Clause">().toMatchTypeOf<EngineLicense>();
     expectTypeOf<"ISC">().toMatchTypeOf<EngineLicense>();
+    expectTypeOf<"GPL-2.0-or-later">().toMatchTypeOf<EngineLicense>();
     expectTypeOf<"mixed">().toMatchTypeOf<EngineLicense>();
 
-    // The union contains exactly these five literals — no more, no less.
+    // The union contains exactly these six literals — no more, no less.
     expectTypeOf<EngineLicense>().toEqualTypeOf<
-      "MIT" | "Apache-2.0" | "BSD-3-Clause" | "ISC" | "mixed"
+      "MIT" | "Apache-2.0" | "BSD-3-Clause" | "ISC" | "GPL-2.0-or-later" | "mixed"
     >();
 
     // Rejected value — arbitrary string must NOT extend EngineLicense.
