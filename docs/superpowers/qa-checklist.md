@@ -73,6 +73,6 @@ The §10.3 demonstration. Must be repeatable by anyone reading the
 
 ## Latest run
 
-| Date | Lighthouse perf / a11y / bp / seo | securityheaders | Deploy URL | Notes |
-|------|-----------------------------------|-----------------|------------|-------|
-| 2026-05-05 | 100 / 95 / 100 / 60 | pending | https://file-converter-tonyyu2170s-projects.vercel.app | SEO=60 is `*.vercel.app` `x-robots-tag: noindex` (deviation documented above). a11y `target-size` audit flagged sidebar links < 24 px; fixed in same release. Vercel Toolbar disabled in production to satisfy strict CSP. |
+| Date | Lighthouse perf / a11y / bp / seo (median of 3) | securityheaders | Deploy URL | Notes |
+|------|-------------------------------------------------|-----------------|------------|-------|
+| 2026-05-05 | 99 / 100 / 100 / 60 | pending | https://file-converter-tonyyu2170s-projects.vercel.app | SEO=60 is `*.vercel.app` `x-robots-tag: noindex` (deviation documented above). Vercel Toolbar disabled in production to satisfy strict CSP. Sidebar touch-target fix landed in `cee2c8e`. Perf raw runs: 91, 99, 100 (typical LCP variance on cold edge cache). |
