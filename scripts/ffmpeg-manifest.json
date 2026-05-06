@@ -1,13 +1,27 @@
 {
-  "package": "@ffmpeg/core",
-  "version": "0.12.10",
-  "license": "GPL-2.0-or-later",
-  "files": [
-    { "name": "ffmpeg-core.js", "sha256": "b266ab5b952555881dd6310663986994a182acb2b7ff25cf10a25f7a37ac2b21" },
-    { "name": "ffmpeg-core.wasm", "sha256": "9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7" }
-  ],
+  "cores": {
+    "mt": {
+      "package": "@ffmpeg/core-mt",
+      "version": "0.12.10",
+      "license": "GPL-2.0-or-later",
+      "files": [
+        { "name": "ffmpeg-core.js",        "sha256": "62f5f5f468a37861da12c4581c321bb5ca8ba2f7b776377e08dd2ab72de293f9" },
+        { "name": "ffmpeg-core.wasm",      "sha256": "be2c97605366b78f3f13e21b52e81a55a79e1f29c133b03a68ec187b1a2ec41a" },
+        { "name": "ffmpeg-core.worker.js", "sha256": "97322a227c5f3d5ccfd0d0825890a6deeba137106a09b633ca75cadf49ddd2cb" }
+      ]
+    },
+    "st": {
+      "package": "@ffmpeg/core",
+      "version": "0.12.10",
+      "license": "GPL-2.0-or-later",
+      "files": [
+        { "name": "ffmpeg-core.js",   "sha256": "b266ab5b952555881dd6310663986994a182acb2b7ff25cf10a25f7a37ac2b21" },
+        { "name": "ffmpeg-core.wasm", "sha256": "9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7" }
+      ]
+    }
+  },
   "_notes": {
-    "build": "Single-threaded UMD build. Multi-threaded (with ffmpeg-core.worker.js) is gated behind COOP/COEP headers and lands in Phase 21.",
-    "loading": "loaded by src/engines/_shared/ffmpeg/index.ts via FFmpeg.load({ coreURL: '/ffmpeg/ffmpeg-core.js', wasmURL: '/ffmpeg/ffmpeg-core.wasm' }). Both URLs are same-origin to honor the project's connect-src 'self' privacy guarantee."
+    "build": "Both single-threaded and multi-threaded UMD builds are bundled. loadFfmpeg() picks at runtime based on crossOriginIsolated. See src/engines/_shared/ffmpeg/index.ts.",
+    "loading": "Loaded same-origin from /ffmpeg/{mt,st}/. CSP connect-src 'self' enforces."
   }
 }
