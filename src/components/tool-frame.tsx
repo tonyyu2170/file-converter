@@ -213,7 +213,7 @@ export function ToolFrame<TOptions>({ engine }: Props<TOptions>) {
           )}
         </div>
       )}
-      {Panel && <Panel value={options} onChange={setOptions} />}
+      {Panel && <Panel value={options} onChange={setOptions} file={stagedFile ?? undefined} />}
       {Staging && stagedFiles.length > 0 && (
         <Staging
           files={stagedFiles}

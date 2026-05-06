@@ -9,6 +9,7 @@
     "dev": "next dev",
     "prebuild": "node scripts/copy-bg-models.mjs",
     "build": "next build",
+    "postbuild": "node scripts/check-bundle-isolation.mjs",
     "postinstall": "node scripts/fetch-bg-models.mjs && node scripts/copy-bg-models.mjs",
     "start": "next start",
     "lint": "biome check src tests",
@@ -40,6 +41,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@biomejs/biome": "^1.9.0",
     "@playwright/test": "^1.48.0",
     "@tailwindcss/postcss": "^4.0.0",

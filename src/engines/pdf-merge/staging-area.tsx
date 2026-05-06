@@ -1,6 +1,7 @@
 "use client";
 
 import { parseRange } from "@/engines/_shared/range";
+import { renderFirstPageThumbnail } from "@/engines/_shared/render-pdf-thumbnail";
 import type { StagingAreaProps } from "@/engines/_shared/types";
 import {
   DndContext,
@@ -20,7 +21,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PdfMergeOptions, PdfMergeRow } from "./options";
-import { renderFirstPageThumbnail } from "./render-thumbnail";
 
 type RowMeta = {
   thumbnailUrl: string | undefined;

@@ -27,6 +27,13 @@ Common file conversions (HEIC→PNG, PDF merging, DOCX→PDF, etc.) typically re
 - File-content history. Only user preferences are persisted.
 - Audio, video, archive, and data conversions — deferred to future scope.
 - PWA / offline-mode / "Add to Home Screen" — deferred.
+- PDF → DOCX experimental — deferred to future scope (§16). Best-effort
+  layout reconstruction does not meet the project quality bar; shipping
+  it behind a "works when it can" label compromises the privacy-first
+  identity of the rest of the catalog.
+- Standalone image-compress tool. The image-convert quality slider
+  covers compression as a re-encode side effect; a dedicated tool would
+  be redundant UX.
 
 ## 4. Primary user
 
@@ -45,7 +52,6 @@ Single technical user, the project owner. Implications:
 | HEIC/HEIF → JPEG / PNG / WebP | one-way | Optional metadata strip |
 | JPEG ↔ PNG ↔ WebP | round-trip | Configurable quality (encoder-specific) |
 | Resize | n/a | Pixel or % input; aspect-ratio-lock toggle |
-| Compress | n/a | Quality slider; preview file-size estimate |
 
 ### 5.2 PDFs
 
@@ -66,10 +72,11 @@ Single technical user, the project owner. Implications:
 | DOCX → TXT | Plain text extract |
 | Markdown → PDF | Styled output |
 | TXT → PDF | Monospace default |
-| **PDF → DOCX** | **Best-effort, labeled "experimental" in UI** |
 | **PDF → Markdown** | **Best-effort, labeled "experimental" in UI** |
 
-The "experimental" label sets honest expectations on the lossy reverse-conversions and prevents user surprise about layout fidelity loss.
+The "experimental" label sets honest expectations on the lossy reverse-conversion and prevents user surprise about layout fidelity loss.
+
+The PDF → DOCX path is cut from v1 (§3); see §16 for the revisit conditions.
 
 ### 5.4 User stories (representative)
 
@@ -78,7 +85,6 @@ The "experimental" label sets honest expectations on the lossy reverse-conversio
 - *As the user, I want to convert a DOCX résumé to PDF without losing styling.*
 - *As the user, I want to know — visibly and verifiably — that no file I drop has been uploaded anywhere.*
 - *As the user, I want the app to remember that I prefer 90% JPEG quality without re-asking every time.*
-- *As the user, I want the experimental PDF→DOCX path to work when it can, and tell me clearly when it can't.*
 
 ## 6. Architecture
 
@@ -458,6 +464,8 @@ Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
 
 `'wasm-unsafe-eval'` required for libheif (and future ffmpeg). No `'unsafe-eval'` for JS. **No `'unsafe-inline'` for styles** — Tailwind v4 in build-time PostCSS mode (which static export uses) emits a static stylesheet, not runtime `<style>` injections, so the strict policy holds. If a build artifact is ever caught requiring inline styles, fix the build, do not relax the header. (Verify this assumption during initial deploy — see Section 18.)
 
+**`script-src 'unsafe-inline'` retention.** `'unsafe-inline'` is retained in `script-src` (only) for Next.js static export's hydration shim, which emits a small inline `<script>` block per page (the `self.__next_f.push(...)` React Server Components flight protocol). Eliminating it requires either server-side nonce generation (which static export precludes) or per-build hash injection (brittle). `style-src` remains `'self'` only — the directive *"do not relax the style-src header; fix the build instead"* applies to `style-src`, not `script-src`. The risk surface added by `script-src 'unsafe-inline'` is bounded by `connect-src 'self'` (an injected script cannot exfiltrate data) and `worker-src 'self' blob:` (cannot spawn off-origin workers).
+
 ### 10.3 Privacy verification
 
 - The `/about` page documents the privacy claim and includes a "verify it yourself" section explaining how to inspect the network panel during conversion.
@@ -591,6 +599,10 @@ In rough priority order:
 7. **Mobile responsive layout** — when desktop is mature.
 8. **Custom domain + branding refresh** — when ready.
 9. **AI image transforms** — background removal, watermark removal, possibly upscaling/inpainting. Browser-side only to honor `connect-src 'self'` (server-side ML breaks the privacy guarantee). Candidates: MediaPipe Selfie Segmentation (~10 MB) for background removal, in-browser inpainting models (larger; gated on bundle-size strategy from Phase 6) for watermark removal. Each fits the engine pattern as `bg-remove`, `watermark-remove` etc.
+10. **PDF → DOCX.** Cut from v1 because best-effort layout reconstruction does not meet the project quality bar. Revisit when a permissively-licensed in-browser solution exists with materially better fidelity than mammoth-style structural mapping.
+11. **image-bg-remove model swap.** The Phase 16 model is portrait-optimized MODNet (per its design spec's "2026-05-04 update" section), which produces unusable masks on non-portrait inputs. Ships in v1 as-is; a model swap to a general-purpose alternative (BiRefNet-lite int8, ISNet-DIS, or equivalent permissive option) is deferred to v2 once browser-side OOM behavior is empirically verified on the dev box.
+12. **Standalone image-compress tool.** Cut from v1; revisit only if user feedback indicates the image-convert quality slider doesn't cover the use case.
+13. **Watermark removal.** Brainstormed and tossed 2026-05-05. State-of-the-art "one-button magic" watermark removal is a server-GPU problem; permissively-licensed open-vocabulary detection that runs in a browser at quality does not exist. Revisit when that changes.
 
 Each future engine plugs into the `convert()` interface (Section 6.3) as a lazy-loaded module. v1's modular structure is what makes future scope cheap.
 
@@ -607,6 +619,6 @@ This is a personal project; success is measured against the stated problem, not 
 ## 18. Open questions / risks
 
 - **Vercel static export + WASM caching headers.** WASM modules need long cache lives but careful cache-busting on releases. Will validate during initial deploy.
-- **PDF → DOCX experimental quality.** The "best-effort" label sets expectations, but if results are unusable in practice, this feature may be cut from v1 rather than ship broken.
+- **PDF → DOCX experimental quality.** Cut from v1 per §3; see §16 for revisit conditions.
 - **shadcn/ui restyling effort.** shadcn defaults are rounded/soft — restyling them to brutalist sharp-corner monospace is real work, not a token swap. Budget time for this in implementation planning.
-- **Tailwind v4 + CSP `style-src`.** Default plan: build-time PostCSS emits a static stylesheet; CSP holds at `style-src 'self'` (no `'unsafe-inline'`). Resolution path: verify on the first deploy that no inline styles slip in via shadcn primitives, design-token runtime, or third-party widgets. If any do, fix the build (precompile, restyle, or drop the offender) — do **not** relax the header.
+- **Tailwind v4 + CSP `style-src`.** Validated via the v1 closeout deploy checklist (§2.5 of `2026-05-05-v1-closeout.md`); CSP holds at `style-src 'self'`. If a regression slips in, fix the build, not the header.

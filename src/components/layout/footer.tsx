@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function Footer({ count, version }: { count: number; version: string }) {
   return (
     <footer className="flex items-center gap-4 border-t border-[var(--color-hairline)] px-4 py-2 text-[var(--text-xs)] text-[var(--color-fg-muted)]">
@@ -22,7 +24,15 @@ export function Footer({ count, version }: { count: number; version: string }) {
           CC BY-ND 4.0
         </a>
       </span>
-      <span className="ml-auto">{version}</span>
+      <span className="ml-auto flex items-center gap-3">
+        <Link
+          href="/about"
+          className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg-strong)]"
+        >
+          about
+        </Link>
+        <span>{version}</span>
+      </span>
     </footer>
   );
 }

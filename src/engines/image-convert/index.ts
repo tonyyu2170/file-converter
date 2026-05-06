@@ -13,6 +13,8 @@ const engine: SingleInputEngine<ImageConvertOptions, OutputItem> = {
   outputMime: "image/png",
   defaultOptions: defaultImageConvertOptions,
   category: "image",
+  library: "libheif-js, Canvas",
+  license: "mixed",
   cardinality: "single",
   isReadyToConvert: (opts) => opts.output !== null,
   OptionsPanel: ImageConvertOptionsPanel,

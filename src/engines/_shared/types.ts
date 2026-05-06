@@ -32,6 +32,8 @@ export type OutputItem = {
 
 export type EngineCategory = "image" | "pdf" | "document";
 
+export type EngineLicense = "MIT" | "Apache-2.0" | "BSD-3-Clause" | "ISC" | "mixed";
+
 export type EngineMeta<TOptions> = {
   id: string;
   inputAccept: string[];
@@ -45,11 +47,25 @@ export type EngineMeta<TOptions> = {
    * (e.g., "myfile" + "-split" → "myfile-split.zip"). Engines that always
    * produce a single output don't need to set this. */
   archiveSuffix?: string;
+  /** Human-readable name(s) of the conversion library used by the engine.
+   * Surfaced on the /about engines transparency table. Comma-separated when
+   * an engine uses more than one (e.g., "libheif-js, Canvas"). */
+  library?: string;
+  /** SPDX-style identifier for the conversion library's license. "mixed"
+   * is allowed when the libraries column lists more than one library and
+   * they have different licenses. */
+  license?: EngineLicense;
 };
 
 export type OptionsPanelProps<TOptions> = {
   value: TOptions;
   onChange: (next: TOptions) => void;
+  /** The currently-staged file for single-cardinality engines, or
+   * undefined when nothing is staged or the engine is multi-cardinality
+   * (multi engines use the StagingArea slot for file plumbing instead).
+   * Most OptionsPanels ignore this; engines that need pre-convert worker
+   * setup (e.g., pdf-edit) read it to load the file before Convert. */
+  file?: File | undefined;
 };
 
 export type StagingAreaProps<TOptions> = {

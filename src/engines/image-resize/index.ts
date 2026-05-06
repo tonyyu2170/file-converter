@@ -12,6 +12,8 @@ const engine: SingleInputEngine<ImageResizeOptions, OutputItem> = {
   outputMime: "image/png", // declarative default; actual MIME varies by input
   defaultOptions: defaultImageResizeOptions,
   category: "image",
+  library: "Canvas",
+  license: "MIT",
   cardinality: "single",
   OptionsPanel: ImageResizeOptionsPanel,
   validate(file) {

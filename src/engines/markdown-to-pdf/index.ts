@@ -12,6 +12,8 @@ const engine: SingleInputEngine<MarkdownToPdfOptions, OutputItem> = {
   outputMime: "application/pdf",
   defaultOptions: defaultMarkdownToPdfOptions,
   category: "document",
+  library: "markdown-it, pdf-lib",
+  license: "mixed",
   cardinality: "single",
   OptionsPanel: MarkdownToPdfOptionsPanel,
   validate(file) {

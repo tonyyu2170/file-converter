@@ -14,6 +14,7 @@ const TOOLS: ToolEntry[] = [
   },
   { id: "image-to-pdf", href: "/tools/image-to-pdf", label: "image→pdf", group: "IMAGES" },
   { id: "pdf-merge", href: "/tools/pdf-merge", label: "merge", group: "PDFS" },
+  { id: "pdf-edit", href: "/tools/pdf-edit", label: "edit", group: "PDFS" },
   { id: "pdf-split", href: "/tools/pdf-split", label: "split", group: "PDFS" },
   { id: "pdf-to-image", href: "/tools/pdf-to-image", label: "pdf→image", group: "PDFS" },
   { id: "pdf-to-md", href: "/tools/pdf-to-md", label: "pdf→md", group: "PDFS" },
@@ -21,9 +22,10 @@ const TOOLS: ToolEntry[] = [
   { id: "docx-to-txt", href: "/tools/docx-to-txt", label: "docx→txt", group: "DOCS" },
   { id: "markdown-to-pdf", href: "/tools/markdown-to-pdf", label: "markdown→pdf", group: "DOCS" },
   { id: "txt-to-pdf", href: "/tools/txt-to-pdf", label: "txt→pdf", group: "DOCS" },
+  { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS"] as const;
+const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "ABOUT"] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {

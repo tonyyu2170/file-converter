@@ -21,6 +21,12 @@ const TOOLS = [
     href: "/tools/pdf-merge",
   },
   {
+    id: "pdf-edit",
+    title: "edit",
+    description: "rotate, reorder, delete pages of a pdf",
+    href: "/tools/pdf-edit",
+  },
+  {
     id: "pdf-split",
     title: "split",
     description: "extract page ranges from a pdf",

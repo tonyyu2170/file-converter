@@ -12,6 +12,8 @@ const engine: SingleInputEngine<DocxToTxtOptions, OutputItem> = {
   outputMime: "text/plain",
   defaultOptions: defaultDocxToTxtOptions,
   category: "document",
+  library: "mammoth",
+  license: "BSD-3-Clause",
   cardinality: "single",
   OptionsPanel: DocxToTxtOptionsPanel,
   validate(file) {

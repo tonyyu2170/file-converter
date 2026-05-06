@@ -27,4 +27,10 @@ describe("Footer", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noreferrer");
   });
+
+  it("renders an /about link", () => {
+    render(<Footer count={0} version="v0.1.0" />);
+    const link = screen.getByRole("link", { name: /^about$/i });
+    expect(link).toHaveAttribute("href", "/about");
+  });
 });

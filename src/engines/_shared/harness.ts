@@ -86,18 +86,19 @@ export class WorkerHarness<TOptions> {
     // types via UnproxyOrClone<T>, which a generic TOptions cannot satisfy
     // without an explicit cast.
     const convertSingle = this.remote.convertSingle as unknown as SingleFn<TOptions>;
-    const buf = await file.arrayBuffer();
-    // Early exit if signal was already aborted before reaching this point.
-    if (signal.aborted) {
-      this.terminateIfEphemeral();
-      throw new DOMException("Aborted", "AbortError");
-    }
-    // Lift `reject` out of the Promise constructor so the finally block can
-    // remove it from the pendingRejecters set on every exit path
-    // (success / error / abort / dispose).
+    // Construct the abortPromise and register the rejecter eagerly — before
+    // any await — so dispose() / signal.abort() can interrupt at any point,
+    // including while file.arrayBuffer() is still pending. Lift `reject` out
+    // of the constructor so the finally block can remove it from
+    // pendingRejecters on every exit path.
     let rejectAbort!: (reason: unknown) => void;
     const abortPromise = new Promise<never>((_, reject) => {
       rejectAbort = reject;
+      if (signal.aborted) {
+        this.terminateIfEphemeral();
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
       const onAbort = () => {
         this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
@@ -105,8 +106,9 @@ export class WorkerHarness<TOptions> {
       signal.addEventListener("abort", onAbort, { once: true });
     });
     this.pendingRejecters.add(rejectAbort);
-    const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
+      const buf = await Promise.race([file.arrayBuffer(), abortPromise]);
+      const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
       const result = await Promise.race([
         convertSingle(buf, file.name, file.type, opts, proxiedOnProgress),
         abortPromise,
@@ -131,19 +133,15 @@ export class WorkerHarness<TOptions> {
     }
     // Cast to the concrete callable type — same reason as in runSingle.
     const convertMulti = this.remote.convertMulti as unknown as MultiFn<TOptions>;
-    const payload = await Promise.all(
-      files.map(async (f) => ({ bytes: await f.arrayBuffer(), name: f.name, type: f.type })),
-    );
-    // Early exit if signal was already aborted before reaching this point.
-    if (signal.aborted) {
-      this.terminateIfEphemeral();
-      throw new DOMException("Aborted", "AbortError");
-    }
-    // Lift `reject` out of the Promise constructor — see runSingle for the
-    // rationale.
+    // Eager rejecter registration — see runSingle for the rationale.
     let rejectAbort!: (reason: unknown) => void;
     const abortPromise = new Promise<never>((_, reject) => {
       rejectAbort = reject;
+      if (signal.aborted) {
+        this.terminateIfEphemeral();
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
       const onAbort = () => {
         this.terminateIfEphemeral();
         reject(new DOMException("Aborted", "AbortError"));
@@ -151,8 +149,14 @@ export class WorkerHarness<TOptions> {
       signal.addEventListener("abort", onAbort, { once: true });
     });
     this.pendingRejecters.add(rejectAbort);
-    const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
     try {
+      const payload = await Promise.race([
+        Promise.all(
+          files.map(async (f) => ({ bytes: await f.arrayBuffer(), name: f.name, type: f.type })),
+        ),
+        abortPromise,
+      ]);
+      const proxiedOnProgress = runOpts.onProgress ? Comlink.proxy(runOpts.onProgress) : undefined;
       const result = await Promise.race([
         convertMulti(payload, opts, proxiedOnProgress),
         abortPromise,

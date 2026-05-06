@@ -42,6 +42,7 @@ export function DropZone({
         onChange={(e) => handleFiles(e.target.files)}
         className="sr-only"
         disabled={disabled}
+        aria-label={prompt}
       />
       <button
         type="button"
