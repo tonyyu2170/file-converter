@@ -20,6 +20,15 @@ export type WorkerEntry<TOptions> = {
     opts: TOptions,
     onProgress?: (p: ConversionProgress) => void,
   ) => Promise<OutputItem | OutputItem[]>;
+  /** Optional: extract waveform peaks for trim-scrubber engines. The trim
+   * engines call this RPC from their OptionsPanel via WorkerHarness.runDecodePeaks
+   * so peak decoding shares the same persistent worker (and ffmpeg singleton)
+   * as the conversion that will follow. */
+  decodePeaks?: (
+    bytes: ArrayBuffer,
+    fileExtension: string,
+    bucketCount: number,
+  ) => Promise<{ min: Float32Array; max: Float32Array }>;
 };
 
 export type WorkerFactory = () => Worker;
@@ -164,6 +173,29 @@ export class WorkerHarness<TOptions> {
       return result;
     } finally {
       this.pendingRejecters.delete(rejectAbort);
+      this.terminateIfEphemeral();
+    }
+  }
+
+  async runDecodePeaks(
+    file: File,
+    bucketCount: number,
+  ): Promise<{ min: Float32Array; max: Float32Array }> {
+    this.spawn();
+    if (!this.remote?.decodePeaks) {
+      this.terminateIfEphemeral();
+      throw new Error("worker does not implement decodePeaks");
+    }
+    const decodePeaks = this.remote.decodePeaks as unknown as (
+      bytes: ArrayBuffer,
+      fileExtension: string,
+      bucketCount: number,
+    ) => Promise<{ min: Float32Array; max: Float32Array }>;
+    const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+    const bytes = await file.arrayBuffer();
+    try {
+      return await decodePeaks(bytes, ext, bucketCount);
+    } finally {
       this.terminateIfEphemeral();
     }
   }

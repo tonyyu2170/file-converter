@@ -236,6 +236,43 @@ describe("WorkerHarness persistent mode", () => {
   });
 });
 
+describe("WorkerHarness.runDecodePeaks", () => {
+  it("forwards bytes + extension + bucketCount to the worker and returns the peaks", async () => {
+    const peaks = { min: new Float32Array([-0.5, -0.3]), max: new Float32Array([0.5, 0.3]) };
+    const decodePeaks = vi.fn().mockResolvedValue(peaks);
+    vi.mocked(Comlink.wrap).mockReturnValue({ decodePeaks } as never);
+
+    const harness = new WorkerHarness<unknown>(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1, 2, 3, 4])], "song.mp3", { type: "audio/mpeg" });
+
+    const result = await harness.runDecodePeaks(file, 64);
+
+    expect(result).toEqual(peaks);
+    expect(decodePeaks).toHaveBeenCalledTimes(1);
+    const call = decodePeaks.mock.calls[0];
+    expect(call?.[1]).toBe("mp3");
+    expect(call?.[2]).toBe(64);
+    // First arg is an ArrayBuffer with the same bytes.
+    expect(new Uint8Array(call?.[0] as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+
+  it("throws an actionable error when the worker does not implement decodePeaks", async () => {
+    vi.mocked(Comlink.wrap).mockReturnValue({} as never);
+    const harness = new WorkerHarness<unknown>(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([0])], "x.wav", { type: "audio/wav" });
+    await expect(harness.runDecodePeaks(file, 32)).rejects.toThrow(/does not implement decodePeaks/);
+  });
+
+  it("lowercases the extension when reading from the file name", async () => {
+    const decodePeaks = vi.fn().mockResolvedValue({ min: new Float32Array(), max: new Float32Array() });
+    vi.mocked(Comlink.wrap).mockReturnValue({ decodePeaks } as never);
+    const harness = new WorkerHarness<unknown>(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([0])], "Tune.FLAC", { type: "audio/flac" });
+    await harness.runDecodePeaks(file, 16);
+    expect(decodePeaks.mock.calls[0]?.[1]).toBe("flac");
+  });
+});
+
 describe("WorkerHarness onProgress callback", () => {
   it("forwards worker-emitted progress events to onProgress", async () => {
     const convertSingle = vi.fn(
