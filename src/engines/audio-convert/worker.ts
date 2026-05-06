@@ -1,4 +1,3 @@
-import { fetchFile } from "@ffmpeg/util";
 import * as Comlink from "comlink";
 import { loadFfmpeg } from "@/engines/_shared/ffmpeg";
 import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
@@ -8,6 +7,13 @@ import {
   OUTPUT_MIME,
   isLossy,
 } from "./options";
+
+// Cancellation note: this worker uses the WorkerHarness in `persistent: true`
+// mode, which means in-flight ffmpeg work is NOT terminated when the user
+// aborts — the rejected host promise unblocks the UI immediately, but
+// ffmpeg keeps grinding inside the worker until the current pass finishes.
+// Audio operations are short enough that the gap is acceptable; revisit if
+// large-file workflows expose user-perceivable lag.
 
 function replaceExtension(name: string, newExt: string): string {
   const dot = name.lastIndexOf(".");
@@ -56,23 +62,29 @@ const api = {
     };
     ff.on("progress", progressHandler);
 
-    try {
-      const inExt = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? "bin").toLowerCase();
-      const inName = `in.${inExt}`;
-      const outExt = OUTPUT_EXTENSION[fmt];
-      const outName = `out.${outExt}`;
+    const inExt = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? "bin").toLowerCase();
+    const outExt = OUTPUT_EXTENSION[fmt];
+    const id = crypto.randomUUID();
+    let inName = `in_${id}.${inExt}`;
+    let outName = `out_${id}.${outExt}`;
 
-      await ff.writeFile(inName, await fetchFile(new Blob([bytes])));
+    try {
+      await ff.writeFile(inName, new Uint8Array(bytes));
 
       onProgress?.({ kind: "inference", pct: 0 });
 
       const codec = ffmpegCodec(fmt);
-      const args = ["-i", inName];
+      const args = ["-i", inName, "-vn"];
       if (isLossy(fmt)) {
         args.push("-b:a", `${opts.bitrate}k`);
       }
       args.push("-c:a", codec, outName);
-      await ff.exec(args);
+
+      // C1: check exit code — non-zero means ffmpeg failed.
+      const exitCode = await ff.exec(args);
+      if (exitCode !== 0) {
+        throw new Error(`audio-convert: ffmpeg exited with code ${exitCode}`);
+      }
 
       onProgress?.({ kind: "inference", pct: 100 });
 
@@ -81,21 +93,9 @@ const api = {
         throw new Error("audio-convert: ffmpeg returned text output unexpectedly");
       }
 
-      // Best-effort cleanup of virtual FS entries.
-      try {
-        await ff.deleteFile(inName);
-        await ff.deleteFile(outName);
-      } catch {
-        /* best-effort */
-      }
-
-      // Copy into a plain ArrayBuffer — Uint8Array<ArrayBufferLike> cannot be
-      // directly accepted by Blob when the underlying buffer is a
-      // SharedArrayBuffer (which @ffmpeg/ffmpeg may use for its virtual FS).
-      const plainBuf: ArrayBuffer = out.buffer instanceof ArrayBuffer
-        ? out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength)
-        : new Uint8Array(out).buffer;
-      const blob = new Blob([plainBuf], { type: OUTPUT_MIME[fmt] });
+      // I2: @ffmpeg/core@0.12.10 is --disable-pthreads (single-threaded UMD);
+      // SharedArrayBuffer cannot appear. Blob constructor accepts Uint8Array directly.
+      const blob = new Blob([out as Uint8Array<ArrayBuffer>], { type: OUTPUT_MIME[fmt] });
       return {
         filename: replaceExtension(name, OUTPUT_EXTENSION[fmt]),
         mime: OUTPUT_MIME[fmt],
@@ -103,6 +103,8 @@ const api = {
       };
     } finally {
       ff.off("progress", progressHandler);
+      try { await ff.deleteFile(inName); } catch { /* best-effort */ }
+      try { await ff.deleteFile(outName); } catch { /* best-effort */ }
     }
   },
 };
