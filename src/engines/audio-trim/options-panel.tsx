@@ -4,7 +4,7 @@ import { TrimScrubber } from "@/engines/_shared/trim-scrubber";
 import type { Peaks } from "@/engines/_shared/trim-scrubber/decode-peaks";
 import { readMediaDurationSec } from "@/engines/_shared/trim-scrubber/duration";
 import type { OptionsPanelProps } from "@/engines/_shared/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getAudioTrimHarness } from "./index";
 import {
   AUDIO_TRIM_BITRATE_OPTIONS,
@@ -21,10 +21,18 @@ export function AudioTrimOptionsPanel({
 }: OptionsPanelProps<AudioTrimOptions>) {
   const [durationSec, setDurationSec] = useState<number | null>(null);
 
+  // Keep refs current so the async probe callback always reads the latest
+  // `value` and `onChange` even if options changed during the probe window.
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    valueRef.current = value;
+    onChangeRef.current = onChange;
+  });
+
   // Probe duration when a file is staged. Reset selection to [0, duration].
-  // We deliberately exclude `value` and `onChange` so the probe fires once
-  // per file, not on every option change while the user drags a handle.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fire once per file, not per option change
+  // The effect only depends on `file`; stale-closure risk is eliminated by
+  // reading valueRef/onChangeRef at resolution time.
   useEffect(() => {
     let cancelled = false;
     if (!file) {
@@ -36,7 +44,7 @@ export function AudioTrimOptionsPanel({
       (d) => {
         if (cancelled) return;
         setDurationSec(d);
-        onChange({ ...value, startSec: 0, endSec: d });
+        onChangeRef.current({ ...valueRef.current, startSec: 0, endSec: d });
       },
       () => {
         if (cancelled) return;

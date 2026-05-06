@@ -22,22 +22,25 @@ vi.mock("./index", async () => {
 });
 
 describe("AudioTrimOptionsPanel", () => {
-  it("renders the format dropdown with 'same' as default", () => {
+  it("renders the format dropdown with 'same' as default", async () => {
     render(
       <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={() => {}} file={fakeFile} />,
     );
     const select = screen.getByLabelText(/output format/i) as HTMLSelectElement;
     expect(select.value).toBe("same");
+    // Flush the trailing microtask so the duration probe's setState completes inside act():
+    await waitFor(() => {});
   });
 
-  it("hides the bitrate dropdown when format is 'same'", () => {
+  it("hides the bitrate dropdown when format is 'same'", async () => {
     render(
       <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={() => {}} file={fakeFile} />,
     );
     expect(screen.queryByLabelText(/bitrate/i)).not.toBeInTheDocument();
+    await waitFor(() => {});
   });
 
-  it("hides the bitrate dropdown when format is wav (lossless)", () => {
+  it("hides the bitrate dropdown when format is wav (lossless)", async () => {
     render(
       <AudioTrimOptionsPanel
         value={{ ...defaultAudioTrimOptions, outputFormat: "wav" }}
@@ -46,9 +49,10 @@ describe("AudioTrimOptionsPanel", () => {
       />,
     );
     expect(screen.queryByLabelText(/bitrate/i)).not.toBeInTheDocument();
+    await waitFor(() => {});
   });
 
-  it("shows the bitrate dropdown when format is mp3 (lossy)", () => {
+  it("shows the bitrate dropdown when format is mp3 (lossy)", async () => {
     render(
       <AudioTrimOptionsPanel
         value={{ ...defaultAudioTrimOptions, outputFormat: "mp3" }}
@@ -57,9 +61,10 @@ describe("AudioTrimOptionsPanel", () => {
       />,
     );
     expect(screen.getByLabelText(/bitrate/i)).toBeInTheDocument();
+    await waitFor(() => {});
   });
 
-  it("calls onChange with new format when user picks one", () => {
+  it("calls onChange with new format when user picks one", async () => {
     const onChange = vi.fn();
     render(
       <AudioTrimOptionsPanel value={defaultAudioTrimOptions} onChange={onChange} file={fakeFile} />,
@@ -67,6 +72,7 @@ describe("AudioTrimOptionsPanel", () => {
     const select = screen.getByLabelText(/output format/i);
     fireEvent.change(select, { target: { value: "mp3" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ outputFormat: "mp3" }));
+    await waitFor(() => {});
   });
 
   it("on file stage, probes duration and writes endSec back into options", async () => {
