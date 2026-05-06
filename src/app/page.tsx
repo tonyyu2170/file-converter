@@ -80,6 +80,12 @@ const TOOLS = [
     description: "render text verbatim as a monospace pdf",
     href: "/tools/txt-to-pdf",
   },
+  {
+    id: "audio-convert",
+    title: "audio convert",
+    description: "mp3, wav, m4a, flac · convert between formats",
+    href: "/tools/audio-convert",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";
