@@ -21,8 +21,18 @@ export type LoaderProgress =
 
 let pipelinePromise: Promise<ImageSegmentationPipeline> | null = null;
 
-// We ship the int8 ONNX (`model_quantized.onnx`, ~6.6 MB) — the smallest
-// MODNet variant Xenova/modnet publishes. The execution device is hard-pinned
+// We ship the q8 ONNX (`model_quantized.onnx`, ~44 MB) — the int8-quantized
+// build of BRIA's RMBG-1.4 (`briaai/RMBG-1.4`). RMBG-1.4 is a general-purpose
+// dichotomous segmentation model; it replaces the prior MODNet build (~6.6 MB),
+// which was portrait-optimized and produced unusable masks on non-portrait
+// inputs. Verification: docs/superpowers/plans/phase-18-verification-log.md.
+//
+// License: bria-rmbg-1.4 (non-commercial; commercial use requires a paid
+// license from BRIA). Acceptable for this project (personal solo-user file
+// converter, no monetization). Disclosure on /about engines table is queued
+// for Phase 26 master-spec amendments.
+//
+// The execution device is hard-pinned
 // to "wasm" rather than probed for WebGPU. Reasons:
 //
 //  1. WebGPU + q8 is empirically unverified on real hardware we control.
