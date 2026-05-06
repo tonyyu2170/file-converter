@@ -6,7 +6,7 @@ describe("Home", () => {
   it("renders the status bar with version and tool count", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
-    expect(bar).toHaveTextContent("v0.1.0");
+    expect(bar).toHaveTextContent("v1.0.0");
     expect(bar).toHaveTextContent("13 TOOLS ONLINE");
   });
 

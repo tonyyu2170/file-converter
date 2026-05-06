@@ -4,13 +4,13 @@ import { Footer } from "./footer";
 
 describe("Footer", () => {
   it("renders the conversion count and version", () => {
-    render(<Footer count={3} version="v0.1.0" />);
+    render(<Footer count={3} version="v1.0.0" />);
     expect(screen.getByText(/3 conversions this session/)).toBeInTheDocument();
-    expect(screen.getByText("v0.1.0")).toBeInTheDocument();
+    expect(screen.getByText("v1.0.0")).toBeInTheDocument();
   });
 
   it("renders the akita attribution link to NVPH Studio", () => {
-    render(<Footer count={0} version="v0.1.0" />);
+    render(<Footer count={0} version="v1.0.0" />);
     const link = screen.getByRole("link", { name: /akita by NVPH Studio/i });
     expect(link).toHaveAttribute(
       "href",
@@ -21,7 +21,7 @@ describe("Footer", () => {
   });
 
   it("renders the CC BY-ND 4.0 license link", () => {
-    render(<Footer count={0} version="v0.1.0" />);
+    render(<Footer count={0} version="v1.0.0" />);
     const link = screen.getByRole("link", { name: /CC BY-ND 4\.0/i });
     expect(link).toHaveAttribute("href", "https://creativecommons.org/licenses/by-nd/4.0/");
     expect(link).toHaveAttribute("target", "_blank");
@@ -29,7 +29,7 @@ describe("Footer", () => {
   });
 
   it("renders an /about link", () => {
-    render(<Footer count={0} version="v0.1.0" />);
+    render(<Footer count={0} version="v1.0.0" />);
     const link = screen.getByRole("link", { name: /^about$/i });
     expect(link).toHaveAttribute("href", "/about");
   });

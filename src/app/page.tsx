@@ -82,7 +82,7 @@ const TOOLS = [
   },
 ] as const;
 
-const VERSION = "v0.1.0";
+const VERSION = "v1.0.0";
 
 export default function Home() {
   return (
