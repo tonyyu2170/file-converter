@@ -109,8 +109,7 @@ describe("Home", () => {
     {
       testid: "tool-card-audio-trim",
       title: "audio trim",
-      description:
-        "trim mp3 / wav / m4a / flac to a sub-range; lossless when the format is unchanged.",
+      description: "mp3, wav, m4a, flac · trim to a sub-range, lossless when format unchanged",
       href: "/tools/audio-trim",
     },
   ])(
