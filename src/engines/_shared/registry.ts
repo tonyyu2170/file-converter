@@ -15,7 +15,8 @@ export type EngineId =
   | "pdf-to-image"
   | "pdf-to-md"
   | "docx-to-pdf"
-  | "txt-to-pdf";
+  | "txt-to-pdf"
+  | "video-trim";
 
 // biome-ignore lint/suspicious/noExplicitAny: registry erases per-engine TOptions
 type AnyEngine = ConversionEngine<any, OutputItem | OutputItem[]>;
@@ -38,6 +39,7 @@ const REGISTRY: Record<EngineId, Loader> = {
   "pdf-to-md": () => import("@/engines/pdf-to-md"),
   "docx-to-pdf": () => import("@/engines/docx-to-pdf"),
   "txt-to-pdf": () => import("@/engines/txt-to-pdf"),
+  "video-trim": () => import("@/engines/video-trim"),
 };
 
 export async function loadEngine(id: EngineId): Promise<ConversionEngine> {

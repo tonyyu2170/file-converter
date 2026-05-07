@@ -30,7 +30,7 @@ export type OutputItem = {
   warnings?: string[];
 };
 
-export type EngineCategory = "image" | "pdf" | "document" | "audio";
+export type EngineCategory = "image" | "pdf" | "document" | "audio" | "video";
 
 export type EngineLicense =
   | "MIT"
