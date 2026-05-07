@@ -40,6 +40,14 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'sample-h264.mov':
   Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 64 kb/s (default)
 `;
 
+const STDERR_COVER_ART_THEN_VIDEO = `
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'music-video.mp4':
+  Duration: 00:03:14.00, start: 0.000000, bitrate: 5000 kb/s
+  Stream #0:0[0x1](und): Video: mjpeg (Baseline) (jpeg / 0x6745706A), yuvj420p(pc, bt470bg/unknown/unknown), 600x600 [SAR 72:72 DAR 1:1], 90k tbr, 90k tbn (attached pic)
+  Stream #0:1[0x2](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080, 4800 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+  Stream #0:2[0x3](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 192 kb/s (default)
+`;
+
 describe("parseProbeOutput", () => {
   it("parses H.264/AAC MP4 — codecs, dimensions, duration", () => {
     const r = parseProbeOutput(STDERR_H264_AAC_MP4);
@@ -95,5 +103,13 @@ describe("parseProbeOutput", () => {
     const r = parseProbeOutput("Duration: 01:02:03.45, start: 0");
     // 1h + 2m + 3.45s = 3600 + 120 + 3.45 = 3723.45
     expect(r.durationSec).toBeCloseTo(3723.45, 2);
+  });
+
+  it("skips cover-art (attached pic) video streams", () => {
+    const r = parseProbeOutput(STDERR_COVER_ART_THEN_VIDEO);
+    expect(r.videoCodec).toBe("h264");
+    expect(r.width).toBe(1920);
+    expect(r.height).toBe(1080);
+    expect(r.audioCodec).toBe("aac");
   });
 });

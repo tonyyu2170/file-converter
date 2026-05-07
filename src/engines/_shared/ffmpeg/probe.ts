@@ -41,11 +41,19 @@ export function parseProbeOutput(text: string): ProbeResult {
   let videoCodec: string | null = null;
   let width = 0;
   let height = 0;
-  const vm = text.match(VIDEO_STREAM_RE);
-  if (vm?.[1] && vm[2] && vm[3]) {
-    videoCodec = vm[1].toLowerCase();
-    width = Number(vm[2]);
-    height = Number(vm[3]);
+  // Scan line-by-line so we can check the full line for "(attached pic)"
+  // before matching dimensions. Cover-art streams (iTunes MP4s, music
+  // videos with embedded thumbnails) emit a mjpeg/jpeg stream first and
+  // would preempt the real video stream if we used text.match() directly.
+  for (const line of text.split("\n")) {
+    if (/\battached pic\b/i.test(line)) continue;
+    const vm = line.match(VIDEO_STREAM_RE);
+    if (vm?.[1] && vm[2] && vm[3]) {
+      videoCodec = vm[1].toLowerCase();
+      width = Number(vm[2]);
+      height = Number(vm[3]);
+      break;
+    }
   }
 
   let audioCodec: string | null = null;
@@ -87,11 +95,12 @@ export async function probeWithFfmpeg(
 
   try {
     await ff.writeFile(inName, new Uint8Array(fileBytes));
-    // ffmpeg with no output spec exits 1 and prints the stream info on
-    // stderr — that's the whole probe.
-    await ff.exec(["-i", inName]).catch(() => {
-      /* exit code 1 expected */
-    });
+    // `ffmpeg -i <input>` with no output spec resolves with exit code 1
+    // and prints stream info on stderr — we ignore the exit code; only
+    // the captured log lines matter. ff.exec resolves with the exit code
+    // (it does not reject on non-zero — verified against the other
+    // engine workers).
+    await ff.exec(["-i", inName]);
   } finally {
     ff.off("log", onLog);
     try {
