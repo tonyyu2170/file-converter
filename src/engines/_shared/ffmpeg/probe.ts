@@ -94,7 +94,13 @@ export async function probeWithFfmpeg(
   ff.on("log", onLog);
 
   try {
-    await ff.writeFile(inName, new Uint8Array(fileBytes));
+    // .slice(0) clones the ArrayBuffer before wrapping it in Uint8Array.
+    // ffmpeg.wasm's writeFile() transfers the underlying buffer to its inner
+    // worker (detaching it on the caller's side). Without the clone, any
+    // caller that later tries to use `fileBytes` (e.g. video-extract-audio's
+    // convertSingle probing first then writing the same bytes) would throw
+    // "Cannot perform Construct on a detached ArrayBuffer".
+    await ff.writeFile(inName, new Uint8Array(fileBytes.slice(0)));
     // `ffmpeg -i <input>` with no output spec resolves with exit code 1
     // and prints stream info on stderr — we ignore the exit code; only
     // the captured log lines matter. ff.exec resolves with the exit code
