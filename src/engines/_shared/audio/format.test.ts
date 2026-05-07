@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIO_BITRATE_OPTIONS,
   AUDIO_FORMAT_LOSSY,
-  isLossy,
   OUTPUT_EXTENSION,
   OUTPUT_MIME,
+  isLossy,
 } from "./format";
 
 describe("_shared/audio/format", () => {

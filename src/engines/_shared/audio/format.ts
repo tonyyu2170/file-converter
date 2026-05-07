@@ -28,9 +28,7 @@ export const AUDIO_FORMAT_LOSSY: Record<AudioFormat, boolean> = {
   flac: false,
 };
 
-export const AUDIO_BITRATE_OPTIONS: ReadonlyArray<AudioBitrate> = [
-  64, 128, 192, 256, 320,
-];
+export const AUDIO_BITRATE_OPTIONS: ReadonlyArray<AudioBitrate> = [64, 128, 192, 256, 320];
 
 export function isLossy(fmt: AudioFormat): boolean {
   return AUDIO_FORMAT_LOSSY[fmt];
