@@ -64,7 +64,13 @@ export async function extractFrameStripInWorker(args: FrameStripArgs): Promise<F
   const id = crypto.randomUUID();
   const inName = `strip_${id}${ext}`;
   const outPattern = `frame_${id}_%03d.jpg`;
-  const outFiles: string[] = [];
+  // Pre-build the full output filename list so MEMFS cleanup in the
+  // finally catches every frame ffmpeg may have written, even if a
+  // later readFile rejects mid-loop.
+  const outFiles = Array.from(
+    { length: count },
+    (_, i) => `frame_${id}_${String(i + 1).padStart(3, "0")}.jpg`,
+  );
 
   try {
     await ff.writeFile(inName, new Uint8Array(fileBytes));
@@ -85,10 +91,18 @@ export async function extractFrameStripInWorker(args: FrameStripArgs): Promise<F
     }
 
     const frames: Uint8Array[] = [];
-    for (let i = 1; i <= count; i++) {
-      const name = `frame_${id}_${String(i).padStart(3, "0")}.jpg`;
-      outFiles.push(name);
-      const data = await ff.readFile(name);
+    for (let i = 0; i < outFiles.length; i++) {
+      const name = outFiles[i] as string;
+      // Diagnostic wrap: a missing frame here usually means ffmpeg succeeded
+      // but produced fewer frames than requested (input shorter than the
+      // declared durationSec, or fps math rounded down).
+      const data = await ff.readFile(name).catch((cause) => {
+        throw new Error(
+          `frame-strip: expected ${count} frames; failed to read frame ${i + 1} ` +
+            `(input may be shorter than durationSec=${durationSec})`,
+          { cause },
+        );
+      });
       if (typeof data === "string") {
         throw new Error(`frame-strip: ffmpeg returned text for ${name}`);
       }
