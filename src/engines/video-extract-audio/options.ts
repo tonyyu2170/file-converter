@@ -48,5 +48,8 @@ export const SAME_OUTPUT_FALLBACK = { ext: "mka", mime: "audio/x-matroska" };
 
 export function sameOutputFor(codec: string | null): { ext: string; mime: string } {
   if (!codec) return SAME_OUTPUT_FALLBACK;
+  // PCM family always fits WAV — match ffmpeg's pcm_* codec naming
+  // (pcm_s16le / s24le / s32le / s16be / f32le / u8 / alaw / mulaw / ...).
+  if (codec.startsWith("pcm_")) return { ext: "wav", mime: "audio/wav" };
   return SAME_OUTPUT_FOR_CODEC[codec] ?? SAME_OUTPUT_FALLBACK;
 }

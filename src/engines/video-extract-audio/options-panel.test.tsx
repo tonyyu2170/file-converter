@@ -1,8 +1,23 @@
 // src/engines/video-extract-audio/options-panel.test.tsx
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultVideoExtractAudioOptions } from "./options";
 import { VideoExtractAudioOptionsPanel } from "./options-panel";
+
+const { runProbeMock } = vi.hoisted(() => ({
+  runProbeMock: vi.fn(),
+}));
+
+vi.mock("./index", () => ({
+  getVideoExtractAudioHarness: () => ({
+    runProbe: runProbeMock,
+  }),
+}));
+
+beforeEach(() => {
+  runProbeMock.mockReset();
+  runProbeMock.mockResolvedValue({ hasAudio: true });
+});
 
 describe("VideoExtractAudioOptionsPanel", () => {
   it("renders the format select with five options", () => {
@@ -65,5 +80,24 @@ describe("VideoExtractAudioOptionsPanel", () => {
       />,
     );
     expect(screen.queryByTestId("video-extract-audio-bitrate")).toBeNull();
+  });
+
+  it("shows the no-audio banner and disables selects when probe reports hasAudio=false", async () => {
+    runProbeMock.mockResolvedValueOnce({ hasAudio: false });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+    render(
+      <VideoExtractAudioOptionsPanel
+        value={{ ...defaultVideoExtractAudioOptions, outputFormat: "mp3" }}
+        onChange={() => {}}
+        file={file}
+      />,
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("video-extract-audio-no-audio-banner"),
+      ).toBeInTheDocument();
+    });
+    const formatSelect = screen.getByTestId("video-extract-audio-format") as HTMLSelectElement;
+    expect(formatSelect.disabled).toBe(true);
   });
 });

@@ -31,7 +31,15 @@ describe("video-extract-audio options", () => {
     expect(sameOutputFor("opus")).toEqual({ ext: "opus", mime: "audio/ogg" });
     expect(sameOutputFor("vorbis")).toEqual({ ext: "ogg", mime: "audio/ogg" });
     expect(sameOutputFor("flac")).toEqual({ ext: "flac", mime: "audio/flac" });
+  });
+
+  it("sameOutputFor maps any PCM family codec to .wav", () => {
     expect(sameOutputFor("pcm_s16le")).toEqual({ ext: "wav", mime: "audio/wav" });
+    expect(sameOutputFor("pcm_s24le")).toEqual({ ext: "wav", mime: "audio/wav" });
+    expect(sameOutputFor("pcm_s32le")).toEqual({ ext: "wav", mime: "audio/wav" });
+    expect(sameOutputFor("pcm_alaw")).toEqual({ ext: "wav", mime: "audio/wav" });
+    expect(sameOutputFor("pcm_mulaw")).toEqual({ ext: "wav", mime: "audio/wav" });
+    expect(sameOutputFor("pcm_u8")).toEqual({ ext: "wav", mime: "audio/wav" });
   });
 
   it("sameOutputFor falls back to mka for unknown codecs and null", () => {
