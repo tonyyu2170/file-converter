@@ -13,11 +13,19 @@ export type TrimScrubberProps = {
   disabled?: boolean;
   /** Optional injection point for tests; production callers pass a function
    * backed by WorkerHarness.runDecodePeaks. When omitted, the component
-   * renders the flat hairline state and never decodes peaks. */
+   * renders the flat hairline state and never decodes peaks.
+   *
+   * IMPORTANT: pass a stable reference (module-scoped, useCallback, or
+   * similar). The effect re-fires when this reference changes, which on
+   * an unstable inline function would re-decode peaks every render. */
   decodePeaks?: (file: File, bucketCount: number) => Promise<Peaks>;
   /** Video: optional injection point. Production callers pass a function
    *  backed by WorkerHarness.runExtractFrameStrip. When omitted (or while
-   *  the promise is pending), a 60px-tall skeleton placeholder renders. */
+   *  the promise is pending), a 60px-tall skeleton placeholder renders.
+   *
+   *  IMPORTANT: pass a stable reference (module-scoped, useCallback, or
+   *  similar). The effect re-fires when this reference changes, which on
+   *  an unstable inline function would re-extract frames every render. */
   extractFrames?: (
     file: File,
     count: number,
@@ -111,12 +119,16 @@ export function TrimScrubber({
     }
   }, [peaks, modality]);
 
+  // useEffect (not useLayoutEffect) is intentional: the skeleton placeholder
+  // fills the strip's width before extraction completes, so reading
+  // getBoundingClientRect post-paint causes no visible layout shift.
   // Extract frame strip for video modality.
   useEffect(() => {
     if (modality !== "video") return;
     if (!extractFrames) return;
     const containerWidth = stripContainerRef.current?.getBoundingClientRect().width ?? 0;
     if (containerWidth <= 0) return;
+    setStripUrls(null);
     const count = Math.max(
       FRAME_COUNT_MIN,
       Math.min(FRAME_COUNT_MAX, Math.floor(containerWidth / SLOT_WIDTH)),

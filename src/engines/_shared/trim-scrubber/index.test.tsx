@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrimScrubber } from "./index";
 
@@ -222,5 +222,74 @@ describe('TrimScrubber modality:"video"', () => {
     expect(revoke).toHaveBeenCalledWith("blob:fake-1");
     expect(revoke).toHaveBeenCalledWith("blob:fake-2");
     revoke.mockRestore();
+  });
+
+  it("revokes object URLs when extractFrames resolves after unmount", async () => {
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+    let resolveExtract!: (v: { urls: string[]; widthPx: number }) => void;
+    const extractFrames = vi.fn(
+      () =>
+        new Promise<{ urls: string[]; widthPx: number }>((r) => {
+          resolveExtract = r;
+        }),
+    );
+    Element.prototype.getBoundingClientRect = vi.fn(
+      () => ({ width: 800, height: 60, top: 0, left: 0, bottom: 60, right: 800 }) as DOMRect,
+    );
+
+    const { unmount } = render(
+      <TrimScrubber
+        source={file}
+        modality="video"
+        durationSec={5}
+        startSec={0}
+        endSec={5}
+        onChange={() => {}}
+        extractFrames={extractFrames}
+      />,
+    );
+
+    // Unmount BEFORE extractFrames resolves.
+    unmount();
+    // Now resolve. The cancellation branch should revoke each URL.
+    await act(async () => {
+      resolveExtract({ urls: ["blob:late-1", "blob:late-2"], widthPx: 107 });
+      // Flush microtasks so the .then handler runs.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(revoke).toHaveBeenCalledWith("blob:late-1");
+    expect(revoke).toHaveBeenCalledWith("blob:late-2");
+    revoke.mockRestore();
+  });
+
+  it("keeps the skeleton (stripUrls=null) when extractFrames rejects", async () => {
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+    const extractFrames = vi.fn().mockRejectedValue(new Error("boom"));
+    Element.prototype.getBoundingClientRect = vi.fn(
+      () => ({ width: 800, height: 60, top: 0, left: 0, bottom: 60, right: 800 }) as DOMRect,
+    );
+
+    render(
+      <TrimScrubber
+        source={file}
+        modality="video"
+        durationSec={5}
+        startSec={0}
+        endSec={5}
+        onChange={() => {}}
+        extractFrames={extractFrames}
+      />,
+    );
+
+    // Wait for the rejection branch to settle.
+    await waitFor(() => {
+      expect(extractFrames).toHaveBeenCalled();
+    });
+    // Strip remains in skeleton state — zero <img> children.
+    const strip = screen.getByTestId("trim-scrubber-frame-strip");
+    expect(strip.querySelectorAll("img").length).toBe(0);
   });
 });
