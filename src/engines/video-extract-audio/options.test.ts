@@ -1,11 +1,11 @@
 // src/engines/video-extract-audio/options.test.ts
 import { describe, expect, it } from "vitest";
 import {
+  SAME_OUTPUT_FALLBACK,
+  VIDEO_EXTRACT_AUDIO_FORMATS,
   defaultVideoExtractAudioOptions,
   isLossy,
   sameOutputFor,
-  SAME_OUTPUT_FALLBACK,
-  VIDEO_EXTRACT_AUDIO_FORMATS,
 } from "./options";
 
 describe("video-extract-audio options", () => {

@@ -4,11 +4,11 @@ import { probeWithFfmpeg } from "@/engines/_shared/ffmpeg/probe";
 import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
 import {
-  isLossy,
   OUTPUT_EXTENSION,
   OUTPUT_MIME,
-  sameOutputFor,
   type VideoExtractAudioOptions,
+  isLossy,
+  sameOutputFor,
 } from "./options";
 
 function ffmpegCodec(fmt: "mp3" | "wav" | "m4a" | "flac"): string {

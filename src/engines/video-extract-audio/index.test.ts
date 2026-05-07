@@ -13,9 +13,7 @@ describe("video-extract-audio engine descriptor", () => {
   });
 
   it("accepts mp4, mov, webm, mkv extensions", () => {
-    expect(engine.inputAccept).toEqual(
-      expect.arrayContaining([".mp4", ".mov", ".webm", ".mkv"]),
-    );
+    expect(engine.inputAccept).toEqual(expect.arrayContaining([".mp4", ".mov", ".webm", ".mkv"]));
   });
 
   it("validate accepts a 1 MB mp4 by MIME", () => {

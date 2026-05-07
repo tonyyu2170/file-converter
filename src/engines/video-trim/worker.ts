@@ -5,10 +5,10 @@ import { extractFrameStripInWorker } from "@/engines/_shared/trim-scrubber/frame
 import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
 import {
+  type VideoTrimOptions,
   containerSupportsCodecs,
   outputExtensionFor,
   outputMimeFor,
-  type VideoTrimOptions,
 } from "./options";
 
 function replaceExtension(name: string, newExt: string): string {
@@ -44,13 +44,7 @@ const api = {
     // stale option value (or a programmatic caller) could slip through.
     if (opts.containerFormat !== "same") {
       const probe = await probeWithFfmpeg(ff, bytes, `.${inExt}`);
-      if (
-        !containerSupportsCodecs(
-          opts.containerFormat,
-          probe.videoCodec,
-          probe.audioCodec,
-        )
-      ) {
+      if (!containerSupportsCodecs(opts.containerFormat, probe.videoCodec, probe.audioCodec)) {
         throw new Error(
           `Can't trim into ${opts.containerFormat.toUpperCase()}: ` +
             `this video uses ${probe.videoCodec ?? "an unknown video codec"}` +
@@ -60,9 +54,7 @@ const api = {
       }
     }
 
-    const progressHandler = ({
-      progress,
-    }: { progress: number; time: number }) => {
+    const progressHandler = ({ progress }: { progress: number; time: number }) => {
       onProgress?.({
         kind: "inference",
         pct: Math.max(0, Math.min(100, progress * 100)),

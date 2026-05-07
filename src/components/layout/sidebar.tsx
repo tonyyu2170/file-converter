@@ -24,10 +24,17 @@ const TOOLS: ToolEntry[] = [
   { id: "txt-to-pdf", href: "/tools/txt-to-pdf", label: "txt→pdf", group: "DOCS" },
   { id: "audio-convert", href: "/tools/audio-convert", label: "audio convert", group: "AUDIO" },
   { id: "audio-trim", href: "/tools/audio-trim", label: "audio trim", group: "AUDIO" },
+  { id: "video-trim", href: "/tools/video-trim", label: "video trim", group: "VIDEO" },
+  {
+    id: "video-extract-audio",
+    href: "/tools/video-extract-audio",
+    label: "video → audio",
+    group: "VIDEO",
+  },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "AUDIO", "ABOUT"] as const;
+const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "AUDIO", "VIDEO", "ABOUT"] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {

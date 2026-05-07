@@ -6,10 +6,10 @@ import type { OptionsPanelProps } from "@/engines/_shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVideoTrimHarness } from "./index";
 import {
-  containerSupportsCodecs,
   VIDEO_TRIM_CONTAINERS,
   type VideoTrimContainer,
   type VideoTrimOptions,
+  containerSupportsCodecs,
 } from "./options";
 
 type ProbeState =
@@ -127,9 +127,7 @@ export function VideoTrimOptionsPanel({
                 if (!allowed) {
                   title =
                     `${fmt.toUpperCase()} can't hold ${probeState.videoCodec ?? "this video's codec"}` +
-                    (probeState.audioCodec
-                      ? ` / ${probeState.audioCodec}`
-                      : "");
+                    (probeState.audioCodec ? ` / ${probeState.audioCodec}` : "");
                 }
               } else {
                 // idle, pending, or failed — only "same" allowed (fail-soft).
@@ -144,9 +142,7 @@ export function VideoTrimOptionsPanel({
           </select>
         </label>
         {probeState.kind === "pending" && (
-          <span className="text-[var(--color-fg-very-muted)]">
-            detecting codecs…
-          </span>
+          <span className="text-[var(--color-fg-very-muted)]">detecting codecs…</span>
         )}
         {probeState.kind === "failed" && (
           <span className="text-[var(--color-fg-very-muted)]">
@@ -162,9 +158,7 @@ export function VideoTrimOptionsPanel({
           durationSec={durationSec}
           startSec={value.startSec}
           endSec={value.endSec}
-          onChange={(start, end) =>
-            onChange({ ...value, startSec: start, endSec: end })
-          }
+          onChange={(start, end) => onChange({ ...value, startSec: start, endSec: end })}
           extractFrames={extractFramesThroughHarness}
         />
       )}

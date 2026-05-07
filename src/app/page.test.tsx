@@ -7,7 +7,7 @@ describe("Home", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
     expect(bar).toHaveTextContent("v1.0.0");
-    expect(bar).toHaveTextContent("15 TOOLS ONLINE");
+    expect(bar).toHaveTextContent("17 TOOLS ONLINE");
   });
 
   it("renders the hero headline as four colored spans", () => {
@@ -112,6 +112,18 @@ describe("Home", () => {
       description: "mp3, wav, m4a, flac · trim to a sub-range, lossless when format unchanged",
       href: "/tools/audio-trim",
     },
+    {
+      testid: "tool-card-video-trim",
+      title: "video trim",
+      description: "mp4, mov, webm, mkv · trim to a sub-range, lossless via -c copy",
+      href: "/tools/video-trim",
+    },
+    {
+      testid: "tool-card-video-extract-audio",
+      title: "video → audio",
+      description: "mp4, mov, webm, mkv · pull the audio track, lossless when possible",
+      href: "/tools/video-extract-audio",
+    },
   ])(
     "renders tool card $testid with title, description, and href",
     ({ testid, title, description, href }) => {
@@ -123,10 +135,10 @@ describe("Home", () => {
     },
   );
 
-  it("renders exactly 15 tool cards", () => {
+  it("renders exactly 17 tool cards", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
-    expect(cards).toHaveLength(15);
+    expect(cards).toHaveLength(17);
   });
 
   it("renders the pet panel inside the hero", () => {

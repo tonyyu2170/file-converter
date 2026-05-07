@@ -1,11 +1,11 @@
 // src/engines/video-extract-audio/options.ts
 import {
   AUDIO_BITRATE_OPTIONS,
-  isLossy,
-  OUTPUT_EXTENSION,
-  OUTPUT_MIME,
   type AudioBitrate,
   type AudioFormat,
+  OUTPUT_EXTENSION,
+  OUTPUT_MIME,
+  isLossy,
 } from "@/engines/_shared/audio/format";
 
 export type VideoExtractAudioFormat = "same" | AudioFormat;

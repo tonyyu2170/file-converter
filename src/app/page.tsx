@@ -92,6 +92,18 @@ const TOOLS = [
     description: "mp3, wav, m4a, flac · trim to a sub-range, lossless when format unchanged",
     href: "/tools/audio-trim",
   },
+  {
+    id: "video-trim",
+    title: "video trim",
+    description: "mp4, mov, webm, mkv · trim to a sub-range, lossless via -c copy",
+    href: "/tools/video-trim",
+  },
+  {
+    id: "video-extract-audio",
+    title: "video → audio",
+    description: "mp4, mov, webm, mkv · pull the audio track, lossless when possible",
+    href: "/tools/video-extract-audio",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

@@ -1,18 +1,10 @@
 // src/engines/video-extract-audio/index.ts
 import { WorkerHarness } from "@/engines/_shared/harness";
 import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
-import {
-  defaultVideoExtractAudioOptions,
-  type VideoExtractAudioOptions,
-} from "./options";
+import { type VideoExtractAudioOptions, defaultVideoExtractAudioOptions } from "./options";
 import { VideoExtractAudioOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = [
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "video/x-matroska",
-];
+const SUPPORTED_INPUT_MIMES = ["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"];
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 let harness: WorkerHarness<VideoExtractAudioOptions> | null = null;

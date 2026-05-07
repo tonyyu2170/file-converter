@@ -1,11 +1,11 @@
 // src/engines/video-trim/options.test.ts
 import { describe, expect, it } from "vitest";
 import {
+  VIDEO_TRIM_CONTAINERS,
   containerSupportsCodecs,
   defaultVideoTrimOptions,
   outputExtensionFor,
   outputMimeFor,
-  VIDEO_TRIM_CONTAINERS,
 } from "./options";
 
 describe("video-trim options", () => {

@@ -93,9 +93,7 @@ describe("VideoExtractAudioOptionsPanel", () => {
       />,
     );
     await waitFor(() => {
-      expect(
-        screen.getByTestId("video-extract-audio-no-audio-banner"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("video-extract-audio-no-audio-banner")).toBeInTheDocument();
     });
     const formatSelect = screen.getByTestId("video-extract-audio-format") as HTMLSelectElement;
     expect(formatSelect.disabled).toBe(true);

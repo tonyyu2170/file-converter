@@ -5,10 +5,10 @@ import { useEffect, useState } from "react";
 import { getVideoExtractAudioHarness } from "./index";
 import {
   AUDIO_BITRATE_OPTIONS,
-  isLossy,
+  VIDEO_EXTRACT_AUDIO_FORMATS,
   type VideoExtractAudioFormat,
   type VideoExtractAudioOptions,
-  VIDEO_EXTRACT_AUDIO_FORMATS,
+  isLossy,
 } from "./options";
 
 type ProbeState =
@@ -47,8 +47,7 @@ export function VideoExtractAudioOptionsPanel({
     };
   }, [file]);
 
-  const showBitrate =
-    value.outputFormat !== "same" && isLossy(value.outputFormat);
+  const showBitrate = value.outputFormat !== "same" && isLossy(value.outputFormat);
 
   const noAudio = probeState.kind === "ready" && !probeState.hasAudio;
 

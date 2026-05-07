@@ -4,12 +4,7 @@ import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type VideoTrimOptions, defaultVideoTrimOptions } from "./options";
 import { VideoTrimOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = [
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "video/x-matroska",
-];
+const SUPPORTED_INPUT_MIMES = ["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"];
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 const MIN_TRIM_SEC = 0.1;
 
@@ -20,8 +15,7 @@ let harness: WorkerHarness<VideoTrimOptions> | null = null;
 export function getVideoTrimHarness(): WorkerHarness<VideoTrimOptions> {
   if (!harness) {
     harness = new WorkerHarness<VideoTrimOptions>(
-      () =>
-        new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
+      () => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }),
       { persistent: true },
     );
   }
@@ -65,12 +59,7 @@ const engine: SingleInputEngine<VideoTrimOptions, OutputItem> = {
     return { ok: true };
   },
   async convert(file, opts, signal, runOpts) {
-    const result = await getVideoTrimHarness().runSingle(
-      file,
-      opts,
-      signal,
-      runOpts,
-    );
+    const result = await getVideoTrimHarness().runSingle(file, opts, signal, runOpts);
     if (Array.isArray(result)) {
       const first = result[0];
       if (!first) throw new Error("video-trim: engine returned empty array");

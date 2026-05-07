@@ -40,16 +40,10 @@ describe("VideoTrimOptionsPanel", () => {
       type: "video/webm",
     });
     render(
-      <VideoTrimOptionsPanel
-        value={defaultVideoTrimOptions}
-        onChange={() => {}}
-        file={file}
-      />,
+      <VideoTrimOptionsPanel value={defaultVideoTrimOptions} onChange={() => {}} file={file} />,
     );
     const select = await screen.findByTestId("video-trim-container");
-    const options = Array.from(select.querySelectorAll("option")).map(
-      (o) => o.value,
-    );
+    const options = Array.from(select.querySelectorAll("option")).map((o) => o.value);
     expect(options).toEqual(["same", "mp4", "webm", "mkv"]);
   });
 
@@ -58,28 +52,16 @@ describe("VideoTrimOptionsPanel", () => {
       type: "video/webm",
     });
     render(
-      <VideoTrimOptionsPanel
-        value={defaultVideoTrimOptions}
-        onChange={() => {}}
-        file={file}
-      />,
+      <VideoTrimOptionsPanel value={defaultVideoTrimOptions} onChange={() => {}} file={file} />,
     );
     const select = await screen.findByTestId("video-trim-container");
     await waitFor(() => {
-      const mp4 = select.querySelector(
-        'option[value="mp4"]',
-      ) as HTMLOptionElement;
+      const mp4 = select.querySelector('option[value="mp4"]') as HTMLOptionElement;
       expect(mp4.disabled).toBe(true);
     });
-    const same = select.querySelector(
-      'option[value="same"]',
-    ) as HTMLOptionElement;
-    const mkv = select.querySelector(
-      'option[value="mkv"]',
-    ) as HTMLOptionElement;
-    const webm = select.querySelector(
-      'option[value="webm"]',
-    ) as HTMLOptionElement;
+    const same = select.querySelector('option[value="same"]') as HTMLOptionElement;
+    const mkv = select.querySelector('option[value="mkv"]') as HTMLOptionElement;
+    const webm = select.querySelector('option[value="webm"]') as HTMLOptionElement;
     expect(same.disabled).toBe(false);
     expect(mkv.disabled).toBe(false);
     expect(webm.disabled).toBe(false);
@@ -91,32 +73,18 @@ describe("VideoTrimOptionsPanel", () => {
       type: "video/x-matroska",
     });
     render(
-      <VideoTrimOptionsPanel
-        value={defaultVideoTrimOptions}
-        onChange={() => {}}
-        file={file}
-      />,
+      <VideoTrimOptionsPanel value={defaultVideoTrimOptions} onChange={() => {}} file={file} />,
     );
     // Wait for the failure hint to appear.
     await waitFor(() => {
-      expect(
-        screen.getByText(/couldn't read codecs — only "same" available/i),
-      ).toBeTruthy();
+      expect(screen.getByText(/couldn't read codecs — only "same" available/i)).toBeTruthy();
     });
     // All non-"same" options must be disabled in the fail-soft state.
     const select = screen.getByTestId("video-trim-container");
-    const mp4 = select.querySelector(
-      'option[value="mp4"]',
-    ) as HTMLOptionElement;
-    const webm = select.querySelector(
-      'option[value="webm"]',
-    ) as HTMLOptionElement;
-    const mkv = select.querySelector(
-      'option[value="mkv"]',
-    ) as HTMLOptionElement;
-    const same = select.querySelector(
-      'option[value="same"]',
-    ) as HTMLOptionElement;
+    const mp4 = select.querySelector('option[value="mp4"]') as HTMLOptionElement;
+    const webm = select.querySelector('option[value="webm"]') as HTMLOptionElement;
+    const mkv = select.querySelector('option[value="mkv"]') as HTMLOptionElement;
+    const same = select.querySelector('option[value="same"]') as HTMLOptionElement;
     expect(mp4.disabled).toBe(true);
     expect(webm.disabled).toBe(true);
     expect(mkv.disabled).toBe(true);
