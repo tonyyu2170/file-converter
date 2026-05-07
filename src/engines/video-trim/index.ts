@@ -48,7 +48,7 @@ const engine: SingleInputEngine<VideoTrimOptions, OutputItem> = {
     opts.endSec > opts.startSec &&
     opts.endSec - opts.startSec >= MIN_TRIM_SEC,
   OptionsPanel: VideoTrimOptionsPanel,
-  validate(file, _opts) {
+  validate(file) {
     const mimeOk = SUPPORTED_INPUT_MIMES.includes(file.type);
     const extOk = /\.(mp4|mov|webm|mkv)$/i.test(file.name);
     if (!mimeOk && !extOk) {

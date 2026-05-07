@@ -12,10 +12,11 @@ import {
   type VideoTrimOptions,
 } from "./options";
 
-type ProbeShape = {
-  videoCodec: string | null;
-  audioCodec: string | null;
-};
+type ProbeState =
+  | { kind: "idle" }
+  | { kind: "pending" }
+  | { kind: "ready"; videoCodec: string | null; audioCodec: string | null }
+  | { kind: "failed" };
 
 export function VideoTrimOptionsPanel({
   value,
@@ -23,7 +24,7 @@ export function VideoTrimOptionsPanel({
   file,
 }: OptionsPanelProps<VideoTrimOptions>) {
   const [durationSec, setDurationSec] = useState<number | null>(null);
-  const [probe, setProbe] = useState<ProbeShape | null>(null);
+  const [probeState, setProbeState] = useState<ProbeState>({ kind: "idle" });
 
   // Keep refs current so async callbacks always read the latest value/onChange
   // even if options changed during the probe window.
@@ -61,19 +62,23 @@ export function VideoTrimOptionsPanel({
   useEffect(() => {
     let cancelled = false;
     if (!file) {
-      setProbe(null);
+      setProbeState({ kind: "idle" });
       return;
     }
-    setProbe(null);
+    setProbeState({ kind: "pending" });
     getVideoTrimHarness()
       .runProbe(file)
       .then(
         (p) => {
           if (cancelled) return;
-          setProbe({ videoCodec: p.videoCodec, audioCodec: p.audioCodec });
+          setProbeState({
+            kind: "ready",
+            videoCodec: p.videoCodec,
+            audioCodec: p.audioCodec,
+          });
         },
         () => {
-          if (!cancelled) setProbe(null);
+          if (!cancelled) setProbeState({ kind: "failed" });
         },
       );
     return () => {
@@ -111,19 +116,25 @@ export function VideoTrimOptionsPanel({
             className="border border-[var(--color-hairline)] bg-[var(--color-bg)] px-2 py-1 text-[var(--color-fg-strong)] uppercase"
           >
             {VIDEO_TRIM_CONTAINERS.map((fmt) => {
-              const allowed =
-                probe === null
-                  ? fmt === "same"
-                  : containerSupportsCodecs(
-                      fmt,
-                      probe.videoCodec,
-                      probe.audioCodec,
-                    );
-              const title =
-                probe !== null && !allowed
-                  ? `${fmt.toUpperCase()} can't hold ${probe.videoCodec ?? "this video's codec"}` +
-                    (probe.audioCodec ? ` / ${probe.audioCodec}` : "")
-                  : undefined;
+              let allowed: boolean;
+              let title: string | undefined;
+              if (probeState.kind === "ready") {
+                allowed = containerSupportsCodecs(
+                  fmt,
+                  probeState.videoCodec,
+                  probeState.audioCodec,
+                );
+                if (!allowed) {
+                  title =
+                    `${fmt.toUpperCase()} can't hold ${probeState.videoCodec ?? "this video's codec"}` +
+                    (probeState.audioCodec
+                      ? ` / ${probeState.audioCodec}`
+                      : "");
+                }
+              } else {
+                // idle, pending, or failed — only "same" allowed (fail-soft).
+                allowed = fmt === "same";
+              }
               return (
                 <option key={fmt} value={fmt} disabled={!allowed} title={title}>
                   {fmt}
@@ -132,9 +143,14 @@ export function VideoTrimOptionsPanel({
             })}
           </select>
         </label>
-        {probe === null && (
+        {probeState.kind === "pending" && (
           <span className="text-[var(--color-fg-very-muted)]">
             detecting codecs…
+          </span>
+        )}
+        {probeState.kind === "failed" && (
+          <span className="text-[var(--color-fg-very-muted)]">
+            couldn't read codecs — only "same" available
           </span>
         )}
       </div>
