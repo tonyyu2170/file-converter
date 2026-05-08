@@ -54,16 +54,22 @@ describe("loadTesseract singleton", () => {
 });
 
 describe("loadTesseract createWorker call shape", () => {
-  it("passes lang='eng', OEM=1 (LSTM_ONLY), and same-origin paths", async () => {
+  it("passes lang='eng', OEM=1 (LSTM_ONLY), and same-origin absolute paths", async () => {
     await loadTesseract();
     expect(createWorker).toHaveBeenCalledTimes(1);
+    // Paths must be absolute URLs (origin-prefixed) so that importScripts()
+    // resolves correctly when Tesseract's blob-worker calls importScripts
+    // (blob: URLs have no base origin to resolve root-relative paths against).
+    // corePath explicitly names the simd-lstm variant to bypass getCore.js's
+    // WASM-feature-detect heuristic (which selects relaxedsimd-lstm but that
+    // binary contains x86 SSE code that crashes on ARM).
     expect(createWorker).toHaveBeenCalledWith(
       "eng",
       1, // OEM.LSTM_ONLY
       expect.objectContaining({
-        langPath: "/tesseract/",
-        corePath: "/tesseract/",
-        workerPath: "/tesseract/worker.min.js",
+        langPath: expect.stringContaining("/tesseract/"),
+        corePath: expect.stringContaining("/tesseract/tesseract-core-simd-lstm.wasm.js"),
+        workerPath: expect.stringContaining("/tesseract/worker.min.js"),
       }),
     );
   });

@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const NEXT_DIR = path.join(ROOT, ".next");
+const OUT_DIR = path.join(ROOT, "out");
 const ENGINES_DIR = path.join(ROOT, "src", "engines");
 
 // ── Pre-flight checks ──────────────────────────────────────────────────────
@@ -168,4 +169,84 @@ if (offenders.length > 0) {
 
 console.log(
   `bundle-isolation: OK — homepage chunks are clean of ${ENGINE_IDS.length} engines`,
+);
+
+// ── Pass B: forbidden CDN strings in any built chunk ──────────────────────
+//
+// Ensures that langPath / corePath / workerPath overrides are in place for
+// Tesseract. If any built JS chunk contains these CDN hostnames, the engine
+// would fetch assets from a third-party server at runtime, breaking the
+// privacy guarantee.
+//
+// NOTE on cdn.jsdelivr.net: tesseract.js and onnxruntime-web both embed
+// their own CDN default strings as dead-code library internals that are
+// bundled regardless of whether caller code overrides the paths. A static
+// grep cannot distinguish a live CDN leak from an overridden-but-still-
+// bundled default. cdn.jsdelivr.net is therefore NOT in this list — the
+// Playwright privacy regression spec asserts zero off-origin requests at
+// runtime, which is the load-bearing gate for that concern.
+//
+// tessdata.projectnaptha.com is Tesseract-specific and empirically absent
+// from the current build; it is safe to gate statically because it only
+// appears if langPath is not overridden to a same-origin path.
+
+const FORBIDDEN_STRINGS = [
+  "tessdata.projectnaptha.com",
+];
+
+const CHUNKS_DIR = path.join(OUT_DIR, "_next", "static", "chunks");
+
+if (!existsSync(CHUNKS_DIR)) {
+  console.error(
+    `bundle-isolation: ${CHUNKS_DIR} does not exist; run \`pnpm build\` first`,
+  );
+  process.exit(1);
+}
+
+/** Recursively collect all .js files under a directory. */
+function collectJsFiles(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectJsFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith(".js")) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+const jsFiles = collectJsFiles(CHUNKS_DIR);
+const cdnOffenders = [];
+
+for (const filePath of jsFiles) {
+  const content = readFileSync(filePath, "utf-8");
+  for (const pattern of FORBIDDEN_STRINGS) {
+    if (content.includes(pattern)) {
+      cdnOffenders.push({ filePath, pattern });
+    }
+  }
+}
+
+if (cdnOffenders.length > 0) {
+  console.error(
+    "bundle-isolation: forbidden CDN strings found in built chunks:",
+  );
+  for (const { filePath, pattern } of cdnOffenders) {
+    const rel = path.relative(ROOT, filePath);
+    console.error(`  pattern: "${pattern}"`);
+    console.error(`  file:    ${rel}`);
+  }
+  console.error(
+    "\nFix: ensure langPath is overridden to a same-origin path",
+  );
+  console.error(
+    "in the engine's Tesseract loader (src/engines/_shared/tesseract/index.ts).",
+  );
+  process.exit(1);
+}
+
+console.log(
+  `bundle-isolation: OK — no forbidden CDN strings in ${jsFiles.length} chunks`,
 );

@@ -29,11 +29,29 @@ export type TesseractLogger = (e: TesseractLogEvent) => void;
 // OEM.LSTM_ONLY === 1 (from tesseract.js/src/constants/OEM.js).
 const OEM_LSTM_ONLY = 1;
 
+// Tesseract.js v7 browser default has workerBlobURL=true, which creates a
+// blob URL containing `importScripts("${workerPath}")`. A root-relative
+// path like "/tesseract/worker.min.js" is invalid in a blob worker context
+// because blob URLs have no origin to resolve against. Use an absolute URL
+// built from self.location.origin so the path resolves correctly regardless
+// of whether loadTesseract() runs in a page or a nested Web Worker.
+//
+// corePath is set to the explicit simd-lstm variant rather than the
+// directory. When getCore.js receives a path ending in ".js" it loads that
+// file directly, bypassing its own WASM-feature-detect heuristic. The
+// relaxedsimd-lstm binary in tesseract.js-core v7 contains native x86 SSE
+// code (via emscripten) that crashes on ARM (Apple Silicon / CI) even when
+// wasm-feature-detect.relaxedSimd() returns true. The simd-lstm variant is
+// pure WASM SIMD and works on any modern browser regardless of host arch.
+//
+// langPath still points to the directory; Tesseract appends "eng.traineddata"
+// or "eng.traineddata.gz" to it internally.
+const origin = typeof self !== "undefined" ? self.location.origin : "";
 const PATHS = {
-  workerPath: "/tesseract/worker.min.js",
-  corePath: "/tesseract/",
-  langPath: "/tesseract/",
-} as const;
+  workerPath: `${origin}/tesseract/worker.min.js`,
+  corePath: `${origin}/tesseract/tesseract-core-simd-lstm.wasm.js`,
+  langPath: `${origin}/tesseract/`,
+};
 
 let instancePromise: Promise<TesseractWorker> | null = null;
 let activeLogger: TesseractLogger | null = null;

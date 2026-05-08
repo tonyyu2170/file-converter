@@ -4,12 +4,13 @@
 // enforces this). Also downloads, gzips, and caches eng.traineddata.gz
 // from tesseract-ocr/tessdata_best at a pinned commit SHA.
 //
-// Sources (from node_modules):
+// Sources (from node_modules — see tesseract-manifest.json for full list):
 //   tesseract.js/dist/worker.min.js
-//   tesseract.js-core/tesseract-core.wasm.js
-//   tesseract.js-core/tesseract-core.wasm
-//   tesseract.js-core/tesseract-core-simd.wasm.js
-//   tesseract.js-core/tesseract-core-simd.wasm
+//   tesseract.js-core/tesseract-core{,-simd,-lstm,-simd-lstm,-relaxedsimd,-relaxedsimd-lstm}.wasm{,.js}
+//
+// NOTE: tesseract.js-core is resolved from tesseract.js's own dependency
+// graph (via realpathSync + createRequire) to avoid using the root
+// node_modules symlink, which pnpm may point at an older version.
 //
 // Downloaded:
 //   eng.traineddata from tesseract-ocr/tessdata_best (pinned SHA)
@@ -27,8 +28,10 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -69,6 +72,31 @@ function ensureDir(d) {
 const destDir = join(repoRoot, "public", "tesseract");
 ensureDir(destDir);
 
+// Require resolver anchored at the real (non-symlinked) tesseract.js pnpm
+// store path, so that peer packages like tesseract.js-core resolve to the
+// version tesseract.js actually depends on (v7.0.0), not whatever the root
+// node_modules symlink points at (pnpm may keep an older peer there).
+//
+// We find the real path by resolving the symlink at node_modules/tesseract.js
+// and then constructing a createRequire from the resolved location.
+const tesseractJsRealDir = realpathSync(
+  join(repoRoot, "node_modules", "tesseract.js"),
+);
+const requireFromTesseractJs = createRequire(
+  join(tesseractJsRealDir, "package.json"),
+);
+
+function resolveSrc(srcPath) {
+  const parts = srcPath.split("/");
+  const [pkg, ...rest] = parts;
+  // Multi-scoped: handle @scope/name packages.
+  const pkgName = pkg.startsWith("@") ? `${pkg}/${rest.shift()}` : pkg;
+  const file = rest.join("/");
+  const pkgMain = requireFromTesseractJs.resolve(pkgName + "/package.json");
+  const pkgDir = dirname(pkgMain);
+  return join(pkgDir, file);
+}
+
 // 1. Copy node_modules files, verify hash.
 for (const [destName, entry] of Object.entries(manifest.files)) {
   if (
@@ -82,7 +110,7 @@ for (const [destName, entry] of Object.entries(manifest.files)) {
     process.exit(1);
   }
 
-  const src = join(repoRoot, "node_modules", ...entry.src.split("/"));
+  const src = resolveSrc(entry.src);
   const dst = join(destDir, destName);
 
   // Idempotency: skip if destination already has the right hash.
