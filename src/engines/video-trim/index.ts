@@ -51,9 +51,7 @@ const engine: SingleInputEngine<VideoTrimOptions, OutputItem> = {
     if (file.size > MAX_FILE_BYTES) {
       return {
         ok: false,
-        reason:
-          `File too large for video-trim (limit 100 MB; got ` +
-          `${(file.size / 1_000_000).toFixed(1)} MB).`,
+        reason: `File too large for video-trim (limit 100 MB; got ${(file.size / 1_000_000).toFixed(1)} MB).`,
       };
     }
     return { ok: true };

@@ -125,9 +125,7 @@ export function VideoTrimOptionsPanel({
                   probeState.audioCodec,
                 );
                 if (!allowed) {
-                  title =
-                    `${fmt.toUpperCase()} can't hold ${probeState.videoCodec ?? "this video's codec"}` +
-                    (probeState.audioCodec ? ` / ${probeState.audioCodec}` : "");
+                  title = `${fmt.toUpperCase()} can't hold ${probeState.videoCodec ?? "this video's codec"}${probeState.audioCodec ? ` / ${probeState.audioCodec}` : ""}`;
                 }
               } else {
                 // idle, pending, or failed — only "same" allowed (fail-soft).

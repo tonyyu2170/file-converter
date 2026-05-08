@@ -46,10 +46,7 @@ const api = {
       const probe = await probeWithFfmpeg(ff, bytes, `.${inExt}`);
       if (!containerSupportsCodecs(opts.containerFormat, probe.videoCodec, probe.audioCodec)) {
         throw new Error(
-          `Can't trim into ${opts.containerFormat.toUpperCase()}: ` +
-            `this video uses ${probe.videoCodec ?? "an unknown video codec"}` +
-            `${probe.audioCodec ? ` and ${probe.audioCodec}` : ""}. ` +
-            `Pick MKV or 'same'.`,
+          `Can't trim into ${opts.containerFormat.toUpperCase()}: this video uses ${probe.videoCodec ?? "an unknown video codec"}${probe.audioCodec ? ` and ${probe.audioCodec}` : ""}. Pick MKV or 'same'.`,
         );
       }
     }
