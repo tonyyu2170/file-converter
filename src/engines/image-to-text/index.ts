@@ -4,7 +4,12 @@ import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type ImageToTextOptions, defaultImageToTextOptions } from "./options";
 import { ImageToTextOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+// HEIF intentionally omitted: inputAccept and validate()'s regex only match
+// .heic, and the worker's HEIC routing checks /\.heic?$/i against the
+// filename which doesn't match .heif. Keep the accepted-MIME surface
+// uniform with those — a Safari HEIF arriving with type="" otherwise
+// gets misrouted by the worker. Revisit if HEIF support is needed.
+const SUPPORTED_INPUT_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 
 // 25 MB cap — OCR engines have practical limits on image resolution/size.
 const MAX_FILE_BYTES = 25 * 1_000_000;

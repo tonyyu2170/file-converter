@@ -4,19 +4,14 @@ import type { ConversionProgress, OutputItem } from "@/engines/_shared/types";
 import * as Comlink from "comlink";
 import type { ImageToTextOptions } from "./options";
 
-// HEIC/HEIF need libheif decoding; all other formats can go straight to
+// HEIC needs libheif decoding; all other formats can go straight to
 // tesseract.js as a Blob (Blob is in tesseract.js v7's ImageLike).
-const HEIC_MIMES = new Set(["image/heic", "image/heif"]);
+// HEIF intentionally omitted — see SUPPORTED_INPUT_MIMES in index.ts.
+const HEIC_MIMES = new Set(["image/heic"]);
 
 // Accepted MIMEs — matches SUPPORTED_INPUT_MIMES in index.ts.
 // detectMime is NOT called here; index.ts runs it host-side before dispatch.
-const ACCEPTED_MIMES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-]);
+const ACCEPTED_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"]);
 
 // ---------------------------------------------------------------------------
 // HEIC decoding — mirrors _shared/decode-image.ts but returns OffscreenCanvas
