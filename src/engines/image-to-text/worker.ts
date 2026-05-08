@@ -70,11 +70,10 @@ const api = {
     opts: ImageToTextOptions,
     onProgress?: (p: ConversionProgress) => void,
   ): Promise<OutputItem> {
-    // Strict MIME check — validate() in index.ts is lenient (extension fallback).
-    // Worker rejects file content that doesn't belong to accepted MIMEs.
-    // We trust `type` here: the harness passes file.type which was checked with
-    // detectMime (called host-side in convert() before dispatch when file.type
-    // is empty-ish). For safety, also check magic below if type is unreliable.
+    // Defense-in-depth MIME check — the canonical strict check runs host-side
+    // in index.ts convert() via detectMime() before the worker is dispatched.
+    // This worker-side guard catches cases where `type` arrives non-empty but
+    // outside the accepted set (e.g., direct worker invocation in tests).
     if (type && !ACCEPTED_MIMES.has(type)) {
       throw new Error(`image-to-text: unsupported content type ${type}`);
     }
@@ -93,8 +92,12 @@ const api = {
     const worker = await loadTesseract();
     onProgress?.({ kind: "model-loading", loaded: 1, total: 1 });
 
-    // Install per-conversion progress logger. The loader bound the logger at
-    // createWorker time; setProgressLogger swaps the mutable delegate.
+    // Map Tesseract's logger events to the project's ConversionProgress shape.
+    // The spec's `phase`/`etaSec` shape was aspirational — the canonical type
+    // in _shared/types.ts uses { kind: "model-loading", loaded, total } and
+    // { kind: "inference", pct }. Adapt: warmup phases map to model-loading
+    // (with loaded=progress, total=1 since Tesseract reports a 0..1 scalar),
+    // the recognize phase maps to inference.
     setProgressLogger((m) => {
       if (!onProgress) return;
       if (m.status === "recognizing text") {

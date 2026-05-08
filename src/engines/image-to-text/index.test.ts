@@ -152,10 +152,38 @@ describe("validate — lenient type+ext fallback (case 5)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cases 6–9 (OCR correctness): see worker.correctness.test.ts.
-// Real OCR requires a node environment (to avoid tesseract.js picking its
-// browser HTTP-fetch path); that environment is incompatible with jsdom.
-// These cases are covered by Playwright E2E tests instead.
+// Case 9: bad MIME → convert() rejects before worker spawns.
+// Now that detectMime() runs host-side in convert() before harness dispatch,
+// this is testable in vitest. The file has type:"" so detectMime inspects
+// magic bytes; HTML bytes don't match any entry in the MAGIC table, so
+// detectMime returns "application/octet-stream" which is not in
+// SUPPORTED_INPUT_MIMES, causing convert() to throw.
+// ---------------------------------------------------------------------------
+describe("MIME validation in convert() (case 9)", () => {
+  it("convert rejects when file bytes don't match a supported type", async () => {
+    const htmlBytes = new TextEncoder().encode("<!DOCTYPE html><html><body>nope</body></html>");
+    // type:"" forces detectMime into the magic-byte fallback path.
+    // With type:"image/png" detectMime trusts file.type and would NOT reject.
+    const file = new File([htmlBytes], "x.png", { type: "" });
+    await expect(
+      engine.convert(file, engine.defaultOptions, new AbortController().signal, {}),
+    ).rejects.toThrow(/unsupported input MIME|content type|MIME/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Real OCR correctness — substring assertions on actual fixture conversion —
+// runs in tests/e2e/image-to-text-correctness.spec.ts (Task 7). vitest +
+// jsdom cannot host the Tesseract.js Web Worker that loads eng.traineddata,
+// so the real-conversion path is exercised in Playwright instead. Cases
+// covered there:
+//   - scanned-receipt.png + outputFormat: "txt" → "TOTAL" + "$" substrings
+//   - screenshot.png + outputFormat: "json-with-bboxes" → JSON shape +
+//     "recognizeText" substring + word-bbox fields
+//   - screenshot.heic + outputFormat: "txt" → "recognizeText" substring
+//     (libheif reuse path)
+//   - already-aborted signal: covered below (abort lands before worker
+//     spawns, so vitest can exercise it)
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

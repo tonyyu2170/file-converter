@@ -1,3 +1,4 @@
+import { detectMime } from "@/engines/_shared/file-detection";
 import { WorkerHarness } from "@/engines/_shared/harness";
 import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type ImageToTextOptions, defaultImageToTextOptions } from "./options";
@@ -57,6 +58,25 @@ const engine: SingleInputEngine<ImageToTextOptions, OutputItem> = {
     return { ok: true };
   },
   async convert(file, opts, signal, runOpts) {
+    // Strict MIME check — mirrors image-convert/index.ts:30-34.
+    // validate() is lenient (accepts extension-only files for Safari HEIC).
+    // convert() re-checks bytes so a file with a deceiving extension/type
+    // is rejected before the worker spawns.
+    const detected = await detectMime(file);
+    if (!SUPPORTED_INPUT_MIMES.includes(detected)) {
+      throw new Error(`image-to-text: unsupported input MIME: ${detected}`);
+    }
+    // Dispose the persistent harness on abort so the engine worker (and its
+    // child Tesseract worker) terminate rather than leaking. The harness's
+    // own abortPromise rejects the in-flight runSingle immediately for instant
+    // cancel UX; the disposal here tears down the worker process in parallel.
+    // The next convert() call rebuilds the harness via getImageToTextHarness().
+    // Each call to convert() receives a fresh AbortController signal from
+    // tool-frame.tsx, so the { once: true } listener never fires on a
+    // subsequent call.
+    if (signal && !signal.aborted) {
+      signal.addEventListener("abort", () => disposeImageToTextHarness(), { once: true });
+    }
     const result = await getImageToTextHarness().runSingle(file, opts, signal, runOpts ?? {});
     if (Array.isArray(result)) {
       const first = result[0];
