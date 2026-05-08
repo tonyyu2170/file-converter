@@ -47,7 +47,7 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Tools"
-      className="w-[180px] shrink-0 border-r border-[var(--color-hairline)] px-3 py-3 text-[var(--text-xs)]"
+      className="w-[180px] shrink-0 overflow-y-auto border-r border-[var(--color-hairline)] px-3 py-3 text-[var(--text-xs)]"
     >
       {GROUP_ORDER.map((group) => {
         const items = groups[group];
