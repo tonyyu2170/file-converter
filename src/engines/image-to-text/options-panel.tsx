@@ -30,8 +30,8 @@ export function ImageToTextOptionsPanel({
           <option value="json-with-bboxes">JSON with bounding boxes (.json)</option>
         </select>
       </label>
-      <p className="text-[var(--color-fg-muted)] tracking-[0.05em]">
-        ⓘ Best on scanned documents and screenshots; lower quality on photos.
+      <p className="text-[var(--color-fg-very-muted)]">
+        {"// best on scanned documents and screenshots; lower quality on photos"}
       </p>
     </div>
   );
