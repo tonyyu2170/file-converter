@@ -22,6 +22,8 @@ Re-encoded from screenshot.png via heif-enc. Substring assertion:
 
 See Phase 23 plan, Task 0 — exact commands captured there.
 
+On macOS, ImageMagick may require full font paths (e.g. `/System/Library/Fonts/Courier.ttc`) instead of short names; substitute as needed.
+
 ## Used by
 
 - `src/engines/image-to-text/index.test.ts`
