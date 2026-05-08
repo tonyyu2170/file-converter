@@ -104,6 +104,12 @@ const TOOLS = [
     description: "mp4, mov, webm, mkv · pull the audio track, lossless when possible",
     href: "/tools/video-extract-audio",
   },
+  {
+    id: "image-to-text",
+    title: "image → text",
+    description: "jpg, png, webp, heic · extract text via ocr (tesseract)",
+    href: "/tools/image-to-text",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";
