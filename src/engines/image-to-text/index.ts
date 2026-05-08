@@ -74,7 +74,7 @@ const engine: SingleInputEngine<ImageToTextOptions, OutputItem> = {
     // Each call to convert() receives a fresh AbortController signal from
     // tool-frame.tsx, so the { once: true } listener never fires on a
     // subsequent call.
-    if (signal && !signal.aborted) {
+    if (!signal.aborted) {
       signal.addEventListener("abort", () => disposeImageToTextHarness(), { once: true });
     }
     const result = await getImageToTextHarness().runSingle(file, opts, signal, runOpts ?? {});

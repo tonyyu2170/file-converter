@@ -199,3 +199,39 @@ describe("cancellation (case 10)", () => {
     await expect(engine.convert(file, engine.defaultOptions, signal, {})).rejects.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Case 11 (C1 regression): setProgressLogger must be installed BEFORE
+// loadTesseract() so cold-start logger events flow through.
+//
+// worker.ts cannot be imported directly in vitest because Comlink.expose(api)
+// runs at module top-level in a non-Worker context. The full end-to-end
+// cold-start ordering is verified in two complementary ways:
+//
+//   1. A CRITICAL comment in worker.ts documents the invariant and will
+//      surface any future reordering during code review.
+//   2. src/engines/_shared/tesseract/index.test.ts tests that a logger
+//      installed before loadTesseract() receives events fired synchronously
+//      by the mock's createWorker (see "installed callback receives progress
+//      events from the worker"). If that test breaks, the shared primitives
+//      powering the fix have regressed.
+//
+// This test asserts the unit-testable half: the setProgressLogger API
+// accepts a callback before loadTesseract is called without error.
+// ---------------------------------------------------------------------------
+describe("cold-start progress ordering invariant (case 11)", () => {
+  it("setProgressLogger can be installed before loadTesseract (no error)", async () => {
+    const { setProgressLogger, __resetForTests, disposeTesseract } = await import(
+      "@/engines/_shared/tesseract"
+    );
+
+    __resetForTests();
+    // This must NOT throw — the logger is a mutable ref that is valid to set
+    // at any time, including before loadTesseract has been called.
+    expect(() => setProgressLogger((_m) => {})).not.toThrow();
+    // Clean up; don't leave a stale logger across tests.
+    setProgressLogger(null);
+    await disposeTesseract();
+    __resetForTests();
+  });
+});

@@ -74,8 +74,12 @@ const api = {
     // in index.ts convert() via detectMime() before the worker is dispatched.
     // This worker-side guard catches cases where `type` arrives non-empty but
     // outside the accepted set (e.g., direct worker invocation in tests).
-    if (type && !ACCEPTED_MIMES.has(type)) {
-      throw new Error(`image-to-text: unsupported content type ${type}`);
+    // Note: `type &&` is intentionally absent — an empty type (Safari HEIC,
+    // any untyped file) must NOT silently bypass the check. We use extension
+    // as the fallback so the guard fires for truly unsupported inputs.
+    const extOk = /\.(jpe?g|png|webp|heic?)$/i.test(name);
+    if (!ACCEPTED_MIMES.has(type) && !extOk) {
+      throw new Error(`image-to-text: unsupported input "${name}" (type: ${type || "<empty>"})`);
     }
 
     // Signal model-loading start.
@@ -83,14 +87,18 @@ const api = {
 
     // Resolve the image input. HEIC requires libheif; everything else passes
     // as a Blob (Blob is in tesseract.js v7's ImageLike).
-    const imageInput: OffscreenCanvas | Blob = HEIC_MIMES.has(type)
-      ? await decodeHeicToCanvas(new Uint8Array(bytes))
-      : new Blob([bytes], { type });
-
-    // Warm/load the persistent Tesseract worker. This is the expensive step
-    // on first call; subsequent calls reuse the singleton.
-    const worker = await loadTesseract();
-    onProgress?.({ kind: "model-loading", loaded: 1, total: 1 });
+    //
+    // HEIC routing accepts both an explicit MIME match and a filename-extension
+    // match because Safari emits file.type = "" for HEIC. The harness forwards
+    // file.type verbatim, so the worker would otherwise mis-route Safari HEIC
+    // to the non-HEIC branch and feed raw HEIC bytes to Tesseract. Task 7's
+    // Playwright correctness spec exercises this with screenshot.heic — to
+    // catch a regression of this fix, Task 7's spec should construct the File
+    // without an explicit `type` (matching Safari behavior).
+    const imageInput: OffscreenCanvas | Blob =
+      HEIC_MIMES.has(type) || /\.heic?$/i.test(name)
+        ? await decodeHeicToCanvas(new Uint8Array(bytes))
+        : new Blob([bytes], { type });
 
     // Map Tesseract's logger events to the project's ConversionProgress shape.
     // The spec's `phase`/`etaSec` shape was aspirational — the canonical type
@@ -98,6 +106,13 @@ const api = {
     // { kind: "inference", pct }. Adapt: warmup phases map to model-loading
     // (with loaded=progress, total=1 since Tesseract reports a 0..1 scalar),
     // the recognize phase maps to inference.
+    //
+    // CRITICAL: setProgressLogger MUST be installed before loadTesseract().
+    // loadTesseract's createWorker fires logger events for "loading language
+    // traineddata" and "initializing api" during cold start — events that
+    // dominate the first conversion's wall-clock time. Installing the logger
+    // after loadTesseract resolves drops every cold-start progress event
+    // silently. Do not reorder.
     setProgressLogger((m) => {
       if (!onProgress) return;
       if (m.status === "recognizing text") {
@@ -108,8 +123,14 @@ const api = {
       }
     });
 
-    let result: Awaited<ReturnType<typeof worker.recognize>>;
+    let result: Awaited<ReturnType<Awaited<ReturnType<typeof loadTesseract>>["recognize"]>>;
     try {
+      // Warm/load the persistent Tesseract worker. This is the expensive step
+      // on first call; subsequent calls reuse the singleton. The logger above
+      // MUST be installed before this call so cold-start events flow through.
+      const worker = await loadTesseract();
+      onProgress?.({ kind: "model-loading", loaded: 1, total: 1 });
+
       // Request blocks output for json-with-bboxes; text output is always on
       // by default. In tesseract.js v7 the second arg to recognize() is
       // RecognizeOptions (rectangle/rotate); output format is the third arg.
