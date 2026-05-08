@@ -77,7 +77,12 @@ export async function decodePeaksInWorker(
   ];
 
   try {
-    await ff.writeFile(inName, new Uint8Array(bytes));
+    // Defensive clone of the input ArrayBuffer — see probe.ts for the
+    // underlying ffmpeg.wasm detach behavior. Today's callers always pass
+    // fresh per-call buffers from the harness so detachment never bites,
+    // but cloning here makes that invariant local rather than depending
+    // on caller discipline.
+    await ff.writeFile(inName, new Uint8Array(bytes.slice(0)));
     const exitCode = await ff.exec(args);
     if (exitCode !== 0) {
       throw new Error(`decodePeaksInWorker: ffmpeg exited with code ${exitCode}`);

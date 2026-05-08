@@ -1,4 +1,4 @@
-import { OUTPUT_EXTENSION, OUTPUT_MIME } from "@/engines/audio-convert/options";
+import { OUTPUT_EXTENSION, OUTPUT_MIME } from "@/engines/_shared/audio/format";
 
 export type AudioTrimFormat = "same" | "mp3" | "wav" | "m4a" | "flac";
 export type AudioTrimBitrate = 64 | 128 | 192 | 256 | 320;

@@ -2,10 +2,9 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 // Source-of-truth route catalog for COOP/COEP. Update when adding tools.
-// (Phase 20 will add `/tools/audio-trim` after rebase — when the rebase
-// lands, append `"/tools/audio-trim"` to TOOL_ROUTES.)
 const TOOL_ROUTES = [
   "/tools/audio-convert",
+  "/tools/audio-trim",
   "/tools/docx-to-pdf",
   "/tools/docx-to-txt",
   "/tools/image-bg-remove",
@@ -19,6 +18,8 @@ const TOOL_ROUTES = [
   "/tools/pdf-to-image",
   "/tools/pdf-to-md",
   "/tools/txt-to-pdf",
+  "/tools/video-extract-audio",
+  "/tools/video-trim",
 ] as const;
 
 const ALL_ROUTES = ["/", "/about", ...TOOL_ROUTES] as const;

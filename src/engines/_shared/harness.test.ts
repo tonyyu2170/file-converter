@@ -287,6 +287,151 @@ describe("WorkerHarness.runDecodePeaks", () => {
   });
 });
 
+describe("WorkerHarness.runProbe", () => {
+  it("calls the worker's probe RPC and returns the result", async () => {
+    const probeResult = {
+      durationSec: 5,
+      videoCodec: "h264",
+      audioCodec: "aac",
+      width: 320,
+      height: 180,
+      hasAudio: true,
+    };
+    const probe = vi.fn().mockResolvedValue(probeResult);
+    vi.mocked(Comlink.wrap).mockReturnValue({ probe } as never);
+
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1, 2, 3, 4])], "x.mp4", { type: "video/mp4" });
+
+    const result = await h.runProbe(file);
+
+    expect(result).toEqual(probeResult);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(probe).toHaveBeenCalledWith(expect.any(ArrayBuffer), ".mp4");
+    h.dispose();
+  });
+
+  it("caches the probe Promise per File identity", async () => {
+    const probe = vi.fn().mockResolvedValue({
+      durationSec: 1,
+      videoCodec: null,
+      audioCodec: null,
+      width: 0,
+      height: 0,
+      hasAudio: false,
+    });
+    vi.mocked(Comlink.wrap).mockReturnValue({ probe } as never);
+
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+
+    const a = await h.runProbe(file);
+    const b = await h.runProbe(file);
+
+    expect(a).toBe(b);
+    expect(probe).toHaveBeenCalledTimes(1);
+    h.dispose();
+  });
+
+  it("re-probes after a previous probe rejected (cache eviction on failure)", async () => {
+    const probe = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce({
+      durationSec: 2,
+      videoCodec: "h264",
+      audioCodec: null,
+      width: 320,
+      height: 180,
+      hasAudio: false,
+    });
+    vi.mocked(Comlink.wrap).mockReturnValue({ probe } as never);
+
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+
+    await expect(h.runProbe(file)).rejects.toThrow(/boom/);
+    const second = await h.runProbe(file);
+    expect(second.videoCodec).toBe("h264");
+    expect(probe).toHaveBeenCalledTimes(2);
+    h.dispose();
+  });
+
+  it("throws actionably if the worker doesn't implement probe", async () => {
+    vi.mocked(Comlink.wrap).mockReturnValue({} as never);
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+    await expect(h.runProbe(file)).rejects.toThrow(/probe/);
+    h.dispose();
+  });
+});
+
+describe("WorkerHarness.runExtractFrameStrip", () => {
+  it("calls the worker RPC and returns object URLs from frame bytes", async () => {
+    const frames = [
+      new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    ];
+    const probe = vi.fn().mockResolvedValue({
+      durationSec: 4,
+      videoCodec: "h264",
+      audioCodec: null,
+      width: 320,
+      height: 180,
+      hasAudio: false,
+    });
+    const extractFrameStrip = vi.fn().mockResolvedValue({ frames, widthPx: 107 });
+    vi.mocked(Comlink.wrap).mockReturnValue({ probe, extractFrameStrip } as never);
+
+    // Stub URL.createObjectURL — jsdom may not implement it.
+    const createSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockImplementation(() => `blob:fake-${Math.random()}`);
+
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1, 2, 3])], "x.mp4", { type: "video/mp4" });
+
+    const result = await h.runExtractFrameStrip({ file, count: 2, heightPx: 60 });
+
+    expect(result.urls).toHaveLength(2);
+    expect(result.widthPx).toBe(107);
+    for (const url of result.urls) {
+      expect(url).toMatch(/^blob:/);
+    }
+    expect(extractFrameStrip).toHaveBeenCalledTimes(1);
+    expect(extractFrameStrip).toHaveBeenCalledWith(
+      expect.objectContaining({
+        count: 2,
+        heightPx: 60,
+        durationSec: 4,
+        sourceWidth: 320,
+        sourceHeight: 180,
+        fileExtension: ".mp4",
+      }),
+    );
+
+    createSpy.mockRestore();
+    h.dispose();
+  });
+
+  it("throws actionably if the worker doesn't implement extractFrameStrip", async () => {
+    const probe = vi.fn().mockResolvedValue({
+      durationSec: 1,
+      videoCodec: "h264",
+      audioCodec: null,
+      width: 320,
+      height: 180,
+      hasAudio: false,
+    });
+    vi.mocked(Comlink.wrap).mockReturnValue({ probe } as never);
+
+    const h = new WorkerHarness(fakeWorker, { persistent: true });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+
+    await expect(h.runExtractFrameStrip({ file, count: 5, heightPx: 60 })).rejects.toThrow(
+      /extractFrameStrip/,
+    );
+    h.dispose();
+  });
+});
+
 describe("WorkerHarness onProgress callback", () => {
   it("forwards worker-emitted progress events to onProgress", async () => {
     const convertSingle = vi.fn(

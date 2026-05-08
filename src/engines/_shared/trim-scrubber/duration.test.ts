@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readMediaDurationSec } from "./duration";
 
@@ -56,9 +58,38 @@ describe("readMediaDurationSec", () => {
     },
   );
 
-  it("throws for the video modality (deferred to phase 22)", async () => {
-    const file = makeSilentWav(0.5);
-    await expect(readMediaDurationSec(file, "video")).rejects.toThrow(/video.*phase 22/i);
+  it.runIf(!isJsdom)('reads duration of a video file via modality:"video"', async () => {
+    const buf = readFileSync(
+      path.resolve(__dirname, "../../../../tests/fixtures/video/sample-h264-aac.mp4"),
+    );
+    const file = new File([buf], "sample.mp4", { type: "video/mp4" });
+    const dur = await readMediaDurationSec(file, "video");
+    expect(dur).toBeGreaterThan(4.9);
+    expect(dur).toBeLessThan(5.1);
+  });
+
+  it("rejects when <video>.duration is Infinity (rare MP4 case)", async () => {
+    const realCreate = document.createElement.bind(document);
+    const spy = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      if (tag === "video") {
+        const el = realCreate("video") as HTMLVideoElement;
+        Object.defineProperty(el, "duration", {
+          value: Number.POSITIVE_INFINITY,
+          configurable: true,
+        });
+        Object.defineProperty(el, "src", {
+          set() {
+            queueMicrotask(() => el.dispatchEvent(new Event("loadedmetadata")));
+          },
+          configurable: true,
+        });
+        return el;
+      }
+      return realCreate(tag);
+    });
+    const file = new File([new Uint8Array([1])], "x.mp4", { type: "video/mp4" });
+    await expect(readMediaDurationSec(file, "video")).rejects.toThrow(/not finite/);
+    spy.mockRestore();
   });
 });
 

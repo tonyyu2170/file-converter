@@ -29,6 +29,37 @@ export type WorkerEntry<TOptions> = {
     fileExtension: string,
     bucketCount: number,
   ) => Promise<{ min: Float32Array; max: Float32Array }>;
+  /** Optional: probe a media file's codec / duration / dimensions.
+   * Engine workers that need codec-aware behavior implement this. The
+   * trim-scrubber video branch and video-trim's options-panel both
+   * call WorkerHarness.runProbe → this RPC so probe results share the
+   * same persistent worker (and ffmpeg singleton) as the conversion. */
+  probe?: (
+    bytes: ArrayBuffer,
+    fileExtension: string,
+  ) => Promise<{
+    durationSec: number;
+    videoCodec: string | null;
+    audioCodec: string | null;
+    width: number;
+    height: number;
+    hasAudio: boolean;
+  }>;
+  /** Optional: extract N evenly-spaced frame thumbnails for the
+   * trim-scrubber video render path. Returns raw JPEG bytes; the main-
+   * thread harness wraps each into a Blob + object URL. */
+  extractFrameStrip?: (args: {
+    bytes: ArrayBuffer;
+    fileExtension: string;
+    durationSec: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    count: number;
+    heightPx: number;
+  }) => Promise<{
+    frames: Uint8Array[];
+    widthPx: number;
+  }>;
 };
 
 export type WorkerFactory = () => Worker;
@@ -195,6 +226,110 @@ export class WorkerHarness<TOptions> {
     try {
       const bytes = await file.arrayBuffer();
       return await decodePeaks(bytes, ext, bucketCount);
+    } finally {
+      this.terminateIfEphemeral();
+    }
+  }
+
+  // Per-File cache for probe results. Keyed on File identity — re-staged
+  // files produce a new File object and thus re-probe (correct).
+  private probeCache = new WeakMap<
+    File,
+    Promise<{
+      durationSec: number;
+      videoCodec: string | null;
+      audioCodec: string | null;
+      width: number;
+      height: number;
+      hasAudio: boolean;
+    }>
+  >();
+
+  async runProbe(file: File): Promise<{
+    durationSec: number;
+    videoCodec: string | null;
+    audioCodec: string | null;
+    width: number;
+    height: number;
+    hasAudio: boolean;
+  }> {
+    const cached = this.probeCache.get(file);
+    if (cached) return cached;
+    const promise = (async () => {
+      this.spawn();
+      if (!this.remote?.probe) {
+        this.terminateIfEphemeral();
+        throw new Error("worker does not implement probe");
+      }
+      const probe = this.remote.probe as unknown as (
+        bytes: ArrayBuffer,
+        ext: string,
+      ) => Promise<{
+        durationSec: number;
+        videoCodec: string | null;
+        audioCodec: string | null;
+        width: number;
+        height: number;
+        hasAudio: boolean;
+      }>;
+      const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+      try {
+        const bytes = await file.arrayBuffer();
+        return await probe(bytes, `.${ext}`);
+      } finally {
+        this.terminateIfEphemeral();
+      }
+    })().catch((err) => {
+      // On failure, evict the cache so the next call retries.
+      this.probeCache.delete(file);
+      throw err;
+    });
+    this.probeCache.set(file, promise);
+    return promise;
+  }
+
+  async runExtractFrameStrip(args: {
+    file: File;
+    count: number;
+    heightPx: number;
+  }): Promise<{ urls: string[]; widthPx: number }> {
+    const probe = await this.runProbe(args.file);
+    this.spawn();
+    if (!this.remote?.extractFrameStrip) {
+      this.terminateIfEphemeral();
+      throw new Error("worker does not implement extractFrameStrip");
+    }
+    const extract = this.remote.extractFrameStrip as unknown as (a: {
+      bytes: ArrayBuffer;
+      fileExtension: string;
+      durationSec: number;
+      sourceWidth: number;
+      sourceHeight: number;
+      count: number;
+      heightPx: number;
+    }) => Promise<{ frames: Uint8Array[]; widthPx: number }>;
+    const ext = (args.file.name.split(".").pop() ?? "").toLowerCase();
+    try {
+      const bytes = await args.file.arrayBuffer();
+      const result = await extract({
+        bytes,
+        fileExtension: `.${ext}`,
+        durationSec: probe.durationSec,
+        sourceWidth: probe.width,
+        sourceHeight: probe.height,
+        count: args.count,
+        heightPx: args.heightPx,
+      });
+      const urls = result.frames.map((frameBytes) => {
+        // ArrayBuffer cast is safe — `frameBytes` came over Comlink as a
+        // structured-cloned Uint8Array backed by an ArrayBuffer.
+        const ab = frameBytes.buffer.slice(
+          frameBytes.byteOffset,
+          frameBytes.byteOffset + frameBytes.byteLength,
+        ) as ArrayBuffer;
+        return URL.createObjectURL(new Blob([ab], { type: "image/jpeg" }));
+      });
+      return { urls, widthPx: result.widthPx };
     } finally {
       this.terminateIfEphemeral();
     }
