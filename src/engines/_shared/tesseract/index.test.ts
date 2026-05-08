@@ -75,9 +75,7 @@ describe("loadTesseract createWorker call shape", () => {
         corePath: expect.stringMatching(
           /^https?:\/\/[^/]+\/tesseract\/tesseract-core-simd-lstm\.wasm\.js$/,
         ),
-        workerPath: expect.stringMatching(
-          /^https?:\/\/[^/]+\/tesseract\/worker\.min\.js$/,
-        ),
+        workerPath: expect.stringMatching(/^https?:\/\/[^/]+\/tesseract\/worker\.min\.js$/),
       }),
     );
   });
