@@ -41,10 +41,7 @@ test("image-to-text conversion produces zero off-origin requests including tesse
     }
   });
 
-  const fixture = path.resolve(
-    __dirname,
-    "../fixtures/image-to-text/screenshot.png",
-  );
+  const fixture = path.resolve(__dirname, "../fixtures/image-to-text/screenshot.png");
   await page.locator('input[type="file"]').setInputFiles(fixture);
   await page.getByTestId("convert-button").click();
 
