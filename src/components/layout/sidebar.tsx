@@ -31,10 +31,11 @@ const TOOLS: ToolEntry[] = [
     label: "video → audio",
     group: "VIDEO",
   },
+  { id: "image-to-text", href: "/tools/image-to-text", label: "image → text", group: "OCR" },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "AUDIO", "VIDEO", "ABOUT"] as const;
+const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "AUDIO", "VIDEO", "OCR", "ABOUT"] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {
@@ -46,7 +47,7 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Tools"
-      className="w-[180px] shrink-0 border-r border-[var(--color-hairline)] px-3 py-3 text-[var(--text-xs)]"
+      className="w-[180px] shrink-0 overflow-y-auto border-r border-[var(--color-hairline)] px-3 py-3 text-[var(--text-xs)]"
     >
       {GROUP_ORDER.map((group) => {
         const items = groups[group];

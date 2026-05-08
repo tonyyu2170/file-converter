@@ -8,6 +8,7 @@ export type EngineId =
   | "image-convert"
   | "image-resize"
   | "image-to-pdf"
+  | "image-to-text"
   | "markdown-to-pdf"
   | "pdf-edit"
   | "pdf-merge"
@@ -32,6 +33,7 @@ const REGISTRY: Record<EngineId, Loader> = {
   "image-convert": () => import("@/engines/image-convert"),
   "image-resize": () => import("@/engines/image-resize"),
   "image-to-pdf": () => import("@/engines/image-to-pdf"),
+  "image-to-text": () => import("@/engines/image-to-text"),
   "markdown-to-pdf": () => import("@/engines/markdown-to-pdf"),
   "pdf-edit": () => import("@/engines/pdf-edit"),
   "pdf-merge": () => import("@/engines/pdf-merge"),
