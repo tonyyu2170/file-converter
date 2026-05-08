@@ -22,9 +22,9 @@ test.describe("/tools/image-to-text", () => {
     await expect(select).toBeVisible();
     const options = await select.locator("option").allTextContents();
     expect(options).toHaveLength(2);
-    // Plain text option
+    // Closed enumeration — update both index assertions if outputFormat
+    // gains a new variant.
     expect(options[0]).toMatch(/plain text/i);
-    // JSON bounding boxes option
     expect(options[1]).toMatch(/json/i);
   });
 

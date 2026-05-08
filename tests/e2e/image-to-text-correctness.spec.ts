@@ -96,9 +96,12 @@ test("screenshot.png → json-with-bboxes has expected structure", async ({ page
   // biome-ignore lint/suspicious/noExplicitAny: JSON output from engine
   const parsed: any = JSON.parse(raw);
 
-  // text field contains the recognized content
+  // text field contains the recognized content. Tesseract may split camelCase
+  // tokens at the case transition (emitting "recognize Text" with whitespace);
+  // collapse spaces before the substring check so the assertion survives any
+  // re-render of the screenshot fixture at a different scale or DPI.
   expect(typeof parsed.text).toBe("string");
-  expect(parsed.text.toLowerCase()).toContain("recognizetext");
+  expect(parsed.text.toLowerCase().replace(/\s+/g, "")).toContain("recognizetext");
 
   // words is a non-empty array of bbox records
   expect(Array.isArray(parsed.words)).toBe(true);
@@ -150,7 +153,8 @@ test("screenshot.heic → txt contains recognizeText (libheif path)", async ({ p
   if (!outPath) throw new Error("download.path() returned null");
 
   const text = await fs.readFile(outPath, "utf-8");
-  expect(text.toLowerCase()).toContain("recognizetext");
+  // Same camelCase split tolerance as case 2 — collapse whitespace first.
+  expect(text.toLowerCase().replace(/\s+/g, "")).toContain("recognizetext");
 });
 
 // ---------------------------------------------------------------------------
