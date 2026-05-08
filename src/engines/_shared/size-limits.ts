@@ -8,6 +8,10 @@ export const SIZE_LIMITS_MB: Record<EngineCategory, { soft: number; hard: number
   document: { soft: 25, hard: 100 },
   audio: { soft: 100, hard: 500 },
   video: { soft: 50, hard: 100 },
+  // OCR engines enforce their own per-engine cap (25 MB in image-to-text).
+  // Provide generous defaults here so the shared size-check UI path doesn't
+  // reject before the engine's own validate() runs.
+  ocr: { soft: 25, hard: 25 },
 } as const;
 
 // SI thresholds (×1_000_000), matching the formatBytes helper.

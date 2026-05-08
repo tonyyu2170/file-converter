@@ -9,6 +9,9 @@ describe("SIZE_LIMITS_MB", () => {
       document: { soft: 25, hard: 100 },
       audio: { soft: 100, hard: 500 },
       video: { soft: 50, hard: 100 },
+      // OCR engines (image-to-text) enforce their own cap; the shared UI
+      // default matches the engine's own 25 MB hard limit.
+      ocr: { soft: 25, hard: 25 },
     });
   });
 });

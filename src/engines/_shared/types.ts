@@ -30,7 +30,9 @@ export type OutputItem = {
   warnings?: string[];
 };
 
-export type EngineCategory = "image" | "pdf" | "document" | "audio" | "video";
+// "ocr" added here (not deferred to Task 5) because image-to-text engine
+// requires the category at compile time and Task 5's UI already expects it.
+export type EngineCategory = "image" | "pdf" | "document" | "audio" | "video" | "ocr";
 
 export type EngineLicense =
   | "MIT"
