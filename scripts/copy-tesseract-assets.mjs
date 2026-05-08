@@ -34,7 +34,7 @@ import {
 import { createRequire } from "node:module";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -143,10 +143,24 @@ for (const [destName, entry] of Object.entries(manifest.files)) {
 const ts = manifest.tessdata_source;
 const gzDst = join(destDir, "eng.traineddata.gz");
 
-// Idempotency: skip if destination gz already has the right hash.
-if (existsSync(gzDst) && sha256File(gzDst) === ts.sha256_gzipped) {
-  console.log("[copy-tesseract-assets] skip (cached) eng.traineddata.gz");
-  process.exit(0);
+// Idempotency: trust the cache if its decompressed bytes match the pinned
+// uncompressed SHA. We deliberately do NOT compare the gzipped file's SHA
+// against a pinned value — Node's zlib.gzipSync is not byte-deterministic
+// across hosts (the gzip header's OS byte differs: macOS=11, Linux=3), so a
+// hash computed on a developer's macOS won't match the CI Linux box even
+// when the underlying compressed content is identical. The load-bearing
+// invariant is that the bytes the BROWSER eventually decompresses match
+// the pinned source from tessdata_best — that's what we verify here.
+if (existsSync(gzDst)) {
+  try {
+    const decompressed = gunzipSync(readFileSync(gzDst));
+    if (sha256(decompressed) === ts.sha256_uncompressed) {
+      console.log("[copy-tesseract-assets] skip (cached) eng.traineddata.gz");
+      process.exit(0);
+    }
+  } catch {
+    // Corrupt cache; fall through to re-download.
+  }
 }
 
 console.log(
@@ -183,22 +197,9 @@ if (rawHash !== ts.sha256_uncompressed) {
   process.exit(1);
 }
 
-// Gzip with level 9 (pinned for reproducibility).
+// Gzip with level 9 (compression ratio is consistent across hosts; only
+// the gzip header bytes vary, which is why we don't pin the gzipped SHA).
 const compressed = gzipSync(raw, { level: 9 });
-
-// Verify gzipped hash.
-const gzHash = sha256(compressed);
-if (gzHash !== ts.sha256_gzipped) {
-  console.error(
-    `[copy-tesseract-assets] sha256 mismatch for gzipped eng.traineddata:\n` +
-      `  expected ${ts.sha256_gzipped}\n` +
-      `  actual   ${gzHash}\n` +
-      `Recompute sha256_gzipped via: node -e "const z=require('zlib'),f=require('fs'),` +
-      `c=require('crypto');const g=z.gzipSync(f.readFileSync('/tmp/eng.traineddata'),` +
-      `{level:9});console.log(c.createHash('sha256').update(g).digest('hex'));"`,
-  );
-  process.exit(1);
-}
 
 writeFileSync(gzDst, compressed);
 console.log(
