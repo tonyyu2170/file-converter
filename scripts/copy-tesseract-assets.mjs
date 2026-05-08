@@ -124,7 +124,15 @@ if (existsSync(gzDst) && sha256File(gzDst) === ts.sha256_gzipped) {
 console.log(
   `[copy-tesseract-assets] downloading eng.traineddata from ${ts.url}`,
 );
-const res = await fetch(ts.url);
+let res;
+try {
+  res = await fetch(ts.url, { signal: AbortSignal.timeout(60_000) });
+} catch (err) {
+  console.error(
+    `[copy-tesseract-assets] network error downloading ${ts.url}: ${err.message}`,
+  );
+  process.exit(1);
+}
 if (!res.ok) {
   console.error(
     `[copy-tesseract-assets] http ${res.status} downloading ${ts.url}`,
