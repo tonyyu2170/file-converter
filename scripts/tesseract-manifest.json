@@ -1,0 +1,20 @@
+{
+  "tesseract_js_version": "7.0.0",
+  "tesseract_core_version": "6.1.2",
+  "tessdata_source": {
+    "repo": "tesseract-ocr/tessdata_best",
+    "ref": "e12c65a915945e4c28e237a9b52bc4a8f39a0cec",
+    "url": "https://github.com/tesseract-ocr/tessdata_best/raw/e12c65a915945e4c28e237a9b52bc4a8f39a0cec/eng.traineddata",
+    "sha256_uncompressed": "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba",
+    "sha256_gzipped": "a3a16992d2bed4e2654cfc52a08634e9ddde528e8f89083704c106b9f4eebca0",
+    "size_bytes_uncompressed": 15400601,
+    "size_bytes_gzipped": 12795762
+  },
+  "files": {
+    "worker.min.js":               { "src": "tesseract.js/dist/worker.min.js",                "sha256": "576b7df7e3393e137e51849357c9adb53fe7ac1bb69bfa06cf3d61520f182c6d" },
+    "tesseract-core.wasm.js":      { "src": "tesseract.js-core/tesseract-core.wasm.js",       "sha256": "e66872f6a76f5ad414d73d21512245df0de3060ad4871a97c47efceaab27b955" },
+    "tesseract-core.wasm":         { "src": "tesseract.js-core/tesseract-core.wasm",          "sha256": "740f7e466a2f026e1f1e54a2e0d9957e386d8166110d1290224abd3d08986106" },
+    "tesseract-core-simd.wasm.js": { "src": "tesseract.js-core/tesseract-core-simd.wasm.js", "sha256": "3b0678c47a8dea6abb931b214171c08b742a5b9a9fcbbb1a028a08d5de6e9d4c" },
+    "tesseract-core-simd.wasm":    { "src": "tesseract.js-core/tesseract-core-simd.wasm",    "sha256": "ca11ee92a02023e4f5083eefd0966fb83b297416da54e997b9f6ce445f719c9b" }
+  }
+}

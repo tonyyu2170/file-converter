@@ -7,10 +7,10 @@
   },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs && node scripts/check-vercel-headers.mjs",
+    "prebuild": "node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs && node scripts/copy-tesseract-assets.mjs && node scripts/check-vercel-headers.mjs",
     "build": "next build",
     "postbuild": "node scripts/check-bundle-isolation.mjs",
-    "postinstall": "node scripts/fetch-bg-models.mjs && node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs",
+    "postinstall": "node scripts/fetch-bg-models.mjs && node scripts/copy-bg-models.mjs && node scripts/copy-ffmpeg-core.mjs && node scripts/copy-tesseract-assets.mjs",
     "start": "next start",
     "lint": "biome check src tests",
     "lint:fix": "biome check --write src tests",
@@ -42,7 +42,9 @@
     "pdf-lib": "^1.17.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^6.1.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

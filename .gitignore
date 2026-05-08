@@ -52,4 +52,6 @@ public/onnx-wasm/*
 !public/onnx-wasm/.gitkeep
 public/ffmpeg/*
 !public/ffmpeg/.gitkeep
+public/tesseract/*
+!public/tesseract/.gitkeep
 .lighthouseci/
