@@ -73,7 +73,12 @@ export async function extractFrameStripInWorker(args: FrameStripArgs): Promise<F
   );
 
   try {
-    await ff.writeFile(inName, new Uint8Array(fileBytes));
+    // Defensive clone of the input ArrayBuffer — see probe.ts for the
+    // underlying ffmpeg.wasm detach behavior. Today's callers always pass
+    // fresh per-call buffers from the harness so detachment never bites,
+    // but cloning here makes that invariant local rather than depending
+    // on caller discipline.
+    await ff.writeFile(inName, new Uint8Array(fileBytes.slice(0)));
     // ffmpeg.exec resolves with the exit code (it does not reject) — see
     // probe.ts for the same pattern. We need a clean exit (0) here because
     // a non-zero exit means the JPEGs we want to read won't be there.
