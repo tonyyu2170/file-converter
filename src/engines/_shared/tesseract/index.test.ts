@@ -63,13 +63,21 @@ describe("loadTesseract createWorker call shape", () => {
     // corePath explicitly names the simd-lstm variant to bypass getCore.js's
     // WASM-feature-detect heuristic (which selects relaxedsimd-lstm but that
     // binary contains x86 SSE code that crashes on ARM).
+    // Anchored regexes verify BOTH the same-origin absolute-URL shape (the
+    // load-bearing invariant) AND the exact file name. A regression that
+    // reverts to root-relative paths or injects a CDN URL would fail these
+    // patterns; stringContaining (the previous form) would have passed both.
     expect(createWorker).toHaveBeenCalledWith(
       "eng",
       1, // OEM.LSTM_ONLY
       expect.objectContaining({
-        langPath: expect.stringContaining("/tesseract/"),
-        corePath: expect.stringContaining("/tesseract/tesseract-core-simd-lstm.wasm.js"),
-        workerPath: expect.stringContaining("/tesseract/worker.min.js"),
+        langPath: expect.stringMatching(/^https?:\/\/[^/]+\/tesseract\/$/),
+        corePath: expect.stringMatching(
+          /^https?:\/\/[^/]+\/tesseract\/tesseract-core-simd-lstm\.wasm\.js$/,
+        ),
+        workerPath: expect.stringMatching(
+          /^https?:\/\/[^/]+\/tesseract\/worker\.min\.js$/,
+        ),
       }),
     );
   });
