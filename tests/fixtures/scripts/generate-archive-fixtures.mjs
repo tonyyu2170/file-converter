@@ -34,7 +34,6 @@ mkdirSync(OUT, { recursive: true });
 const FIXED_MTIME = 0; // pin for byte-stable output
 const enc = new TextEncoder();
 
-
 // ── Independent minimal TAR writer (NOT _shared/tar). ──────────────────────
 // Used to build tar-sparse.tar header and the round-trip fixtures' inner tars.
 function buildTarHeader({ path: p, size, mtime, typeflag }) {
@@ -69,12 +68,14 @@ function writeOctal(buf, start, len, value) {
 function buildTar(entries) {
   const blocks = [];
   for (const e of entries) {
-    blocks.push(buildTarHeader({
-      path: e.path,
-      size: e.payload.length,
-      mtime: FIXED_MTIME,
-      typeflag: 0x30, // "0"
-    }));
+    blocks.push(
+      buildTarHeader({
+        path: e.path,
+        size: e.payload.length,
+        mtime: FIXED_MTIME,
+        typeflag: 0x30, // "0"
+      }),
+    );
     blocks.push(e.payload);
     const pad = (512 - (e.payload.length % 512)) % 512;
     if (pad) blocks.push(new Uint8Array(pad));
@@ -86,7 +87,10 @@ function concat(arrs) {
   const total = arrs.reduce((s, a) => s + a.length, 0);
   const out = new Uint8Array(total);
   let off = 0;
-  for (const a of arrs) { out.set(a, off); off += a.length; }
+  for (const a of arrs) {
+    out.set(a, off);
+    off += a.length;
+  }
   return out;
 }
 
@@ -105,24 +109,31 @@ console.log("✓ sample.tar");
 writeFileSync(path.join(OUT, "sample.tar.gz"), gzipSync(sampleTar, { mtime: 0 }));
 console.log("✓ sample.tar.gz");
 
-writeFileSync(path.join(OUT, "sample.zip"), buildStoredZip([
-  { name: "hello.txt", data: HELLO },
-  { name: "data/notes.md", data: NOTES },
-]));
+writeFileSync(
+  path.join(OUT, "sample.zip"),
+  buildStoredZip([
+    { name: "hello.txt", data: HELLO },
+    { name: "data/notes.md", data: NOTES },
+  ]),
+);
 console.log("✓ sample.zip");
 
 // ── Security fixtures ──────────────────────────────────────────────────────
 
-writeFileSync(path.join(OUT, "zip-slip.zip"), buildStoredZip([
-  { name: "../escape.txt", data: enc.encode("escaped\n") },
-]));
+writeFileSync(
+  path.join(OUT, "zip-slip.zip"),
+  buildStoredZip([{ name: "../escape.txt", data: enc.encode("escaped\n") }]),
+);
 console.log("✓ zip-slip.zip");
 
-writeFileSync(path.join(OUT, "huge-entry.zip"), buildForgedSizeZip({
-  name: "huge.bin",
-  declaredUncompressed: 2_000_000_000,
-  realPayload: enc.encode("forged-uncompressed-size-sentinel"),
-}));
+writeFileSync(
+  path.join(OUT, "huge-entry.zip"),
+  buildForgedSizeZip({
+    name: "huge.bin",
+    declaredUncompressed: 2_000_000_000,
+    realPayload: enc.encode("forged-uncompressed-size-sentinel"),
+  }),
+);
 console.log("✓ huge-entry.zip");
 
 const bombEntries = [];
@@ -138,7 +149,9 @@ console.log("✓ bare.gz");
 try {
   const tmp = path.join(OUT, "_tmp-encrypted-source.txt");
   writeFileSync(tmp, "secret\n");
-  execSync(`cd "${OUT}" && rm -f encrypted.zip && zip -j -q -P test encrypted.zip _tmp-encrypted-source.txt`);
+  execSync(
+    `cd "${OUT}" && rm -f encrypted.zip && zip -j -q -P test encrypted.zip _tmp-encrypted-source.txt`,
+  );
   execSync(`rm "${tmp}"`);
   console.log("✓ encrypted.zip (via zip -P)");
 } catch (err) {
@@ -158,9 +171,10 @@ try {
   // BSD tar (macOS): no --mtime flag; we accept the live mtime for
   // tar-cli-sample.tar. Determinism for that file is not required since the
   // checksum-and-truncation tests only assert *behavior*, not byte equality.
-  const cmd = process.platform === "darwin"
-    ? `cd "${tmpDir}" && COPYFILE_DISABLE=1 tar -cf "${path.join(OUT, "tar-cli-sample.tar")}" hello.txt data/notes.md`
-    : `cd "${tmpDir}" && tar --mtime='1970-01-01' --owner=0 --group=0 --numeric-owner -cf "${path.join(OUT, "tar-cli-sample.tar")}" hello.txt data/notes.md`;
+  const cmd =
+    process.platform === "darwin"
+      ? `cd "${tmpDir}" && COPYFILE_DISABLE=1 tar -cf "${path.join(OUT, "tar-cli-sample.tar")}" hello.txt data/notes.md`
+      : `cd "${tmpDir}" && tar --mtime='1970-01-01' --owner=0 --group=0 --numeric-owner -cf "${path.join(OUT, "tar-cli-sample.tar")}" hello.txt data/notes.md`;
   execSync(cmd);
   execSync(`rm -rf "${tmpDir}"`);
   cliSampleBytes = new Uint8Array(readFileSync(path.join(OUT, "tar-cli-sample.tar")));
@@ -197,7 +211,10 @@ if (cliSampleBytes === null) {
     mtime: 0,
     typeflag: 0x53, // "S"
   });
-  writeFileSync(path.join(OUT, "tar-sparse.tar"), concat([header, new Uint8Array(512), new Uint8Array(1024)]));
+  writeFileSync(
+    path.join(OUT, "tar-sparse.tar"),
+    concat([header, new Uint8Array(512), new Uint8Array(1024)]),
+  );
   console.log("✓ tar-sparse.tar");
 }
 
@@ -265,7 +282,8 @@ function buildStoredZip(entries) {
   const eocd = new Uint8Array(22);
   const edv = new DataView(eocd.buffer);
   edv.setUint32(0, 0x06054b50, true);
-  edv.setUint16(4, 0, true); edv.setUint16(6, 0, true);
+  edv.setUint16(4, 0, true);
+  edv.setUint16(6, 0, true);
   edv.setUint16(8, entries.length, true);
   edv.setUint16(10, entries.length, true);
   edv.setUint32(12, central.length, true);
@@ -278,7 +296,10 @@ function buildForgedSizeZip({ name, declaredUncompressed, realPayload }) {
   const dv = new DataView(buf.buffer);
   let eocdOffset = -1;
   for (let i = buf.length - 22; i >= 0; i--) {
-    if (dv.getUint32(i, true) === 0x06054b50) { eocdOffset = i; break; }
+    if (dv.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
   }
   if (eocdOffset < 0) throw new Error("EOCD not found");
   const cdOffset = dv.getUint32(eocdOffset + 16, true);
@@ -291,7 +312,10 @@ function buildBombZip(entries) {
   const dv = new DataView(buf.buffer);
   let eocdOffset = -1;
   for (let i = buf.length - 22; i >= 0; i--) {
-    if (dv.getUint32(i, true) === 0x06054b50) { eocdOffset = i; break; }
+    if (dv.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
   }
   let cdOffset = dv.getUint32(eocdOffset + 16, true);
   for (const e of entries) {

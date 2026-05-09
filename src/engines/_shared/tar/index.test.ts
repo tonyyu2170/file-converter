@@ -93,7 +93,9 @@ describe("_shared/tar read errors", () => {
 describe("_shared/tar against tar(1) CLI fixture", () => {
   it("reads tar-cli-sample.tar (independent writer)", () => {
     const buf = new Uint8Array(
-      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-cli-sample.tar")),
+      readFileSync(
+        path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-cli-sample.tar"),
+      ),
     );
     const entries = readTar(buf);
     const byName = new Map(entries.map((e) => [e.path, e]));
@@ -104,14 +106,18 @@ describe("_shared/tar against tar(1) CLI fixture", () => {
 
   it("throws on tar-bad-checksum.tar", () => {
     const buf = new Uint8Array(
-      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-bad-checksum.tar")),
+      readFileSync(
+        path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-bad-checksum.tar"),
+      ),
     );
     expect(() => readTar(buf)).toThrow(/checksum mismatch/);
   });
 
   it("throws on tar-truncated.tar", () => {
     const buf = new Uint8Array(
-      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-truncated.tar")),
+      readFileSync(
+        path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-truncated.tar"),
+      ),
     );
     expect(() => readTar(buf)).toThrow(/truncated/);
   });
