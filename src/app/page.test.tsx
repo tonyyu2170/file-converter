@@ -7,7 +7,7 @@ describe("Home", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
     expect(bar).toHaveTextContent("v1.0.0");
-    expect(bar).toHaveTextContent("18 TOOLS ONLINE");
+    expect(bar).toHaveTextContent("19 TOOLS ONLINE");
   });
 
   it("renders the hero headline as four colored spans", () => {
@@ -138,7 +138,7 @@ describe("Home", () => {
   it("renders exactly 18 tool cards", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
-    expect(cards).toHaveLength(18);
+    expect(cards).toHaveLength(19);
   });
 
   it("renders the pet panel inside the hero", () => {
