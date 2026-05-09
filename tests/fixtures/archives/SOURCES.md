@@ -6,6 +6,12 @@ Run: `node tests/fixtures/scripts/generate-archive-fixtures.mjs`
 Re-run after `_shared/tar` changes that affect byte-level format
 (none expected — POSIX ustar is stable).
 
+Note: 4 of the 11 fixtures (`encrypted.zip`, `tar-cli-sample.tar`,
+`tar-bad-checksum.tar`, `tar-truncated.tar`) are NOT byte-stable on
+re-run because Info-ZIP `zip -P` and BSD `tar` embed live timestamps.
+The committed files are the source of truth for tests; if a re-run
+dirties these, `git checkout` reverts.
+
 ## Happy-path fixtures (3)
 
 | File | Contents |

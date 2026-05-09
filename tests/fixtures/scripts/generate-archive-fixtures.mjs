@@ -1,16 +1,25 @@
 #!/usr/bin/env node
 /**
- * Deterministic archive fixture generator.
+ * Archive fixture generator.
  *
  * Run from repo root: node tests/fixtures/scripts/generate-archive-fixtures.mjs
  *
- * Produces all fixtures under tests/fixtures/archives/. Idempotent —
- * re-running overwrites existing files with byte-identical output (mtime is
- * pinned to FIXED_MTIME below; gzip is invoked with no timestamp).
+ * Produces all fixtures under tests/fixtures/archives/.
+ *
+ * Idempotence:
+ *   - Byte-stable across runs: sample.zip, sample.tar, sample.tar.gz,
+ *     zip-slip.zip, huge-entry.zip, bomb.zip, bare.gz, tar-sparse.tar
+ *     (all built in-process by the JS helpers below; mtimes pinned to 0,
+ *     gzip invoked with no timestamp).
+ *   - NOT byte-stable: encrypted.zip (zip -P doesn't pin timestamps),
+ *     tar-cli-sample.tar (BSD tar on macOS lacks --mtime), and the two
+ *     fixtures derived from tar-cli-sample.tar (tar-bad-checksum.tar,
+ *     tar-truncated.tar). The committed files are the source of truth
+ *     for tests; if a re-run dirties these, `git checkout` reverts.
  *
  * The TAR helpers in this script are intentionally INDEPENDENT of
- * src/engines/_shared/tar/ so the readTar tests verify against bytes that
- * weren't produced by writeTar.
+ * src/engines/_shared/tar/ so the readTar tests verify against bytes
+ * that weren't produced by writeTar.
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
