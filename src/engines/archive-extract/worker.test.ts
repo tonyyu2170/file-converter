@@ -86,4 +86,57 @@ describe("archive-extract: rejections", () => {
     const garbage = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]).buffer;
     await expect(extractArchive(garbage, "x.bin", "")).rejects.toThrow(/unrecognized/);
   });
+
+  it("rejects path with backslash separator", async () => {
+    // Hand-build a minimal ZIP with one entry named "..\\evil.txt" (Windows
+    // path traversal payload). isSafePath should reject backslash separators.
+    const enc = new TextEncoder();
+    const name = enc.encode("..\\evil.txt");
+    const data = enc.encode("x");
+    // CRC-32 of "x"
+    let crc = 0xffffffff;
+    for (const b of data) {
+      crc ^= b;
+      for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+    crc = (crc ^ 0xffffffff) >>> 0;
+    const local = new Uint8Array(30 + name.length + data.length);
+    const ldv = new DataView(local.buffer);
+    ldv.setUint32(0, 0x04034b50, true);
+    ldv.setUint16(4, 20, true);
+    ldv.setUint32(14, crc, true);
+    ldv.setUint32(18, data.length, true);
+    ldv.setUint32(22, data.length, true);
+    ldv.setUint16(26, name.length, true);
+    local.set(name, 30);
+    local.set(data, 30 + name.length);
+
+    const central = new Uint8Array(46 + name.length);
+    const cdv = new DataView(central.buffer);
+    cdv.setUint32(0, 0x02014b50, true);
+    cdv.setUint16(4, 20, true);
+    cdv.setUint16(6, 20, true);
+    cdv.setUint32(16, crc, true);
+    cdv.setUint32(20, data.length, true);
+    cdv.setUint32(24, data.length, true);
+    cdv.setUint16(28, name.length, true);
+    central.set(name, 46);
+
+    const eocd = new Uint8Array(22);
+    const edv = new DataView(eocd.buffer);
+    edv.setUint32(0, 0x06054b50, true);
+    edv.setUint16(8, 1, true);
+    edv.setUint16(10, 1, true);
+    edv.setUint32(12, central.length, true);
+    edv.setUint32(16, local.length, true);
+
+    const buf = new Uint8Array(local.length + central.length + eocd.length);
+    buf.set(local, 0);
+    buf.set(central, local.length);
+    buf.set(eocd, local.length + central.length);
+
+    await expect(
+      extractArchive(buf.buffer as ArrayBuffer, "evil.zip", "application/zip"),
+    ).rejects.toThrow(/unsafe path/);
+  });
 });

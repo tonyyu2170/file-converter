@@ -32,6 +32,7 @@ function isSafePath(p: string): boolean {
   if (p.startsWith("/")) return false;
   if (/^[A-Za-z]:/.test(p)) return false; // Windows drive letter
   if (p.includes("\0")) return false;
+  if (p.includes("\\")) return false; // backslash — Windows separator
   // Disallow any segment that is exactly ".."
   for (const seg of p.split("/")) {
     if (seg === "..") return false;
@@ -48,8 +49,15 @@ async function extractZip(bytes: Uint8Array): Promise<OutputItem[]> {
   let eocdOffset = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
     if (dv.getUint32(i, true) === 0x06054b50) {
-      eocdOffset = i;
-      break;
+      // Validate: EOCD record (22 bytes) + comment field (declared length)
+      // must end exactly at the end of the file. If not, this is either a
+      // signature-in-comment collision or the real EOCD is further back —
+      // keep scanning.
+      const commentLen = dv.getUint16(i + 20, true);
+      if (i + 22 + commentLen === bytes.length) {
+        eocdOffset = i;
+        break;
+      }
     }
   }
   if (eocdOffset < 0) throw new Error("archive-extract: ZIP end-of-central-directory not found");
@@ -68,6 +76,9 @@ async function extractZip(bytes: Uint8Array): Promise<OutputItem[]> {
       throw new Error("archive-extract: malformed ZIP central directory");
     }
     const gpFlag = dv.getUint16(cursor + 8, true);
+    // Encryption check fires BEFORE size/path checks because user-actionable
+    // errors should reflect the most fundamental obstacle (no password support)
+    // rather than a derived one (size cap on an archive we wouldn't decrypt).
     if (gpFlag & 0x0001) {
       throw new Error(
         "archive-extract: this archive is encrypted; password-protected ZIPs aren't supported",
