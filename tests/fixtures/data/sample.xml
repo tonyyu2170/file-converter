@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<library>
+  <book id="1">
+    <title>Pride and Prejudice</title>
+    <author>Jane Austen</author>
+  </book>
+  <book id="2">
+    <title>Frankenstein</title>
+    <author>Mary Shelley</author>
+  </book>
+</library>

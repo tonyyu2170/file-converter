@@ -1,0 +1,12 @@
+- id: 1
+  name: Alice
+  score: 95
+- id: 2
+  name: Bob
+  score: 87
+- id: 3
+  name: Carol
+  score: 72
+- id: 4
+  name: Dan
+  score: 90
