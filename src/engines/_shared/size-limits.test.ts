@@ -12,6 +12,11 @@ describe("SIZE_LIMITS_MB", () => {
       // OCR engines (image-to-text) enforce their own cap; the shared UI
       // default matches the engine's own 25 MB hard limit.
       ocr: { soft: 25, hard: 25 },
+      // Archive engines validate per-entry sizes internally. Hard cap covers
+      // archive-create's 500 MB sum-of-inputs; soft cap (200 MB) is set so the
+      // "may be slow" warning fires on batches that genuinely take noticeable
+      // time to package, not on every multi-file drop.
+      archive: { soft: 200, hard: 500 },
     });
   });
 });
@@ -28,5 +33,7 @@ describe("softCapBytes / hardCapBytes", () => {
     expect(hardCapBytes("audio")).toBe(500_000_000);
     expect(softCapBytes("video")).toBe(50_000_000);
     expect(hardCapBytes("video")).toBe(100_000_000);
+    expect(softCapBytes("archive")).toBe(200_000_000);
+    expect(hardCapBytes("archive")).toBe(500_000_000);
   });
 });

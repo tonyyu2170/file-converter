@@ -110,6 +110,18 @@ const TOOLS = [
     description: "jpg, png, webp, heic · extract text via ocr (tesseract)",
     href: "/tools/image-to-text",
   },
+  {
+    id: "archive-extract",
+    title: "archive extract",
+    description: "zip, tar, tar.gz · extract entries; safe paths only",
+    href: "/tools/archive-extract",
+  },
+  {
+    id: "archive-create",
+    title: "archive create",
+    description: "any files in · zip or tar.gz out · custom filename",
+    href: "/tools/archive-create",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

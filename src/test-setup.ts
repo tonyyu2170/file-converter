@@ -12,6 +12,18 @@ if (typeof Blob !== "undefined" && Blob.prototype.arrayBuffer === undefined) {
   };
 }
 
+// jsdom 25 does not implement Blob.prototype.text; polyfill via FileReader.
+if (typeof Blob !== "undefined" && Blob.prototype.text === undefined) {
+  Blob.prototype.text = function text(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(this);
+    });
+  };
+}
+
 if (typeof URL.createObjectURL !== "function") {
   URL.createObjectURL = () => "";
 }

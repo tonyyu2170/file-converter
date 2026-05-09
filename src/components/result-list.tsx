@@ -12,6 +12,30 @@ type Props = {
   inputBytes?: number;
 };
 
+function basenameOf(p: string): string {
+  const i = p.lastIndexOf("/");
+  return i === -1 ? p : p.slice(i + 1);
+}
+
+function buildDedupeMap(items: ReadonlyArray<OutputItem>): string[] {
+  const seen = new Map<string, number>();
+  const out: string[] = [];
+  for (const item of items) {
+    const base = basenameOf(item.filename);
+    const count = seen.get(base) ?? 0;
+    if (count === 0) {
+      out.push(base);
+    } else {
+      const dot = base.lastIndexOf(".");
+      const stem = dot === -1 ? base : base.slice(0, dot);
+      const ext = dot === -1 ? "" : base.slice(dot);
+      out.push(`${stem}-${count}${ext}`);
+    }
+    seen.set(base, count + 1);
+  }
+  return out;
+}
+
 function formatDelta(input: number, output: number): string {
   if (input === 0) return "";
   const pct = Math.round(((output - input) / input) * 100);
@@ -25,6 +49,7 @@ export function ResultList({ items, archiveBasename, archiveSuffix, inputBytes }
   if (items.length === 0) return null;
 
   const outputBytes = items.reduce((sum, it) => sum + it.blob.size, 0);
+  const downloadNames = buildDedupeMap(items);
 
   async function handleDownloadAllAsZip() {
     if (zipBusy) return;
@@ -84,7 +109,7 @@ export function ResultList({ items, archiveBasename, archiveSuffix, inputBytes }
             </button>
           </li>
         )}
-        {items.map((item) => (
+        {items.map((item, i) => (
           <li key={item.filename} className="flex flex-col gap-1 px-3 py-2 text-[var(--text-sm)]">
             <div className="flex items-center justify-between">
               <span className="flex min-w-0 items-baseline gap-2">
@@ -98,7 +123,7 @@ export function ResultList({ items, archiveBasename, archiveSuffix, inputBytes }
               <button
                 type="button"
                 aria-label={`download ${item.filename}`}
-                onClick={() => download(item.blob, item.filename)}
+                onClick={() => download(item.blob, downloadNames[i] ?? basenameOf(item.filename))}
                 className="border border-[var(--color-hairline)] px-2 py-1 text-[var(--text-xs)] uppercase tracking-[0.1em] text-[var(--color-fg-strong)] hover:border-[var(--color-accent)]"
               >
                 download

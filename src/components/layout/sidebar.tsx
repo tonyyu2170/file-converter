@@ -32,10 +32,32 @@ const TOOLS: ToolEntry[] = [
     group: "VIDEO",
   },
   { id: "image-to-text", href: "/tools/image-to-text", label: "image → text", group: "OCR" },
+  {
+    id: "archive-extract",
+    href: "/tools/archive-extract",
+    label: "archive extract",
+    group: "ARCHIVES",
+  },
+  {
+    id: "archive-create",
+    href: "/tools/archive-create",
+    label: "archive create",
+    group: "ARCHIVES",
+  },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
-const GROUP_ORDER = ["HOME", "IMAGES", "PDFS", "DOCS", "AUDIO", "VIDEO", "OCR", "ABOUT"] as const;
+const GROUP_ORDER = [
+  "HOME",
+  "IMAGES",
+  "PDFS",
+  "DOCS",
+  "AUDIO",
+  "VIDEO",
+  "OCR",
+  "ARCHIVES",
+  "ABOUT",
+] as const;
 
 export function Sidebar() {
   const groups = TOOLS.reduce<Record<string, ToolEntry[]>>((acc, t) => {
