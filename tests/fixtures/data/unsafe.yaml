@@ -1,0 +1,1 @@
+greet: !!js/function "function() { return 'hello'; }"

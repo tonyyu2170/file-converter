@@ -122,6 +122,24 @@ const TOOLS = [
     description: "any files in · zip or tar.gz out · custom filename",
     href: "/tools/archive-create",
   },
+  {
+    id: "data-convert",
+    title: "data convert",
+    description: "csv, json, yaml · convert between formats",
+    href: "/tools/data-convert",
+  },
+  {
+    id: "json-format",
+    title: "json format",
+    description: "json · pretty-print or minify with indent control",
+    href: "/tools/json-format",
+  },
+  {
+    id: "xml-to-json",
+    title: "xml → json",
+    description: "xml · convert to json (one-way)",
+    href: "/tools/xml-to-json",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

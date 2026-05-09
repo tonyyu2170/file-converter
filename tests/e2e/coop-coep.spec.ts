@@ -6,6 +6,7 @@ const TOOL_ROUTES = [
   "/tools/archive-create",
   "/tools/archive-extract",
   "/tools/audio-convert",
+  "/tools/data-convert",
   "/tools/audio-trim",
   "/tools/docx-to-pdf",
   "/tools/docx-to-txt",
@@ -14,6 +15,7 @@ const TOOL_ROUTES = [
   "/tools/image-resize",
   "/tools/image-to-pdf",
   "/tools/image-to-text",
+  "/tools/json-format",
   "/tools/markdown-to-pdf",
   "/tools/pdf-edit",
   "/tools/pdf-merge",
@@ -23,6 +25,7 @@ const TOOL_ROUTES = [
   "/tools/txt-to-pdf",
   "/tools/video-extract-audio",
   "/tools/video-trim",
+  "/tools/xml-to-json",
 ] as const;
 
 const ALL_ROUTES = ["/", "/about", ...TOOL_ROUTES] as const;
