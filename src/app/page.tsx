@@ -128,6 +128,12 @@ const TOOLS = [
     description: "csv, json, yaml · convert between formats",
     href: "/tools/data-convert",
   },
+  {
+    id: "json-format",
+    title: "json format",
+    description: "json · pretty-print or minify with indent control",
+    href: "/tools/json-format",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

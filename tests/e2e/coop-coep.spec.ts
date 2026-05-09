@@ -15,6 +15,7 @@ const TOOL_ROUTES = [
   "/tools/image-resize",
   "/tools/image-to-pdf",
   "/tools/image-to-text",
+  "/tools/json-format",
   "/tools/markdown-to-pdf",
   "/tools/pdf-edit",
   "/tools/pdf-merge",
