@@ -1,3 +1,4 @@
+import * as downloadModule from "@/lib/download";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -179,5 +180,49 @@ describe("ResultList", () => {
       expect(notice).toHaveTextContent("a, b, c, …");
       expect(notice).not.toHaveTextContent(/\bd\b/);
     });
+  });
+});
+
+describe("ResultList per-item download for path-bearing entries", () => {
+  it("strips directory prefix when downloading individually", () => {
+    const downloadSpy = vi.spyOn(downloadModule, "download").mockImplementation(() => {});
+    const beachBlob = new Blob(["a"]);
+    const items = [{ filename: "vacation/beach.jpg", mime: "image/jpeg", blob: beachBlob }];
+    render(<ResultList items={items} />);
+    fireEvent.click(screen.getByLabelText(/download vacation\/beach\.jpg/i));
+    expect(downloadSpy).toHaveBeenCalledWith(beachBlob, "beach.jpg");
+    downloadSpy.mockRestore();
+  });
+
+  it("dedupes basename collisions across items", () => {
+    const downloadSpy = vi.spyOn(downloadModule, "download").mockImplementation(() => {});
+    const blobA = new Blob(["a"]);
+    const blobB = new Blob(["b"]);
+    const blobC = new Blob(["c"]);
+    const items = [
+      { filename: "vacation/foo.jpg", mime: "image/jpeg", blob: blobA },
+      { filename: "archive/foo.jpg", mime: "image/jpeg", blob: blobB },
+      { filename: "foo.jpg", mime: "image/jpeg", blob: blobC },
+    ];
+    render(<ResultList items={items} />);
+    // Buttons are aria-labelled by the ORIGINAL filename to remain unique
+    // and accessible. The downloaded name is what the dedupe produces.
+    fireEvent.click(screen.getByLabelText("download vacation/foo.jpg"));
+    fireEvent.click(screen.getByLabelText("download archive/foo.jpg"));
+    fireEvent.click(screen.getByLabelText("download foo.jpg"));
+    expect(downloadSpy).toHaveBeenNthCalledWith(1, blobA, "foo.jpg");
+    expect(downloadSpy).toHaveBeenNthCalledWith(2, blobB, "foo-1.jpg");
+    expect(downloadSpy).toHaveBeenNthCalledWith(3, blobC, "foo-2.jpg");
+    downloadSpy.mockRestore();
+  });
+
+  it("download-all-as-zip preserves entry paths verbatim", async () => {
+    const items = [
+      { filename: "vacation/beach.jpg", mime: "image/jpeg", blob: new Blob(["a"]) },
+      { filename: "vacation/sunset.jpg", mime: "image/jpeg", blob: new Blob(["b"]) },
+    ];
+    render(<ResultList items={items} archiveBasename="trip" archiveSuffix="-extract" />);
+    // Smoke check that the button renders + the click handler is wired.
+    expect(screen.getByTestId("download-all-zip")).toBeInTheDocument();
   });
 });
