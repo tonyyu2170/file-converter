@@ -34,7 +34,6 @@ mkdirSync(OUT, { recursive: true });
 const FIXED_MTIME = 0; // pin for byte-stable output
 const enc = new TextEncoder();
 
-function readBuf(p) { return new Uint8Array(readFileSync(p)); }
 
 // ── Independent minimal TAR writer (NOT _shared/tar). ──────────────────────
 // Used to build tar-sparse.tar header and the round-trip fixtures' inner tars.
@@ -148,6 +147,9 @@ try {
 
 // ── TAR-format fixtures ────────────────────────────────────────────────────
 
+/** @type {Uint8Array | null} */
+let cliSampleBytes = null;
+
 try {
   const tmpDir = path.join(OUT, "_tmp-tar-src");
   execSync(`rm -rf "${tmpDir}" && mkdir -p "${tmpDir}/data"`);
@@ -161,32 +163,31 @@ try {
     : `cd "${tmpDir}" && tar --mtime='1970-01-01' --owner=0 --group=0 --numeric-owner -cf "${path.join(OUT, "tar-cli-sample.tar")}" hello.txt data/notes.md`;
   execSync(cmd);
   execSync(`rm -rf "${tmpDir}"`);
+  cliSampleBytes = new Uint8Array(readFileSync(path.join(OUT, "tar-cli-sample.tar")));
   console.log("✓ tar-cli-sample.tar");
 } catch (err) {
   console.warn(`! skipped tar-cli-sample.tar — install tar and re-run (${err.message})`);
 }
 
-try {
-  const buf = readBuf(path.join(OUT, "tar-cli-sample.tar"));
-  const corrupted = new Uint8Array(buf);
+if (cliSampleBytes === null) {
+  console.warn("! skipped tar-bad-checksum.tar (tar-cli-sample.tar unavailable)");
+} else {
+  const corrupted = new Uint8Array(cliSampleBytes);
   corrupted[0] = corrupted[0] === 0x61 ? 0x62 : 0x61;
   writeFileSync(path.join(OUT, "tar-bad-checksum.tar"), corrupted);
   console.log("✓ tar-bad-checksum.tar");
-} catch {
-  console.warn("! skipped tar-bad-checksum.tar (depends on tar-cli-sample.tar)");
 }
 
-try {
-  const buf = readBuf(path.join(OUT, "tar-cli-sample.tar"));
+if (cliSampleBytes === null) {
+  console.warn("! skipped tar-truncated.tar (tar-cli-sample.tar unavailable)");
+} else {
   // Slice at 515: header (512) + 3 bytes of payload. First entry is hello.txt
   // (size=6), so payloadEnd=518 > 515 — guaranteed truncation regardless of
   // whether BSD tar emits PAX headers (original spec used 512+50 which was
   // designed for PAX-prefixed output that pushes data further; plain ustar
   // with a 6-byte first entry fits entirely within 512+50 bytes).
-  writeFileSync(path.join(OUT, "tar-truncated.tar"), buf.slice(0, 515));
+  writeFileSync(path.join(OUT, "tar-truncated.tar"), cliSampleBytes.slice(0, 515));
   console.log("✓ tar-truncated.tar");
-} catch {
-  console.warn("! skipped tar-truncated.tar (depends on tar-cli-sample.tar)");
 }
 
 {
