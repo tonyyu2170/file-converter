@@ -134,6 +134,12 @@ const TOOLS = [
     description: "json · pretty-print or minify with indent control",
     href: "/tools/json-format",
   },
+  {
+    id: "xml-to-json",
+    title: "xml → json",
+    description: "xml · convert to json (one-way)",
+    href: "/tools/xml-to-json",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

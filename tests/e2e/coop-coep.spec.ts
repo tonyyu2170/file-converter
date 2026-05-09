@@ -25,6 +25,7 @@ const TOOL_ROUTES = [
   "/tools/txt-to-pdf",
   "/tools/video-extract-audio",
   "/tools/video-trim",
+  "/tools/xml-to-json",
 ] as const;
 
 const ALL_ROUTES = ["/", "/about", ...TOOL_ROUTES] as const;

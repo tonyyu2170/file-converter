@@ -46,6 +46,7 @@ const TOOLS: ToolEntry[] = [
   },
   { id: "data-convert", href: "/tools/data-convert", label: "data convert", group: "DATA" },
   { id: "json-format", href: "/tools/json-format", label: "json format", group: "DATA" },
+  { id: "xml-to-json", href: "/tools/xml-to-json", label: "xml → json", group: "DATA" },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
