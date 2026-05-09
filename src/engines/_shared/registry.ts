@@ -5,12 +5,14 @@ export type EngineId =
   | "archive-extract"
   | "audio-convert"
   | "audio-trim"
+  | "data-convert"
   | "docx-to-txt"
   | "image-bg-remove"
   | "image-convert"
   | "image-resize"
   | "image-to-pdf"
   | "image-to-text"
+  | "json-format"
   | "markdown-to-pdf"
   | "pdf-edit"
   | "pdf-merge"
@@ -20,7 +22,8 @@ export type EngineId =
   | "docx-to-pdf"
   | "txt-to-pdf"
   | "video-extract-audio"
-  | "video-trim";
+  | "video-trim"
+  | "xml-to-json";
 
 // biome-ignore lint/suspicious/noExplicitAny: registry erases per-engine TOptions
 type AnyEngine = ConversionEngine<any, OutputItem | OutputItem[]>;
@@ -32,12 +35,14 @@ const REGISTRY: Record<EngineId, Loader> = {
   "archive-extract": () => import("@/engines/archive-extract"),
   "audio-convert": () => import("@/engines/audio-convert"),
   "audio-trim": () => import("@/engines/audio-trim"),
+  "data-convert": () => import("@/engines/data-convert"),
   "docx-to-txt": () => import("@/engines/docx-to-txt"),
   "image-bg-remove": () => import("@/engines/image-bg-remove"),
   "image-convert": () => import("@/engines/image-convert"),
   "image-resize": () => import("@/engines/image-resize"),
   "image-to-pdf": () => import("@/engines/image-to-pdf"),
   "image-to-text": () => import("@/engines/image-to-text"),
+  "json-format": () => import("@/engines/json-format"),
   "markdown-to-pdf": () => import("@/engines/markdown-to-pdf"),
   "pdf-edit": () => import("@/engines/pdf-edit"),
   "pdf-merge": () => import("@/engines/pdf-merge"),
@@ -48,6 +53,7 @@ const REGISTRY: Record<EngineId, Loader> = {
   "txt-to-pdf": () => import("@/engines/txt-to-pdf"),
   "video-extract-audio": () => import("@/engines/video-extract-audio"),
   "video-trim": () => import("@/engines/video-trim"),
+  "xml-to-json": () => import("@/engines/xml-to-json"),
 };
 
 export async function loadEngine(id: EngineId): Promise<ConversionEngine> {

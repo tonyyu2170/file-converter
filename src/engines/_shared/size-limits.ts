@@ -17,6 +17,11 @@ export const SIZE_LIMITS_MB: Record<EngineCategory, { soft: number; hard: number
   // "may be slow" warning fires on batches that genuinely take noticeable
   // time to package, not on every multi-file drop.
   archive: { soft: 200, hard: 500 },
+  // Data engines parse text trees into JS objects. 50 MB hard cap matches
+  // the per-engine constants; soft cap (25 MB) sets the "may be slow"
+  // warning at the threshold where in-browser parsing of large text trees
+  // starts to feel sluggish on the 8 GB dev box.
+  data: { soft: 25, hard: 50 },
 } as const;
 
 // SI thresholds (×1_000_000), matching the formatBytes helper.

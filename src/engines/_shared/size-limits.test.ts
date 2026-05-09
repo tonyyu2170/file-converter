@@ -17,6 +17,11 @@ describe("SIZE_LIMITS_MB", () => {
       // "may be slow" warning fires on batches that genuinely take noticeable
       // time to package, not on every multi-file drop.
       archive: { soft: 200, hard: 500 },
+      // Data engines parse text trees into JS objects. 50 MB hard cap matches
+      // the per-engine constants; soft cap (25 MB) sets the "may be slow"
+      // warning at the threshold where in-browser parsing of large text trees
+      // starts to feel sluggish on the 8 GB dev box.
+      data: { soft: 25, hard: 50 },
     });
   });
 });
@@ -35,5 +40,7 @@ describe("softCapBytes / hardCapBytes", () => {
     expect(hardCapBytes("video")).toBe(100_000_000);
     expect(softCapBytes("archive")).toBe(200_000_000);
     expect(hardCapBytes("archive")).toBe(500_000_000);
+    expect(softCapBytes("data")).toBe(25_000_000);
+    expect(hardCapBytes("data")).toBe(50_000_000);
   });
 });
