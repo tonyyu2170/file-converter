@@ -12,6 +12,9 @@ export const SIZE_LIMITS_MB: Record<EngineCategory, { soft: number; hard: number
   // Provide generous defaults here so the shared size-check UI path doesn't
   // reject before the engine's own validate() runs.
   ocr: { soft: 25, hard: 25 },
+  // Archive engines validate individual entry sizes internally.
+  // Top-level cap covers total input archive size.
+  archive: { soft: 100, hard: 500 },
 } as const;
 
 // SI thresholds (×1_000_000), matching the formatBytes helper.
