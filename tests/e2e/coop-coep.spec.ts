@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 
 // Source-of-truth route catalog for COOP/COEP. Update when adding tools.
 const TOOL_ROUTES = [
+  "/tools/archive-create",
   "/tools/archive-extract",
   "/tools/audio-convert",
   "/tools/audio-trim",

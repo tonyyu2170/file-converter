@@ -116,6 +116,12 @@ const TOOLS = [
     description: "zip, tar, tar.gz · extract entries; safe paths only",
     href: "/tools/archive-extract",
   },
+  {
+    id: "archive-create",
+    title: "archive create",
+    description: "any files in · zip or tar.gz out · custom filename",
+    href: "/tools/archive-create",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

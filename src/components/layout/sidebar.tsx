@@ -38,6 +38,12 @@ const TOOLS: ToolEntry[] = [
     label: "archive extract",
     group: "ARCHIVES",
   },
+  {
+    id: "archive-create",
+    href: "/tools/archive-create",
+    label: "archive create",
+    group: "ARCHIVES",
+  },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
