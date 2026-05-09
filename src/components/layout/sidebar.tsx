@@ -44,6 +44,7 @@ const TOOLS: ToolEntry[] = [
     label: "archive create",
     group: "ARCHIVES",
   },
+  { id: "data-convert", href: "/tools/data-convert", label: "data convert", group: "DATA" },
   { id: "about", href: "/about", label: "about", group: "ABOUT" },
 ];
 
@@ -56,6 +57,7 @@ const GROUP_ORDER = [
   "VIDEO",
   "OCR",
   "ARCHIVES",
+  "DATA",
   "ABOUT",
 ] as const;
 

@@ -122,6 +122,12 @@ const TOOLS = [
     description: "any files in · zip or tar.gz out · custom filename",
     href: "/tools/archive-create",
   },
+  {
+    id: "data-convert",
+    title: "data convert",
+    description: "csv, json, yaml · convert between formats",
+    href: "/tools/data-convert",
+  },
 ] as const;
 
 const VERSION = "v1.0.0";

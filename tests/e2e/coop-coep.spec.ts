@@ -6,6 +6,7 @@ const TOOL_ROUTES = [
   "/tools/archive-create",
   "/tools/archive-extract",
   "/tools/audio-convert",
+  "/tools/data-convert",
   "/tools/audio-trim",
   "/tools/docx-to-pdf",
   "/tools/docx-to-txt",
