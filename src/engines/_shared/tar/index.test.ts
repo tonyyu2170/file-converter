@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { type TarEntry, readTar, writeTar } from "./index";
 
@@ -85,5 +87,39 @@ describe("_shared/tar read errors", () => {
     // Cut off mid-payload.
     const truncated = buf.slice(0, 512 + 50);
     expect(() => readTar(truncated)).toThrow(/truncated/);
+  });
+});
+
+describe("_shared/tar against tar(1) CLI fixture", () => {
+  it("reads tar-cli-sample.tar (independent writer)", () => {
+    const buf = new Uint8Array(
+      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-cli-sample.tar")),
+    );
+    const entries = readTar(buf);
+    const byName = new Map(entries.map((e) => [e.path, e]));
+    const dec = new TextDecoder();
+    expect(dec.decode(byName.get("hello.txt")?.payload)).toBe("hello\n");
+    expect(dec.decode(byName.get("data/notes.md")?.payload)).toBe("# notes\n");
+  });
+
+  it("throws on tar-bad-checksum.tar", () => {
+    const buf = new Uint8Array(
+      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-bad-checksum.tar")),
+    );
+    expect(() => readTar(buf)).toThrow(/checksum mismatch/);
+  });
+
+  it("throws on tar-truncated.tar", () => {
+    const buf = new Uint8Array(
+      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-truncated.tar")),
+    );
+    expect(() => readTar(buf)).toThrow(/truncated/);
+  });
+
+  it("throws on tar-sparse.tar", () => {
+    const buf = new Uint8Array(
+      readFileSync(path.resolve(__dirname, "../../../../tests/fixtures/archives/tar-sparse.tar")),
+    );
+    expect(() => readTar(buf)).toThrow(/sparse/);
   });
 });
