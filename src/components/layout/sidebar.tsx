@@ -24,6 +24,7 @@ const TOOLS: ToolEntry[] = [
   { id: "txt-to-pdf", href: "/tools/txt-to-pdf", label: "txt→pdf", group: "DOCS" },
   { id: "audio-convert", href: "/tools/audio-convert", label: "audio convert", group: "AUDIO" },
   { id: "audio-trim", href: "/tools/audio-trim", label: "audio trim", group: "AUDIO" },
+  { id: "video-convert", href: "/tools/video-convert", label: "video convert", group: "VIDEO" },
   { id: "video-trim", href: "/tools/video-trim", label: "video trim", group: "VIDEO" },
   {
     id: "video-extract-audio",
