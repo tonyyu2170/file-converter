@@ -1,15 +1,7 @@
 import { PetPanel } from "@/components/pets/pet-panel";
 import Link from "next/link";
 
-type Category =
-  | "image"
-  | "pdf"
-  | "document"
-  | "audio"
-  | "video"
-  | "archive"
-  | "data"
-  | "ocr";
+type Category = "image" | "pdf" | "document" | "audio" | "video" | "archive" | "data" | "ocr";
 
 const TOOLS = [
   {
