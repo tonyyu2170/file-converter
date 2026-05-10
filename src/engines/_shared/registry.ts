@@ -21,6 +21,7 @@ export type EngineId =
   | "pdf-to-md"
   | "docx-to-pdf"
   | "txt-to-pdf"
+  | "video-convert"
   | "video-extract-audio"
   | "video-trim"
   | "xml-to-json";
@@ -51,6 +52,7 @@ const REGISTRY: Record<EngineId, Loader> = {
   "pdf-to-md": () => import("@/engines/pdf-to-md"),
   "docx-to-pdf": () => import("@/engines/docx-to-pdf"),
   "txt-to-pdf": () => import("@/engines/txt-to-pdf"),
+  "video-convert": () => import("@/engines/video-convert"),
   "video-extract-audio": () => import("@/engines/video-extract-audio"),
   "video-trim": () => import("@/engines/video-trim"),
   "xml-to-json": () => import("@/engines/xml-to-json"),
