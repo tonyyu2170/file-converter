@@ -15,7 +15,5 @@ test("video-convert shows the three format radios and the quality select", async
 
 test("video-convert shows the latency-expectation tooltip", async ({ page }) => {
   await page.goto("/tools/video-convert");
-  await expect(
-    page.getByText(/typically takes ~1 minute per minute of video/i),
-  ).toBeVisible();
+  await expect(page.getByText(/typically takes ~1 minute per minute of video/i)).toBeVisible();
 });

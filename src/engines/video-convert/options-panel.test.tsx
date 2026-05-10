@@ -1,15 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { VideoConvertOptionsPanel } from "./options-panel";
 import { defaultVideoConvertOptions } from "./options";
+import { VideoConvertOptionsPanel } from "./options-panel";
 
 describe("VideoConvertOptionsPanel", () => {
   it("renders three format radios in design order", () => {
     render(
-      <VideoConvertOptionsPanel
-        value={defaultVideoConvertOptions}
-        onChange={() => undefined}
-      />,
+      <VideoConvertOptionsPanel value={defaultVideoConvertOptions} onChange={() => undefined} />,
     );
     const radios = screen.getAllByRole("radio");
     expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["mp4", "mov", "webm"]);
@@ -17,12 +14,7 @@ describe("VideoConvertOptionsPanel", () => {
 
   it("emits onChange with the chosen format", () => {
     const onChange = vi.fn();
-    render(
-      <VideoConvertOptionsPanel
-        value={defaultVideoConvertOptions}
-        onChange={onChange}
-      />,
-    );
+    render(<VideoConvertOptionsPanel value={defaultVideoConvertOptions} onChange={onChange} />);
     fireEvent.click(screen.getByLabelText("mp4"));
     expect(onChange).toHaveBeenCalledWith({
       ...defaultVideoConvertOptions,
@@ -38,11 +30,7 @@ describe("VideoConvertOptionsPanel", () => {
       />,
     );
     const select = screen.getByLabelText("quality") as HTMLSelectElement;
-    expect(Array.from(select.options).map((o) => o.value)).toEqual([
-      "low",
-      "medium",
-      "high",
-    ]);
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["low", "medium", "high"]);
     expect(select.value).toBe("medium");
   });
 
@@ -63,13 +51,8 @@ describe("VideoConvertOptionsPanel", () => {
 
   it("renders a tooltip-style hint about expected latency", () => {
     render(
-      <VideoConvertOptionsPanel
-        value={defaultVideoConvertOptions}
-        onChange={() => undefined}
-      />,
+      <VideoConvertOptionsPanel value={defaultVideoConvertOptions} onChange={() => undefined} />,
     );
-    expect(
-      screen.getByText(/typically takes ~1 minute per minute of video/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/typically takes ~1 minute per minute of video/i)).toBeInTheDocument();
   });
 });

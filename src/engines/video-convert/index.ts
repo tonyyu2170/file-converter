@@ -3,12 +3,7 @@ import type { OutputItem, SingleInputEngine } from "@/engines/_shared/types";
 import { type VideoConvertOptions, defaultVideoConvertOptions } from "./options";
 import { VideoConvertOptionsPanel } from "./options-panel";
 
-const SUPPORTED_INPUT_MIMES = [
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "video/x-matroska",
-];
+const SUPPORTED_INPUT_MIMES = ["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"];
 
 // v2 design §7.1: 100 MB cap. Constrained by ffmpeg.wasm memory and the
 // "users will wait" tolerance for browser-side full transcode.

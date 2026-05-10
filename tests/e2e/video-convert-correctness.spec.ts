@@ -40,34 +40,35 @@ const MAGIC: Record<(typeof OUTPUT_FORMATS)[number], (b: Buffer) => boolean> = {
 const guarded = SHOULD_RUN ? test : test.skip;
 
 for (const outFmt of OUTPUT_FORMATS) {
-  guarded(`video-convert ${FIXTURE} → .${outFmt} produces a valid ${outFmt} file`, async ({
-    page,
-  }) => {
-    await page.goto("/tools/video-convert");
-    await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
+  guarded(
+    `video-convert ${FIXTURE} → .${outFmt} produces a valid ${outFmt} file`,
+    async ({ page }) => {
+      await page.goto("/tools/video-convert");
+      await expect(page.getByTestId("status-indicator")).toHaveText("[ READY ]");
 
-    const fixture = path.resolve(__dirname, "../fixtures/video", FIXTURE);
-    await page.locator('input[type="file"]').setInputFiles(fixture);
+      const fixture = path.resolve(__dirname, "../fixtures/video", FIXTURE);
+      await page.locator('input[type="file"]').setInputFiles(fixture);
 
-    await page.getByLabel(new RegExp(`^${outFmt}$`, "i")).click();
-    // Quality "low" (CRF 28) keeps the test fast.
-    await page.getByLabel(/quality/i).selectOption("low");
+      await page.getByLabel(new RegExp(`^${outFmt}$`, "i")).click();
+      // Quality "low" (CRF 28) keeps the test fast.
+      await page.getByLabel(/quality/i).selectOption("low");
 
-    await page.getByTestId("convert-button").click();
+      await page.getByTestId("convert-button").click();
 
-    await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
-      timeout: 200_000,
-    });
+      await expect(page.getByTestId("status-indicator")).toHaveText("[ DONE ]", {
+        timeout: 200_000,
+      });
 
-    const downloadButton = page.getByRole("button", { name: /^download / });
-    const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
-    await downloadButton.click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(new RegExp(`\\.${outFmt}$`, "i"));
+      const downloadButton = page.getByRole("button", { name: /^download / });
+      const downloadPromise = page.waitForEvent("download", { timeout: 30_000 });
+      await downloadButton.click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toMatch(new RegExp(`\\.${outFmt}$`, "i"));
 
-    const dlPath = await download.path();
-    const bytes = await readFile(dlPath);
-    expect(bytes.length).toBeGreaterThan(100);
-    expect(MAGIC[outFmt](bytes)).toBe(true);
-  });
+      const dlPath = await download.path();
+      const bytes = await readFile(dlPath);
+      expect(bytes.length).toBeGreaterThan(100);
+      expect(MAGIC[outFmt](bytes)).toBe(true);
+    },
+  );
 }

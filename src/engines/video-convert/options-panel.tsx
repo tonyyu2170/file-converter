@@ -2,10 +2,10 @@
 
 import type { OptionsPanelProps } from "@/engines/_shared/types";
 import {
-  type VideoConvertOptions,
-  type VideoConvertQuality,
   VIDEO_CONVERT_FORMATS,
   VIDEO_CONVERT_QUALITY_LEVELS,
+  type VideoConvertOptions,
+  type VideoConvertQuality,
 } from "./options";
 
 export function VideoConvertOptionsPanel({
@@ -64,7 +64,7 @@ export function VideoConvertOptionsPanel({
       </label>
 
       <p className="basis-full text-[var(--color-fg-very-muted)]">
-        // this typically takes ~1 minute per minute of video.
+        {"// this typically takes ~1 minute per minute of video."}
       </p>
     </div>
   );

@@ -6,11 +6,7 @@
 export type VideoConvertFormat = "mp4" | "mov" | "webm";
 export type VideoConvertQuality = "low" | "medium" | "high";
 
-export const VIDEO_CONVERT_FORMATS: ReadonlyArray<VideoConvertFormat> = [
-  "mp4",
-  "mov",
-  "webm",
-];
+export const VIDEO_CONVERT_FORMATS: ReadonlyArray<VideoConvertFormat> = ["mp4", "mov", "webm"];
 
 export const VIDEO_CONVERT_QUALITY_LEVELS: ReadonlyArray<VideoConvertQuality> = [
   "low",

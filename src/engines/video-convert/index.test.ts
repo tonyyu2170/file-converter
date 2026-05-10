@@ -21,9 +21,7 @@ describe("video-convert engine descriptor", () => {
 
   it("isReadyToConvert is false until outputFormat is chosen", () => {
     expect(engine.isReadyToConvert?.(defaultVideoConvertOptions)).toBe(false);
-    expect(
-      engine.isReadyToConvert?.({ outputFormat: "mp4", quality: "medium" }),
-    ).toBe(true);
+    expect(engine.isReadyToConvert?.({ outputFormat: "mp4", quality: "medium" })).toBe(true);
   });
 
   it("validates a known mp4 file by extension", () => {
