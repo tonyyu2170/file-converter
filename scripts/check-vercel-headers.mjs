@@ -57,3 +57,43 @@ if (errors.length > 0) {
 console.log(
   "[check-vercel-headers] OK — vercel.json carries COOP same-origin and COEP require-corp",
 );
+
+// Expected long-cache rules. WASM / model assets are content-addressed by
+// build hash and immutable; if a path moves or its rule is dropped, this
+// script fails the prebuild gate so the regression is caught locally.
+const REQUIRED_CACHE_RULES = [
+  "/models/bg-remove/(.*)",
+  "/onnx-wasm/(.*)",
+  "/ffmpeg/(.*)",
+  "/tesseract/(.*)",
+];
+
+const cacheErrors = [];
+for (const source of REQUIRED_CACHE_RULES) {
+  const rule = (vercelConfig.headers ?? []).find((r) => r.source === source);
+  if (!rule) {
+    cacheErrors.push(`missing rule: ${source}`);
+    continue;
+  }
+  const cc = (rule.headers ?? []).find((h) => h.key === "Cache-Control");
+  if (!cc) {
+    cacheErrors.push(`${source}: missing Cache-Control header`);
+    continue;
+  }
+  if (!/max-age=31536000/.test(cc.value) || !/immutable/.test(cc.value)) {
+    cacheErrors.push(
+      `${source}: Cache-Control should include max-age=31536000 and immutable, got "${cc.value}"`,
+    );
+  }
+}
+
+if (cacheErrors.length > 0) {
+  console.error(
+    `[check-vercel-headers] vercel.json fails cache-rule requirements:\n  ${cacheErrors.join("\n  ")}\n\nWASM/model assets are content-addressed; long-cache headers are required so first-use cost is paid once.`,
+  );
+  process.exit(1);
+}
+
+console.log(
+  `[check-vercel-headers] OK — ${REQUIRED_CACHE_RULES.length} cache rules present (1y immutable)`,
+);
