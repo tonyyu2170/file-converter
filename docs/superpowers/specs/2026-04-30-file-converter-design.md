@@ -86,6 +86,50 @@ The PDF → DOCX path is cut from v1 (§3); see §16 for the revisit conditions.
 - *As the user, I want to know — visibly and verifiably — that no file I drop has been uploaded anywhere.*
 - *As the user, I want the app to remember that I prefer 90% JPEG quality without re-asking every time.*
 
+### 5.5 Audio
+
+| Operation | Direction | Notes |
+|---|---|---|
+| MP3 / WAV / M4A / FLAC ↔ format swap | round-trip | Bitrate options on lossy outputs |
+| Audio trim to sub-range | n/a | Lossless via `-c copy` when output format matches input |
+
+### 5.6 Video
+
+| Operation | Direction | Notes |
+|---|---|---|
+| MP4 / MOV / WebM transcode | round-trip | libx264 / libvpx; quality low/medium/high → CRF 28/23/18 |
+| Video trim to sub-range | n/a | Lossless `-c copy`; cuts may snap to nearest keyframe |
+| Extract audio track from video | one-way | MP3 / M4A / WAV; lossless when no re-encode |
+
+WebM uses libvpx (VP8) on output: the libvpx-vp9 path in the current `@ffmpeg/core` build OOBs on real inputs, verified empirically in Phase 25.5.
+
+### 5.7 Archives
+
+| Operation | Direction | Notes |
+|---|---|---|
+| ZIP / TAR / TAR.GZ extract | one-way | Magic-byte format detection; entries downloaded as a bundle |
+| Multi-file archive create | one-way | ZIP or TAR.GZ output; ordered via StagingArea |
+
+Encrypted ZIPs and zip-slip path entries are rejected at validation time with actionable errors. Per-entry sanity check rejects single-entry archives that would expand to > 1 GB.
+
+### 5.8 Data
+
+| Operation | Direction | Notes |
+|---|---|---|
+| CSV ↔ JSON ↔ YAML | round-trip | Auto-detect input by extension + sniff |
+| JSON pretty / minify | n/a | Indent 2 / 4 / tab on pretty mode |
+| XML → JSON | one-way | Configurable attribute prefix (`@` / `$_` / none) |
+
+JSON → XML reconstruction is deferred (lossy); see §16.
+
+### 5.9 OCR
+
+| Operation | Direction | Notes |
+|---|---|---|
+| Image → text (English) | one-way | Tesseract.js; TXT or JSON-with-bboxes output |
+
+Best on scanned documents and screenshots; lower quality on photos. Multi-language packs deferred to a later release; see §16.
+
 ## 6. Architecture
 
 ### 6.1 High-level
@@ -484,6 +528,11 @@ Not applicable to the conversion path (no backend exists). If any backend endpoi
 | Image conversion | 50 MB | 250 MB |
 | PDF operations | 100 MB | 500 MB |
 | Document conversion | 25 MB | 100 MB |
+| Audio | 100 MB | 500 MB |
+| Video | 50 MB | 100 MB |
+| Archives | 200 MB | 500 MB |
+| Data | 25 MB | 50 MB |
+| OCR | 25 MB | 25 MB |
 
 Soft warn = "this may take a while or hit memory limits, continue?" modal. Hard block = friendly "this exceeds the supported size" message with the cap stated.
 
@@ -586,25 +635,27 @@ Merge to main:
 
 All checks must pass before merge. No `--no-verify`, no skipped hooks.
 
-## 16. Future scope (post-v1)
+## 16. Future scope (post-v2)
 
 In rough priority order:
 
-1. **Audio** — MP3/WAV/M4A/FLAC via ffmpeg.wasm. Heaviest add (~30MB WASM); lazy-load mandatory.
-2. **Video** — MP4/MOV/WebM transcoding, trimming. Same ffmpeg.wasm; likely needs OffscreenCanvas + SharedArrayBuffer (requires COOP/COEP headers — additional Vercel config).
-3. **Archives** — ZIP/TAR creation/extraction. Lightweight, easy add.
-4. **Data** — CSV ↔ JSON, JSON ↔ YAML, JSON pretty/minify. Trivial; could even be v1.1.
-5. **OCR** — Tesseract.js for "PDF → searchable PDF" or "image → text". Heavy WASM, niche use.
-6. **PWA / offline mode** — once feature surface stabilizes.
-7. **Mobile responsive layout** — when desktop is mature.
-8. **Custom domain + branding refresh** — when ready.
-9. **AI image transforms** — background removal, watermark removal, possibly upscaling/inpainting. Browser-side only to honor `connect-src 'self'` (server-side ML breaks the privacy guarantee). Candidates: MediaPipe Selfie Segmentation (~10 MB) for background removal, in-browser inpainting models (larger; gated on bundle-size strategy from Phase 6) for watermark removal. Each fits the engine pattern as `bg-remove`, `watermark-remove` etc.
-10. **PDF → DOCX.** Cut from v1 because best-effort layout reconstruction does not meet the project quality bar. Revisit when a permissively-licensed in-browser solution exists with materially better fidelity than mammoth-style structural mapping.
-11. **image-bg-remove model swap.** The Phase 16 model is portrait-optimized MODNet (per its design spec's "2026-05-04 update" section), which produces unusable masks on non-portrait inputs. Ships in v1 as-is; a model swap to a general-purpose alternative (BiRefNet-lite int8, ISNet-DIS, or equivalent permissive option) is deferred to v2 once browser-side OOM behavior is empirically verified on the dev box.
-12. **Standalone image-compress tool.** Cut from v1; revisit only if user feedback indicates the image-convert quality slider doesn't cover the use case.
-13. **Watermark removal.** Brainstormed and tossed 2026-05-05. State-of-the-art "one-button magic" watermark removal is a server-GPU problem; permissively-licensed open-vocabulary detection that runs in a browser at quality does not exist. Revisit when that changes.
+1. **PWA / offline mode** — once feature surface stabilizes.
+2. **Mobile responsive layout** — when desktop is mature.
+3. **Custom domain + branding refresh** — when ready.
+4. **AI image transforms** — watermark removal, possibly upscaling/inpainting. Browser-side only to honor `connect-src 'self'` (server-side ML breaks the privacy guarantee). General-purpose background removal shipped in v2 as `image-bg-remove`. Watermark removal and inpainting remain aspirational and gated on the bundle-size strategy.
+5. **PDF → DOCX.** Cut from v1 because best-effort layout reconstruction does not meet the project quality bar. Revisit when a permissively-licensed in-browser solution exists with materially better fidelity than mammoth-style structural mapping.
+6. **Standalone image-compress tool.** Cut from v1; revisit only if user feedback indicates the image-convert quality slider doesn't cover the use case.
+7. **Watermark removal.** Brainstormed and tossed 2026-05-05. State-of-the-art "one-button magic" watermark removal is a server-GPU problem; permissively-licensed open-vocabulary detection that runs in a browser at quality does not exist. Revisit when that changes.
+8. **Audio extras** — `audio-concat`, `audio-normalize`. Concat shape is awkward without a multi-input UX precedent in the audio family; normalize is small but waiting on the catalog hitting a stable shape post-v2.
+9. **OGG / Opus formats in `audio-convert`.** Trivial codec add; deferred only because v2 already shipped four formats and the marginal user-facing value didn't justify the small additional bundle weight.
+10. **`video-to-gif`.** Browser-side ffmpeg can do this, but quality vs file size is poor at GIF's bit-depth limits and users expecting "shareable GIFs" tend to want the WebP/MP4 path that already exists.
+11. **Standalone `gzip` / `gunzip`.** Useful but covered partially by `archive-extract` (which handles `.tar.gz`). Standalone single-file gzip add waits on demand signal.
+12. **TOML in `data-convert`.** Adds a parser dependency; deferred until a user use-case surfaces.
+13. **Multi-language OCR.** v2 ships English only. Adding Spanish/French/German/simplified-Chinese language packs is a bundle-weight conversation — each pack is ~10 MB. The pattern is in place via `_shared/tesseract`; selection UX is the open design question.
+14. **`pdf-ocr`** (PDF → searchable PDF). Reuses pdf-rasterize from `pdf-to-image` and PDF reassembly from `pdf-edit` plus the v2 Tesseract pipeline. Deferred because the multi-page progress + per-page error handling is non-trivial to design well.
+15. **JSON → XML reconstruction.** v2 ships `xml-to-json` one-way only. Reconstruction is lossy without a documented type-mapping convention; deferred until that convention is settled on.
 
-Each future engine plugs into the `convert()` interface (Section 6.3) as a lazy-loaded module. v1's modular structure is what makes future scope cheap.
+Each future engine plugs into the `convert()` interface (Section 6.3) as a lazy-loaded module. The catalog's modular structure is what makes future scope cheap.
 
 ## 17. Success criteria
 
@@ -618,9 +669,12 @@ This is a personal project; success is measured against the stated problem, not 
    **Deviation — Lighthouse SEO on `*.vercel.app`:** Vercel auto-injects `x-robots-tag: noindex` on all team-prefix and deploy-hash subdomains under `*.vercel.app` to prevent SEO duplication with the project's canonical URL. This single header trips the `is-crawlable` audit and forces the SEO category to ~60. Resolution path: assign a custom domain (post-v1); the `noindex` header is not present on custom domains. SEO ≥ 95 will be re-verified at that point.
 5. **Adding a new conversion** (audio, archive, etc.) post-v1 takes a single PR that adds one engine module + one route, without touching shared code.
 
+> **v2 footnote (2026-05-09).** Catalog of 24 engines verified against this bar.
+
 ## 18. Open questions / risks
 
 - **Vercel static export + WASM caching headers.** WASM modules need long cache lives but careful cache-busting on releases. Will validate during initial deploy.
 - **PDF → DOCX experimental quality.** Cut from v1 per §3; see §16 for revisit conditions.
 - **shadcn/ui restyling effort.** shadcn defaults are rounded/soft — restyling them to brutalist sharp-corner monospace is real work, not a token swap. Budget time for this in implementation planning.
 - **Tailwind v4 + CSP `style-src`.** Validated via the v1 closeout deploy checklist (§2.5 of `2026-05-05-v1-closeout.md`); CSP holds at `style-src 'self'`. If a regression slips in, fix the build, not the header.
+- **`image-bg-remove` model quality.** Resolved in v2 Phase 18 — model swapped from MODNet (portrait-only, Apache-2.0, 6.6 MB) to **ormbg int8** (general-purpose, Apache-2.0, ~38 MB). The portrait-only limitation is removed. Verification log: `docs/superpowers/plans/phase-18-verification-log.md`.
