@@ -93,6 +93,12 @@ const TOOLS = [
     href: "/tools/audio-trim",
   },
   {
+    id: "video-convert",
+    title: "video convert",
+    description: "mp4, mov, webm, mkv · transcode between formats with quality control",
+    href: "/tools/video-convert",
+  },
+  {
     id: "video-trim",
     title: "video trim",
     description: "mp4, mov, webm, mkv · trim to a sub-range, lossless via -c copy",

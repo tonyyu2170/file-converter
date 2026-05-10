@@ -52,4 +52,13 @@ describe("Sidebar", () => {
       "/tools/audio-convert",
     );
   });
+
+  it("renders the video-convert link in the VIDEO group", () => {
+    render(<Sidebar />);
+    expect(screen.getByText("// VIDEO")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /video convert/i })).toHaveAttribute(
+      "href",
+      "/tools/video-convert",
+    );
+  });
 });

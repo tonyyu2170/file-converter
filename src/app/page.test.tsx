@@ -7,7 +7,7 @@ describe("Home", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
     expect(bar).toHaveTextContent("v1.0.0");
-    expect(bar).toHaveTextContent("23 TOOLS ONLINE");
+    expect(bar).toHaveTextContent("24 TOOLS ONLINE");
   });
 
   it("renders the hero headline as four colored spans", () => {
@@ -113,6 +113,12 @@ describe("Home", () => {
       href: "/tools/audio-trim",
     },
     {
+      testid: "tool-card-video-convert",
+      title: "video convert",
+      description: "mp4, mov, webm, mkv · transcode between formats with quality control",
+      href: "/tools/video-convert",
+    },
+    {
       testid: "tool-card-video-trim",
       title: "video trim",
       description: "mp4, mov, webm, mkv · trim to a sub-range, lossless via -c copy",
@@ -135,10 +141,10 @@ describe("Home", () => {
     },
   );
 
-  it("renders exactly 23 tool cards", () => {
+  it("renders exactly 24 tool cards", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
-    expect(cards).toHaveLength(23);
+    expect(cards).toHaveLength(24);
   });
 
   it("renders the pet panel inside the hero", () => {
