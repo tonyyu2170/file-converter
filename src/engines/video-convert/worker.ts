@@ -28,9 +28,10 @@ function suffixedFilename(name: string, suffix: string, newExt: string): string 
 
 function preset(fmt: NonNullable<VideoConvertOptions["outputFormat"]>): string[] {
   if (fmt === "webm") {
-    // libvpx-vp9: `-deadline good -cpu-used 2` is a sane "real users will
-    // wait this long" point. Lower cpu-used = slower + better quality.
-    return ["-deadline", "good", "-cpu-used", "2"];
+    // libvpx (VP8): in @ffmpeg/core's single-threaded build, low -cpu-used
+    // values (0–2) are punishingly slow. Use cpu-used 5 with -deadline good
+    // for an acceptable quality/speed point in a browser environment.
+    return ["-deadline", "good", "-cpu-used", "5"];
   }
   // libx264: medium preset is the standard quality/speed balance.
   return ["-preset", "medium"];
@@ -57,6 +58,15 @@ const api = {
       onProgress?.({ kind: "inference", pct: Math.max(0, Math.min(100, progress * 100)) });
     };
     ff.on("progress", progressHandler);
+
+    // Capture the trailing ffmpeg log so a non-zero exit gives an actionable
+    // error rather than just "ffmpeg exited with code N".
+    const logTail: string[] = [];
+    const logHandler = ({ message }: { type: string; message: string }) => {
+      logTail.push(message);
+      if (logTail.length > 12) logTail.shift();
+    };
+    ff.on("log", logHandler);
 
     const inExt = (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? "bin").toLowerCase();
     const outExt = OUTPUT_EXTENSION[fmt];
@@ -86,7 +96,9 @@ const api = {
 
       const exitCode = await ff.exec(args);
       if (exitCode !== 0) {
-        throw new Error(`video-convert: ffmpeg exited with code ${exitCode}`);
+        throw new Error(
+          `video-convert: ffmpeg exited with code ${exitCode}\n${logTail.join("\n")}`,
+        );
       }
 
       onProgress?.({ kind: "inference", pct: 100 });
@@ -104,6 +116,7 @@ const api = {
       };
     } finally {
       ff.off("progress", progressHandler);
+      ff.off("log", logHandler);
       try {
         await ff.deleteFile(inName);
       } catch {

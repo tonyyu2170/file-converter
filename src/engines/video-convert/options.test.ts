@@ -25,10 +25,10 @@ describe("video-convert options", () => {
     expect(CRF_BY_QUALITY.high).toBe(18);
   });
 
-  it("picks libx264 for mp4 and mov, libvpx-vp9 for webm", () => {
+  it("picks libx264 for mp4 and mov, libvpx (VP8) for webm", () => {
     expect(videoCodec("mp4")).toBe("libx264");
     expect(videoCodec("mov")).toBe("libx264");
-    expect(videoCodec("webm")).toBe("libvpx-vp9");
+    expect(videoCodec("webm")).toBe("libvpx");
   });
 
   it("picks aac for mp4/mov and libopus for webm", () => {

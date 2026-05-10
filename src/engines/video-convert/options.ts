@@ -40,7 +40,12 @@ export const OUTPUT_MIME: Record<VideoConvertFormat, string> = {
 };
 
 export function videoCodec(fmt: VideoConvertFormat): string {
-  return fmt === "webm" ? "libvpx-vp9" : "libx264";
+  // WebM uses libvpx (VP8) rather than libvpx-vp9: the VP9 encoder in the
+  // current @ffmpeg/core build OOBs on real inputs (memory access out of
+  // bounds in libvpx, regardless of cpu-used / row-mt / tile-columns
+  // settings). VP8 + Opus is a fully browser-supported webm combination
+  // and the libvpx VP8 path is battle-tested in ffmpeg.wasm.
+  return fmt === "webm" ? "libvpx" : "libx264";
 }
 
 export function audioCodec(fmt: VideoConvertFormat): string {

@@ -23,6 +23,7 @@ const TOOL_ROUTES = [
   "/tools/pdf-to-image",
   "/tools/pdf-to-md",
   "/tools/txt-to-pdf",
+  "/tools/video-convert",
   "/tools/video-extract-audio",
   "/tools/video-trim",
   "/tools/xml-to-json",
