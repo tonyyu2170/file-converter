@@ -21,4 +21,17 @@ describe("StatusIndicator", () => {
     render(<StatusIndicator status="converting" />);
     expect(screen.getByTestId("status-indicator")).toHaveAttribute("aria-live", "polite");
   });
+
+  // Regression gate: the production CSP is `style-src 'self'`, so any inline
+  // `style="..."` attribute on this component fails the CSP and drops the
+  // Lighthouse Best Practices score on every /tools/* route. Color must come
+  // from a className.
+  it("never renders an inline style attribute (CSP regression gate)", () => {
+    const all = ["ready", "converting", "done", "error", "fatal"] as const;
+    for (const s of all) {
+      const { unmount } = render(<StatusIndicator status={s} />);
+      expect(screen.getByTestId("status-indicator")).not.toHaveAttribute("style");
+      unmount();
+    }
+  });
 });
