@@ -58,9 +58,9 @@ const GROUP_ORDER = [
   "DOCS",
   "AUDIO",
   "VIDEO",
-  "OCR",
   "ARCHIVES",
   "DATA",
+  "OCR",
   "ABOUT",
 ] as const;
 
