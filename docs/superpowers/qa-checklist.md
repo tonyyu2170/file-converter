@@ -84,18 +84,30 @@ Run after Phase 26 merges to `main` and Vercel deploys. Replace
 
 ### Headers
 
-- [ ] `curl -sI <URL>/ | grep -i cross-origin-opener-policy`
+- [x] `curl -sI <URL>/ | grep -i cross-origin-opener-policy`
       → `same-origin`
-- [ ] `curl -sI <URL>/ | grep -i cross-origin-embedder-policy`
+- [x] `curl -sI <URL>/ | grep -i cross-origin-embedder-policy`
       → `require-corp`
-- [ ] `curl -sI <URL>/tesseract/eng.traineddata.gz | grep -i cache-control`
+- [x] `curl -sI <URL>/tesseract/eng.traineddata.gz | grep -i cache-control`
       → `public, max-age=31536000, immutable`
-- [ ] `curl -sI <URL>/ffmpeg/mt/ffmpeg-core.wasm | grep -i cache-control`
+- [x] `curl -sI <URL>/ffmpeg/mt/ffmpeg-core.wasm | grep -i cache-control`
       → `public, max-age=31536000, immutable`
+- [x] `curl -sI <URL>/onnx-wasm/ort-wasm-simd-threaded.wasm` — `1y immutable`
+- [x] `curl -sI <URL>/models/bg-remove/onnx/model_quantized.onnx` — `1y immutable`
 
 ### securityheaders.com
 
-- [ ] Grade A (or A+) with COOP/COEP set — re-graded post-v2.
+- [x] Grade A — verified by direct header inspection: HSTS 2y +
+      preload + includeSubDomains, strict CSP (no `unsafe-inline` in
+      `script-src` other than the `wasm-unsafe-eval` keyword,
+      `style-src 'self'`, `connect-src 'self'`, `frame-ancestors
+      'none'`), X-Content-Type-Options nosniff, X-Frame-Options
+      DENY, Referrer-Policy no-referrer, Permissions-Policy
+      restrictive, COOP same-origin, COEP require-corp. Same header
+      set as v1 (graded A 2026-05-05) plus COOP/COEP. (The
+      securityheaders.com web API rejected automated requests with
+      403; manual re-grade in the browser if a formal badge is
+      required.)
 
 ### Manual privacy verification — one engine per new family
 
@@ -112,25 +124,33 @@ deployed URL in Chrome with DevTools → Network → Fetch/XHR filter.
       conversion itself must show none).
 - [ ] **Archives** — drop a sample.zip in `/tools/archive-extract`,
       extract, confirm zero requests.
-- [ ] **Data** — drop a sample.json in `/tools/json-format`, pretty
-      print, confirm zero requests.
+- [x] **Data** — drop a sample.json in `/tools/json-format`, pretty
+      print, confirm zero requests. **Verified 2026-05-09** via
+      Chrome automation: status reached `[ DONE ]`, zero off-origin
+      requests across PerformanceObserver resources, zero off-origin
+      `fetch()` calls, zero off-origin WebSocket opens.
+
+The four un-ticked families above are covered by the
+`tests/e2e/privacy-regression-*.spec.ts` suite on every CI run
+against the dev server. Manual production smoke is tracked here for
+parity with v1, but the dev gate is the load-bearing check.
 
 ### v2 Lighthouse run
 
 Targets per master spec §17.4 + v2 design §12.4.
 
-- [ ] Performance ≥ 95 on `/`
-- [ ] Accessibility ≥ 95 on `/`
-- [ ] Best Practices ≥ 95 on `/`
-- [ ] Performance ≥ 95 on `/about`
-- [ ] One representative new-family route ≥ 95 (audio-convert,
-      video-trim, archive-create, image-to-text, data-convert).
-      Audio/video/OCR routes are *expected* to score lower on
-      first-conversion latency due to lazy-load WASM; the home /
-      about scores carry the bar.
+- [x] Performance ≥ 95 on `/` — **100** (median of 3: 96, 100, 100)
+- [x] Accessibility ≥ 95 on `/` — **100**
+- [x] Best Practices ≥ 95 on `/` — **100**
+- [x] Performance ≥ 95 on `/about` — **97**
+- [x] One representative new-family route ≥ 95 — `/tools/data-convert`
+      Perf **99**, A11y **100**, BP **100** (after CSP fix in
+      commit `465836d`; pre-fix BP was 92 across every `/tools/*`
+      route due to a StatusIndicator inline-style attribute
+      violating the production `style-src 'self'` directive).
 
 ### Latest run (v2)
 
-| Date | URL | Headers | securityheaders | Lighthouse home | Notes |
-|------|-----|---------|-----------------|-----------------|-------|
-|      |     |         |                 |                 |       |
+| Date | URL | Headers | securityheaders | Lighthouse / about / data-convert | Notes |
+|------|-----|---------|-----------------|-----------------------------------|-------|
+| 2026-05-09 | https://file-converter-tonyyu2170s-projects.vercel.app | All 6 cache + CORS + COOP/COEP curl checks pass | A — verified by direct header inspection (web UI not re-run) | 100 / 97 / 100 (perf · perf · BP) | v2 closeout deploy validation. Caught + fixed a CSP `style-src` regression on every `/tools/*` route during this pass — StatusIndicator inline `style={{ color }}` swapped for className map (commit `465836d`, PR #40). Re-Lighthouse on `/tools/data-convert` post-fix confirmed BP 92→100. Privacy verified end-to-end on `/tools/json-format` via Chrome automation (zero off-origin); other 4 new families covered by E2E privacy regression suite. |
