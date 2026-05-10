@@ -1,7 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const ROUTES = ["/", "/about", "/tools/pdf-merge", "/tools/image-convert", "/tools/pdf-edit"];
+const ROUTES = [
+  "/",
+  "/about",
+  "/tools/pdf-merge",
+  "/tools/image-convert",
+  "/tools/pdf-edit",
+  "/tools/audio-convert",
+  "/tools/video-trim",
+  "/tools/archive-create",
+  "/tools/image-to-text",
+];
 
 for (const route of ROUTES) {
   test(`a11y AA clean on ${route}`, async ({ page }) => {
