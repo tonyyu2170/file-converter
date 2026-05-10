@@ -6,7 +6,7 @@ describe("Home", () => {
   it("renders the status bar with version and tool count", () => {
     render(<Home />);
     const bar = screen.getByTestId("status-bar");
-    expect(bar).toHaveTextContent("v1.0.0");
+    expect(bar).toHaveTextContent("v2.0.0");
     expect(bar).toHaveTextContent("24 TOOLS ONLINE");
   });
 
@@ -145,6 +145,28 @@ describe("Home", () => {
     render(<Home />);
     const cards = screen.getAllByTestId(/^tool-card-/);
     expect(cards).toHaveLength(24);
+  });
+
+  it("renders one section per non-empty category in design order", () => {
+    render(<Home />);
+    const sections = screen.getAllByTestId(/^home-section-/);
+    expect(sections.map((s) => s.getAttribute("data-testid"))).toEqual([
+      "home-section-image",
+      "home-section-pdf",
+      "home-section-document",
+      "home-section-audio",
+      "home-section-video",
+      "home-section-archive",
+      "home-section-data",
+      "home-section-ocr",
+    ]);
+  });
+
+  it("renders the section label as a [ … ] heading inside each section", () => {
+    render(<Home />);
+    expect(screen.getByText("[ images ]")).toBeInTheDocument();
+    expect(screen.getByText("[ video ]")).toBeInTheDocument();
+    expect(screen.getByText("[ ocr ]")).toBeInTheDocument();
   });
 
   it("renders the pet panel inside the hero", () => {
